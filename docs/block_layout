@@ -1,0 +1,29 @@
+
+------ BLOCK ------
+
+prev hash: SHA256(LAST_BLOCK)
+block_id: LAST_BLOCK::block_id + 1
+reward: REWARD_FUNC(block_id)
+
+pages: 
+    max_bytes: <HALF_BLOCK_SIZE>
+    page_layout:
+        page_data: <DIFF_FILE>
+        site_id: <SITE_ID_PUB_KEY>
+        page_fee: <FEE_GIVEN_BY_OWNER>
+        signature: <PROOF_OF_OWNING_SITE>
+
+transactions:
+    max_bytes: <HALF_BLOCK_SIZE>
+    transaction_layout:
+        from: <SITE_ID_PUB_KEY>
+        to: <SITE_ID_PUB_KEY>
+        transaction_fee: <FEE_GIVEN_BY_FROM>
+        signature: <PROOF_OF_TRANSACTION>
+
+proof_of_work:
+    difficulty: <BASED_ON_NET_HASH_RATE_SOMEHOW>
+    pow: <POW>
+
+------  END  ------
+
