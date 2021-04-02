@@ -17,7 +17,7 @@ pub fn mine_block(chain: &mut BlockChain, mut block: Block)
     }
 }
 
-pub fn mine(chain: &mut BlockChain, wallet: &Wallet) -> Option<()>
+pub fn mine(chain: &mut BlockChain, wallet: &Wallet, blocks_to_mine: i32) -> Option<()>
 {    
     let for_pub_key = wallet.get_public_key();
 
@@ -33,7 +33,7 @@ pub fn mine(chain: &mut BlockChain, wallet: &Wallet) -> Option<()>
 
     let mut block = Block::new(prev, for_pub_key)?;
     let mut blocks_found = 0;
-    while blocks_found < 10
+    while blocks_found < blocks_to_mine
     {
         if block.validate(chain)
         {

@@ -1,4 +1,16 @@
-#[macro_use] extern crate slice_as_array;
+#[macro_use] 
+extern crate slice_as_array;
+
+#[cfg(feature = "serde_derive")] 
+#[macro_use]
+extern crate serde;
+
+#[macro_use]
+extern crate serde_big_array;
+
+extern crate sha2;
+extern crate bincode;
+
 mod block;
 mod miner;
 mod wallet;
@@ -14,7 +26,9 @@ fn main()
     let wallet = Wallet::read_from_file(&PathBuf::from("N4L8.wallet")).unwrap();
     let other = Wallet::read_from_file(&PathBuf::from("other.wallet")).unwrap();
 
-    if true
+    //miner::mine(&mut chain, &wallet, 6).unwrap();
+
+    if false
     {
         let mut block = Block::from_chain(&chain, wallet.get_public_key()).unwrap();
         block.add_transaction(Transaction::for_block(&chain, &wallet, other.get_public_key(), 50, 3).unwrap());
@@ -23,7 +37,7 @@ fn main()
     }
 
     let top = chain.top().unwrap();
-    println!("{:?}", top.validate(&chain));
+    println!("{:?}", top);
     println!("Balance N4L8: {}", wallet.calculate_balance(&chain));
     println!("Balance Other: {}", other.calculate_balance(&chain));
 }

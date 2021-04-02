@@ -1,12 +1,22 @@
 use super::{Signature, BlockChain};
+use serde::{Serialize, Deserialize};
 
-#[derive(Debug, Clone)]
+big_array! { BigArray; }
+
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct Page
 {
     pub page_data: Vec<u8>,
+
+    #[serde(with = "BigArray")]
     pub site_id: Signature,
+
+    #[serde(with = "BigArray")]
     pub page_name: [u8; 64],
+
     pub page_fee: u32,
+
+    #[serde(with = "BigArray")]
     pub signature: Signature,
 }
 

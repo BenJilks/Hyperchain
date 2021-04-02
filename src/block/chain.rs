@@ -38,7 +38,7 @@ impl BlockChain
 
         let mut bytes = Vec::<u8>::new();
         file.unwrap().read_to_end(&mut bytes).unwrap();
-        return Some( Block::from_bytes(&bytes) );
+        return Block::from_bytes(&bytes);
     }
 
     pub fn top(&self) -> Option<Block>

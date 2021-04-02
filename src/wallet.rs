@@ -6,7 +6,6 @@ use rand::rngs::OsRng;
 use std::fs::File;
 use std::path::PathBuf;
 use std::io::{Read, Write};
-use sha2::{Sha256, Digest};
 use slice_as_array;
 
 pub struct Wallet
@@ -81,18 +80,18 @@ impl Wallet
 
             for transaction in &block.transactions
             {
-                if transaction.to == pub_key {
-                    balance += transaction.amount;
+                if transaction.header.to == pub_key {
+                    balance += transaction.header.amount;
                 }
 
-                if transaction.from == pub_key 
+                if transaction.header.from == pub_key 
                 {
-                    balance -= transaction.amount;
-                    balance -= transaction.transaction_fee;
+                    balance -= transaction.header.amount;
+                    balance -= transaction.header.transaction_fee;
                 }
 
                 if is_miner {
-                    balance += transaction.transaction_fee;
+                    balance += transaction.header.transaction_fee;
                 }
             }
         });
