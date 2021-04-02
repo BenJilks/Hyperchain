@@ -8,7 +8,10 @@ use crate::wallet::{PublicWallet, Wallet};
 
 use sha2::{Sha256, Digest};
 use serde::{Serialize, Deserialize};
+use rsa::BigUint;
 use std::collections::HashMap;
+use std::time::SystemTime;
+use num_traits::pow::Pow;
 use bincode;
 use slice_as_array;
 
@@ -18,6 +21,13 @@ type Signature = [u8; PUB_KEY_LEN];
 type Hash = [u8; HASH_LEN];
 
 const BLOCK_SIZE: usize = 16 * 1024 * 1024; // 16 MB
+const MIN_TARGET: [u8; HASH_LEN] = 
+[
+    0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8,
+    0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8,
+    0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8,
+    0x00u8, 0x00u8,
+];
 
 big_array! { BigArray; }
 
@@ -26,47 +36,85 @@ pub struct Block
 {
     pub prev_hash: Hash,
     pub block_id: u64,
-    pub raward: u16,
 
     #[serde(with = "BigArray")]
     pub raward_to: Signature,
 
     pub pages: Vec<Page>,
     pub transactions: Vec<Transaction>,
-    pub difficulty: u16, // TODO: This should be a correct size
-    pub pow: u16, // TODO: This should be a correct size
+    pub timestamp: u64,
+    pub target: Hash,
+    pub pow: u64, // TODO: This should be a correct size
 }
 
 impl Block
 {
 
-    pub fn new(prev: Option<&Block>, raward_to: Signature) -> Option<Self>
+    fn time_for_last_ten_blocks(chain: &BlockChain, top_or_none: &Option<Block>) -> u64
     {
-        let prev_block_id = if prev.is_some() { prev.unwrap().block_id } else { 0 };
-        let prev_block_hash = if prev.is_some() { prev.unwrap().hash()? } else { [0u8; HASH_LEN] };
+        if top_or_none.is_none() {
+            return 0;
+        }
 
+        let top = top_or_none.as_ref().unwrap();
+        let mut current_block = top.clone();
+        for _ in 0..10
+        {
+            let next = chain.block(current_block.block_id - 1);
+            if next.is_none() {
+                break;
+            }
+
+            current_block = next.unwrap();
+        }
+
+        return top.timestamp - current_block.timestamp;
+    }
+
+    fn calculate_target(chain: &BlockChain, top: &Option<Block>) -> [u8; HASH_LEN]
+    {
+        if top.is_none() {
+            return MIN_TARGET;
+        }
+
+        let average_time = Self::time_for_last_ten_blocks(chain, top) / 10;
+        if average_time == 0 {
+            return MIN_TARGET;
+        }
+
+        let last_difficualty = BigUint::from(2u64).pow(256u32) / BigUint::from_bytes_le(&top.as_ref().unwrap().target);
+        let hash_rate = last_difficualty.clone() / average_time;
+        println!("{} H/s", hash_rate);
+        return MIN_TARGET;
+    }
+
+    pub fn new(chain: &BlockChain, raward_to: Signature) -> Option<Self>
+    {
+        let top_or_none = chain.top();
+        let mut prev_block_id: u64 = 0;
+        let mut prev_block_hash = [0u8; HASH_LEN];
+        let target = Self::calculate_target(chain, &top_or_none);
+
+        if top_or_none.is_some()
+        {
+            let top = top_or_none.unwrap();
+            prev_block_id = top.block_id;
+            prev_block_hash = top.hash()?;
+        }
+
+        let timestamp = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
         Some(Block
         {
             prev_hash: prev_block_hash,
             block_id: prev_block_id + 1,
-            raward: 10, // TODO: This need to be done correctly
             raward_to: raward_to,
 
             pages: Vec::new(),
             transactions: Vec::new(),
-            difficulty: 10,
+            timestamp: timestamp,
+            target: target,
             pow: 0,
         })
-    }
-
-    pub fn from_chain(chain: &BlockChain, raward_to: Signature) -> Option<Self>
-    {
-        let top = chain.top();
-        if top.is_none() {
-            Self::new(None, raward_to)
-        } else {
-            Self::new(Some( top.as_ref().unwrap() ), raward_to)
-        }
     }
 
     pub fn add_page(&mut self, page: Page)
@@ -114,18 +162,10 @@ impl Block
         return Some( *slice_as_array!(&hash[0..HASH_LEN], [u8; HASH_LEN]).unwrap() );
     }
 
-    /*
-    fn print_as_bits(arr: &[u8])
+    pub fn calculate_reward(&self) -> u32
     {
-        for byte in arr
-        {
-            for i in 0..8 {
-                print!("{}", (byte >> i) & 0x1);
-            }
-        }
-        println!();
+        10u32 // FIXME: do real reward calc
     }
-    */
 
     fn validate_transactions(&self, chain: &BlockChain) -> bool
     {
@@ -186,6 +226,16 @@ impl Block
                 println!("prev hash does not match this hash");
                 return false;
             }
+
+            let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+            if self.timestamp < last_block.timestamp || self.timestamp > now {
+                return false;
+            }
+
+            let expected_target = Self::calculate_target(chain, &Some( last_block ));
+            if self.target != expected_target {
+                return false;
+            }
         }
 
         return self.validate_transactions(chain);
@@ -202,17 +252,10 @@ impl Block
 
         // Validate POW
         let hash = hash_or_none.unwrap();
-        for i in 0..(self.difficulty / 8 + 1) as usize
-        {
-            if i < (self.difficulty as usize / 8) && hash[i] != 0 {
-                return false;
-            }
-
-            let zero_count = self.difficulty % 8;
-            let mask = (1u8 << zero_count) - 1;
-            if hash[i] & mask != 0 {
-                return false;
-            }
+        let hash_num = BigUint::from_bytes_le(&hash);
+        let target_num = BigUint::from_bytes_le(&self.target);
+        if hash_num > target_num {
+            return false;
         }
 
         true

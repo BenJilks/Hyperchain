@@ -19,7 +19,7 @@ pub trait Wallet
     fn calculate_status(&self, chain: &BlockChain) -> WalletStatus
     {
         let pub_key = self.get_public_key();
-        let mut balance: i32 = 0;
+        let mut balance: u32 = 0;
         let mut max_id: u32 = 0;
 
         chain.lookup(&mut |block: &Block|
@@ -27,25 +27,25 @@ pub trait Wallet
             let mut is_miner = false;
             if block.raward_to == pub_key 
             {
-                balance += block.raward as i32;
+                balance += block.calculate_reward();
                 is_miner = true;
             }
 
             for transaction in &block.transactions
             {
                 if transaction.header.to == pub_key {
-                    balance += transaction.header.amount as i32;
+                    balance += transaction.header.amount;
                 }
 
                 if transaction.header.from == pub_key 
                 {
-                    balance -= transaction.header.amount as i32;
-                    balance -= transaction.header.transaction_fee as i32;
+                    balance -= transaction.header.amount;
+                    balance -= transaction.header.transaction_fee;
                     max_id = std::cmp::max(max_id, transaction.header.id);
                 }
 
                 if is_miner {
-                    balance += transaction.header.transaction_fee as i32;
+                    balance += transaction.header.transaction_fee;
                 }
             }
         });
