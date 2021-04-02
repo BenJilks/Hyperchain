@@ -10,12 +10,12 @@ pub use chain::BlockChain;
 
 use sha2::{Sha256, Digest};
 use byteorder::{LittleEndian, ByteOrder};
+use rsa::{RSAPublicKey, PublicKey, PaddingScheme, BigUint};
 use slice_as_array;
 
-pub const PUB_KEY_LEN: usize = 12;
+pub const PUB_KEY_LEN: usize = 256;
 pub const HASH_LEN: usize = 32;
-type PublicKey = [u8; PUB_KEY_LEN];
-type Signature = [u8; HASH_LEN];
+type Signature = [u8; PUB_KEY_LEN];
 type Hash = [u8; HASH_LEN];
 
 const BLOCK_HEADER_SIZE: usize = 
@@ -33,13 +33,14 @@ const BLOCK_SIZE: usize = BLOCK_HEADER_SIZE + BLOCK_DATA_SIZE;
 #[derive(Debug, Clone)]
 pub struct Block
 {
-    prev_hash: Hash,
+    pub prev_hash: Hash,
     pub block_id: u64,
-    raward: u16,
+    pub raward: u16,
+    pub raward_to: Signature,
 
-    pages: Vec<Page>,
-    transactions: Vec<Transaction>,
-    difficulty: u16, // TODO: This should be a correct size
+    pub pages: Vec<Page>,
+    pub transactions: Vec<Transaction>,
+    pub difficulty: u16, // TODO: This should be a correct size
     pub pow: u16, // TODO: This should be a correct size
 }
 
@@ -67,7 +68,7 @@ fn append_u16(vec: &mut Vec<u8>, n: u16)
 impl Block
 {
 
-    pub fn new(prev: Option<&Block>) -> Option<Self>
+    pub fn new(prev: Option<&Block>, raward_to: Signature) -> Option<Self>
     {
         let prev_block_id = if prev.is_some() { prev.unwrap().block_id } else { 0 };
         let prev_block_hash = if prev.is_some() { prev.unwrap().hash()? } else { [0u8; HASH_LEN] };
@@ -77,12 +78,23 @@ impl Block
             prev_hash: prev_block_hash,
             block_id: prev_block_id + 1,
             raward: 10, // TODO: This need to be done correctly
+            raward_to: raward_to,
 
             pages: Vec::new(),
             transactions: Vec::new(),
             difficulty: 10,
             pow: 0,
         })
+    }
+
+    pub fn from_chain(chain: &BlockChain, raward_to: Signature) -> Option<Self>
+    {
+        let top = chain.top();
+        if top.is_none() {
+            Self::new(None, raward_to)
+        } else {
+            Self::new(Some( top.as_ref().unwrap() ), raward_to)
+        }
     }
 
     pub fn add_page(&mut self, page: Page)
@@ -120,10 +132,13 @@ impl Block
         let mut bytes = Vec::<u8>::new();
         for transaction in &self.transactions
         {
+            append_u32(&mut bytes, transaction.id);
             bytes.extend_from_slice(&transaction.from);
             bytes.extend_from_slice(&transaction.to);
+            append_u32(&mut bytes, transaction.amount);
             append_u32(&mut bytes, transaction.transaction_fee);
             bytes.extend_from_slice(&transaction.signature);
+            bytes.extend_from_slice(&transaction.e);
         }
 
         if bytes.len() > BLOCK_DATA_SIZE / 2 {
@@ -139,6 +154,7 @@ impl Block
         bytes.extend_from_slice(&self.prev_hash);
         append_u64(&mut bytes, self.block_id);
         append_u16(&mut bytes, self.raward);
+        bytes.extend_from_slice(&self.raward_to);
         bytes.push(self.pages.len() as u8);
         bytes.push(self.transactions.len() as u8);
         append_u16(&mut bytes, self.difficulty);
@@ -162,6 +178,7 @@ impl Block
         let prev_hash = slice_as_array!(&bytes[bp..bp+HASH_LEN], [u8; HASH_LEN]).unwrap(); bp += HASH_LEN;
         let block_id = LittleEndian::read_u64(&bytes[bp..bp+8]); bp += 8;
         let raward = LittleEndian::read_u16(&bytes[bp..bp+2]); bp += 2;
+        let raward_to = slice_as_array!(&bytes[bp..bp+PUB_KEY_LEN], [u8; PUB_KEY_LEN]).unwrap(); bp += PUB_KEY_LEN;
         let page_count = bytes[bp]; bp += 1;
         let transaction_count = bytes[bp]; bp += 1;
         let difficulty = LittleEndian::read_u16(&bytes[bp..bp+2]); bp += 2;
@@ -175,18 +192,21 @@ impl Block
             let site_id = slice_as_array!(&bytes[bp..bp+PUB_KEY_LEN], [u8; PUB_KEY_LEN]).unwrap(); bp += PUB_KEY_LEN;
             let page_name = slice_as_array!(&bytes[bp..bp+64], [u8; 64]).unwrap(); bp += 64;
             let fee = LittleEndian::read_u32(&bytes[bp..bp+4]); bp += 4;
-            let signature = slice_as_array!(&bytes[bp..bp+HASH_LEN], [u8; HASH_LEN]).unwrap(); bp += HASH_LEN;
+            let signature = slice_as_array!(&bytes[bp..bp+PUB_KEY_LEN], [u8; PUB_KEY_LEN]).unwrap(); bp += PUB_KEY_LEN;
             pages.push(Page::new(data, *site_id, *page_name, fee, *signature));
         }
 
         let mut transactions = Vec::<Transaction>::new();
         for _ in 0..transaction_count 
         {
+            let id = LittleEndian::read_u32(&bytes[bp..bp+4]); bp += 4;
             let from = slice_as_array!(&bytes[bp..bp+PUB_KEY_LEN], [u8; PUB_KEY_LEN]).unwrap(); bp += PUB_KEY_LEN;
             let to = slice_as_array!(&bytes[bp..bp+PUB_KEY_LEN], [u8; PUB_KEY_LEN]).unwrap(); bp += PUB_KEY_LEN;
+            let amount = LittleEndian::read_u32(&bytes[bp..bp+4]); bp += 4;
             let fee = LittleEndian::read_u32(&bytes[bp..bp+4]); bp += 4;
-            let signature = slice_as_array!(&bytes[bp..bp+HASH_LEN], [u8; HASH_LEN]).unwrap(); bp += HASH_LEN;
-            transactions.push(Transaction::new(*from, *to, fee, *signature));
+            let signature = slice_as_array!(&bytes[bp..bp+PUB_KEY_LEN], [u8; PUB_KEY_LEN]).unwrap(); bp += PUB_KEY_LEN;
+            let e = slice_as_array!(&bytes[bp..bp+3], [u8; 3]).unwrap(); bp += 3;
+            transactions.push(Transaction::new(id, *from, *to, amount, fee, *signature, *e));
         }
 
         return Self
@@ -194,6 +214,8 @@ impl Block
             prev_hash: *prev_hash,
             block_id,
             raward,
+            raward_to: *raward_to,
+
             pages,
             transactions,
             difficulty,
@@ -224,23 +246,44 @@ impl Block
     }
     */
 
-    pub fn validate(&self, last_block: Option<&Block>) -> bool
+    fn validate_transactions(&self, _chain: &BlockChain) -> bool
+    {
+        for transaction in &self.transactions
+        {
+            let from = RSAPublicKey::new(BigUint::from_bytes_le(&transaction.from), BigUint::from_bytes_le(&transaction.e)).unwrap();
+            let header = transaction.header_hash();
+            if from.verify(PaddingScheme::new_pkcs1v15_sign(None), &header, &transaction.signature).is_err() {
+                return false;
+            }
+        }
+
+        // TODO: Varify balance
+        // chain.lookup(&mut |block: &Block|
+        // {
+        // });
+
+        return true;
+    }
+
+    pub fn validate(&self, chain: &BlockChain) -> bool
     {
         if self.block_id > 1
         {
-            if last_block.is_none() 
+            let last_block_or_none = chain.block(self.block_id - 1);
+            if last_block_or_none.is_none() 
             {
                 println!("prev is none");
                 return false;
             }
 
-            if self.block_id != last_block.unwrap().block_id + 1 
+            let last_block = last_block_or_none.unwrap();
+            if self.block_id != last_block.block_id + 1 
             {
                 println!("prev is not the last block");
                 return false;
             }
 
-            let prev_hash = last_block.unwrap().hash();
+            let prev_hash = last_block.hash();
             if prev_hash.is_none() 
             {
                 println!("prev faild to hash");
@@ -276,7 +319,7 @@ impl Block
             }
         }
 
-        return true;
+        return self.validate_transactions(chain);
     }
 
 }

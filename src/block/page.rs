@@ -1,10 +1,10 @@
-use super::{PublicKey, Signature, BlockChain};
+use super::{Signature, BlockChain};
 
 #[derive(Debug, Clone)]
 pub struct Page
 {
     pub page_data: Vec<u8>,
-    pub site_id: PublicKey,
+    pub site_id: Signature,
     pub page_name: [u8; 64],
     pub page_fee: u32,
     pub signature: Signature,
@@ -13,7 +13,7 @@ pub struct Page
 impl Page
 {
 
-    pub fn new(diff: Vec<u8>, site_id: PublicKey, page_name: [u8; 64], fee: u32, signature: Signature) -> Self
+    pub fn new(diff: Vec<u8>, site_id: Signature, page_name: [u8; 64], fee: u32, signature: Signature) -> Self
     {
         Self
         {
@@ -25,7 +25,7 @@ impl Page
         }
     }
 
-    pub fn from_page(chain: BlockChain, new_page: Vec<u8>, site_id: PublicKey, page_name: [u8; 64], fee: u32, signature: Signature) -> Self
+    pub fn from_page(chain: BlockChain, new_page: Vec<u8>, site_id: Signature, page_name: [u8; 64], fee: u32, signature: Signature) -> Self
     {
         let diff = Vec::<u8>::new(); // TODO: Calculate diff
         Self::new(diff, site_id, page_name, fee, signature)

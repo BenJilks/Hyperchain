@@ -64,13 +64,7 @@ impl BlockChain
     {
         if block.block_id > 1
         {
-            let prev_or_none = self.block(block.block_id - 1);
-            if prev_or_none.is_none() {
-                return Ok(()); // FIXME: This should be an error
-            }
-
-            let prev = prev_or_none.unwrap();
-            if !block.validate(Some( &prev )) {
+            if !block.validate(self) {
                 return Ok(()); // FIXME: This should be an error
             }
         }
@@ -83,6 +77,23 @@ impl BlockChain
         let mut file = File::create(self.blocks_path.join(block.block_id.to_string()))?;
         file.write(&bytes.unwrap())?;
         Ok(())
+    }
+
+    pub fn lookup<Callback>(&self, callback: &mut Callback)
+        where Callback: FnMut(&Block)
+    {
+        let mut id = 1;
+        loop
+        {
+            // FIXME: This is not good, not good at all :(
+            if !self.blocks_path.join(id.to_string()).exists() {
+                break;
+            }
+
+            let block = self.block(id).unwrap();
+            callback(&block);
+            id += 1;
+        }
     }
 
 }

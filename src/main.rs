@@ -1,47 +1,29 @@
 #[macro_use] extern crate slice_as_array;
 mod block;
-use block::{Block, BlockChain};
+mod miner;
+mod wallet;
+use wallet::Wallet;
 use std::path::PathBuf;
-
-fn miner() -> Option<()>
-{    
-    println!("Hello, Blockchains!!");
-
-    let chain = BlockChain::new(PathBuf::from("blockchain"));
-
-    let mut prev: Option<&Block> = None;
-    let mut last_block = Block::new(None)?;
-    let top_or_none = chain.top();
-    if top_or_none.is_some() 
-    {
-        last_block = top_or_none.unwrap();
-        println!("Found top {}", last_block.block_id);
-        prev = Some( &last_block );
-    }
-
-    let mut block = Block::new(prev)?;
-    let mut blocks_found = 0;
-    while blocks_found <= 20
-    {
-        if block.validate(prev)
-        {
-            println!("Block {} found!!", block.block_id);
-            chain.add(&block).unwrap();
-
-            last_block = block.clone();
-            prev = Some( &last_block );
-            block = Block::new(prev)?;
-            blocks_found += 1;
-            continue;
-        }
-
-        block.pow += 1;
-    }
-
-    Some(())
-}
+use block::{Block, Transaction, BlockChain};
 
 fn main()
 {
-    miner().unwrap();
+    println!("Hello, Blockchains!!");
+
+    let mut chain = BlockChain::new(PathBuf::from("blockchain"));
+    let wallet = Wallet::read_from_file(&PathBuf::from("N4L8.wallet")).unwrap();
+    let other = Wallet::read_from_file(&PathBuf::from("other.wallet")).unwrap();
+
+    if true
+    {
+        let mut block = Block::from_chain(&chain, wallet.get_public_key()).unwrap();
+        block.add_transaction(Transaction::for_block(&chain, &wallet, other.get_public_key(), 50, 3).unwrap());
+        block.add_transaction(Transaction::for_block(&chain, &wallet, other.get_public_key(), 6, 3).unwrap());
+        miner::mine_block(&mut chain, block);
+    }
+
+    let top = chain.top().unwrap();
+    println!("{:?}", top.validate(&chain));
+    println!("Balance N4L8: {}", wallet.calculate_balance(&chain));
+    println!("Balance Other: {}", other.calculate_balance(&chain));
 }
