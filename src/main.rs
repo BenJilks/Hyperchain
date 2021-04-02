@@ -10,11 +10,13 @@ extern crate serde_big_array;
 
 extern crate sha2;
 extern crate bincode;
+extern crate rsa;
+extern crate rand;
 
 mod block;
 mod miner;
 mod wallet;
-use wallet::Wallet;
+use wallet::{PrivateWallet, Wallet};
 use std::path::PathBuf;
 use block::{Block, Transaction, BlockChain};
 
@@ -23,16 +25,16 @@ fn main()
     println!("Hello, Blockchains!!");
 
     let mut chain = BlockChain::new(PathBuf::from("blockchain"));
-    let wallet = Wallet::read_from_file(&PathBuf::from("N4L8.wallet")).unwrap();
-    let other = Wallet::read_from_file(&PathBuf::from("other.wallet")).unwrap();
+    let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet")).unwrap();
+    let other = PrivateWallet::read_from_file(&PathBuf::from("other.wallet")).unwrap();
 
     //miner::mine(&mut chain, &wallet, 6).unwrap();
 
-    if false
+    if true
     {
-        let mut block = Block::from_chain(&chain, wallet.get_public_key()).unwrap();
-        block.add_transaction(Transaction::for_block(&chain, &wallet, other.get_public_key(), 50, 3).unwrap());
-        block.add_transaction(Transaction::for_block(&chain, &wallet, other.get_public_key(), 6, 3).unwrap());
+        let mut block = Block::from_chain(&chain, other.get_public_key()).unwrap();
+        block.add_transaction(Transaction::for_block(&chain, &wallet, other.get_public_key(), 40, 3).unwrap());
+        block.add_transaction(Transaction::for_block(&chain, &wallet, other.get_public_key(), 6, 1).unwrap());
         miner::mine_block(&mut chain, block);
     }
 

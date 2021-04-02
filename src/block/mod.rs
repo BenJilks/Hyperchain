@@ -4,10 +4,11 @@ mod chain;
 pub use page::Page;
 pub use transaction::Transaction;
 pub use chain::BlockChain;
+use crate::wallet::{PublicWallet, Wallet};
 
 use sha2::{Sha256, Digest};
-use rsa::{RSAPublicKey, PublicKey, PaddingScheme, BigUint};
 use serde::{Serialize, Deserialize};
+use std::collections::HashMap;
 use bincode;
 use slice_as_array;
 
@@ -126,21 +127,31 @@ impl Block
     }
     */
 
-    fn validate_transactions(&self, _chain: &BlockChain) -> bool
+    fn validate_transactions(&self, chain: &BlockChain) -> bool
     {
+        let mut account_map = HashMap::<[u8; PUB_KEY_LEN], u32>::new();
         for transaction in &self.transactions
         {
-            let from = RSAPublicKey::new(BigUint::from_bytes_le(&transaction.header.from), BigUint::from_bytes_le(&transaction.e)).unwrap();
+            if !account_map.contains_key(&transaction.header.from) {
+                account_map.insert(transaction.header.from, 0);
+            }
+            *account_map.get_mut(&transaction.header.from).unwrap() += transaction.header.amount + transaction.header.transaction_fee;
+
+            let wallet = PublicWallet::from_public_key_e(transaction.header.from, transaction.e);
             let header = transaction.header.hash().unwrap();
-            if from.verify(PaddingScheme::new_pkcs1v15_sign(None), &header, &transaction.signature).is_err() {
+            if wallet.varify(&header, &transaction.signature) {
                 return false;
             }
         }
 
-        // TODO: Varify balance
-        // chain.lookup(&mut |block: &Block|
-        // {
-        // });
+        for (public_key, balance_out) in &account_map
+        {
+            let wallet = PublicWallet::from_public_key(*public_key);
+            let balance = wallet.calculate_balance(chain);
+            if balance < *balance_out {
+                return false;
+            }
+        }
 
         return true;
     }
@@ -177,6 +188,11 @@ impl Block
             }
         }
 
+        return self.validate_transactions(chain);
+    }
+
+    pub fn validate_pow(&self) -> bool
+    {
         let hash_or_none = self.hash();
         if hash_or_none.is_none() 
         {
@@ -199,7 +215,7 @@ impl Block
             }
         }
 
-        return self.validate_transactions(chain);
+        true
     }
 
 }

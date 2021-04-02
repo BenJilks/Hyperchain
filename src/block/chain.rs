@@ -69,6 +69,10 @@ impl BlockChain
             }
         }
 
+        if !block.validate_pow() {
+            return Ok(()); // FIXME: This should be an error
+        }
+
         let bytes = block.as_bytes();
         if bytes.is_none() {
             return Ok(()); // FIXME: This should be an error
