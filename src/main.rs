@@ -29,7 +29,7 @@ fn main()
     let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet")).unwrap();
     let other = PrivateWallet::read_from_file(&PathBuf::from("other.wallet")).unwrap();
 
-    miner::mine(&mut chain, &wallet, 6).unwrap();
+    miner::mine(&mut chain, &wallet, 25).unwrap();
 
     if true
     {

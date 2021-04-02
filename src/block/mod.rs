@@ -17,6 +17,7 @@ use slice_as_array;
 
 pub const PUB_KEY_LEN: usize = 256;
 pub const HASH_LEN: usize = 32;
+pub const MS_TO_FIND_BLOCK: usize = 1000;
 type Signature = [u8; PUB_KEY_LEN];
 type Hash = [u8; HASH_LEN];
 
@@ -26,7 +27,7 @@ const MIN_TARGET: [u8; HASH_LEN] =
     0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8,
     0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8,
     0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8,
-    0x00u8, 0x00u8,
+    0xFFu8, 0xF2u8,
 ];
 
 big_array! { BigArray; }
@@ -42,21 +43,21 @@ pub struct Block
 
     pub pages: Vec<Page>,
     pub transactions: Vec<Transaction>,
-    pub timestamp: u64,
+    pub timestamp: u128,
     pub target: Hash,
     pub pow: u64, // TODO: This should be a correct size
+}
+
+fn current_timestamp() -> u128
+{
+    SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis()
 }
 
 impl Block
 {
 
-    fn time_for_last_ten_blocks(chain: &BlockChain, top_or_none: &Option<Block>) -> u64
+    fn time_for_last_ten_blocks(chain: &BlockChain, top: &Block) -> u128
     {
-        if top_or_none.is_none() {
-            return 0;
-        }
-
-        let top = top_or_none.as_ref().unwrap();
         let mut current_block = top.clone();
         for _ in 0..10
         {
@@ -71,21 +72,31 @@ impl Block
         return top.timestamp - current_block.timestamp;
     }
 
-    fn calculate_target(chain: &BlockChain, top: &Option<Block>) -> [u8; HASH_LEN]
+    fn calculate_target(chain: &BlockChain, top_or_none: &Option<Block>) -> [u8; HASH_LEN]
     {
-        if top.is_none() {
+        if top_or_none.is_none() {
             return MIN_TARGET;
         }
 
-        let average_time = Self::time_for_last_ten_blocks(chain, top) / 10;
-        if average_time == 0 {
-            return MIN_TARGET;
+        let top = top_or_none.as_ref().unwrap();
+        if top.block_id % 10 != 0 {
+            return top.target;
         }
 
-        let last_difficualty = BigUint::from(2u64).pow(256u32) / BigUint::from_bytes_le(&top.as_ref().unwrap().target);
-        let hash_rate = last_difficualty.clone() / average_time;
-        println!("{} H/s", hash_rate);
-        return MIN_TARGET;
+        let average_time = std::cmp::max(Self::time_for_last_ten_blocks(chain, top), 10) / 10;
+
+        let target_num = BigUint::from_bytes_le(&top.target);
+        let c_2_pow_256 = BigUint::from(2u32).pow(256u32);
+        let last_difficualty = c_2_pow_256.clone() / target_num;
+        let hash_rate = std::cmp::max(last_difficualty.clone() / average_time, BigUint::from(1u32));
+
+        let new_difficaulty = hash_rate.clone() * MS_TO_FIND_BLOCK;
+        let new_target_num = c_2_pow_256.clone() / new_difficaulty;
+        let mut new_target = new_target_num.to_bytes_le();
+        new_target.resize(HASH_LEN, 0);
+        
+        println!("{} in {}, {} H/ms", last_difficualty, average_time, hash_rate);
+        return *slice_as_array!(&new_target, [u8; HASH_LEN]).unwrap();
     }
 
     pub fn new(chain: &BlockChain, raward_to: Signature) -> Option<Self>
@@ -102,7 +113,7 @@ impl Block
             prev_block_hash = top.hash()?;
         }
 
-        let timestamp = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+        let timestamp = current_timestamp();
         Some(Block
         {
             prev_hash: prev_block_hash,
@@ -227,7 +238,7 @@ impl Block
                 return false;
             }
 
-            let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+            let now = current_timestamp();
             if self.timestamp < last_block.timestamp || self.timestamp > now {
                 return false;
             }
