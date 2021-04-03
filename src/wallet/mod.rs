@@ -2,8 +2,9 @@ mod private_wallet;
 mod public_wallet;
 pub use private_wallet::PrivateWallet;
 pub use public_wallet::PublicWallet;
+use crate::block::{BlockChain, Block, PUB_KEY_LEN, HASH_LEN};
 
-use crate::block::{BlockChain, Block, PUB_KEY_LEN};
+use sha2::{Sha256, Digest};
 
 pub struct WalletStatus
 {
@@ -15,6 +16,15 @@ pub trait Wallet
 {
 
     fn get_public_key(&self) -> [u8; PUB_KEY_LEN];
+
+    fn get_address(&self) -> [u8; HASH_LEN]
+    {
+        let mut hasher = Sha256::default();
+        hasher.update(&self.get_public_key());
+
+        let hash = hasher.finalize();
+        *slice_as_array!(&hash, [u8; HASH_LEN]).unwrap()
+    }
 
     fn calculate_status(&self, chain: &BlockChain) -> WalletStatus
     {
@@ -46,6 +56,17 @@ pub trait Wallet
 
                 if is_miner {
                     balance += transaction.header.transaction_fee;
+                }
+            }
+
+            for page in &block.pages 
+            {
+                if page.header.site_id == pub_key {
+                    balance -= page.header.page_fee;
+                }
+
+                if is_miner {
+                    balance += page.header.page_fee;
                 }
             }
         });

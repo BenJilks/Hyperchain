@@ -1,7 +1,7 @@
 mod page;
 mod transaction;
 mod chain;
-pub use page::Page;
+pub use page::{Page, DataFormat};
 pub use transaction::Transaction;
 pub use chain::BlockChain;
 use crate::wallet::{PublicWallet, Wallet};
@@ -99,7 +99,7 @@ impl Block
         return *slice_as_array!(&new_target, [u8; HASH_LEN]).unwrap();
     }
 
-    pub fn new(chain: &BlockChain, raward_to: Signature) -> Option<Self>
+    pub fn new<W: Wallet>(chain: &BlockChain, raward_to: &W) -> Option<Self>
     {
         let top_or_none = chain.top();
         let mut prev_block_id: u64 = 0;
@@ -118,7 +118,7 @@ impl Block
         {
             prev_hash: prev_block_hash,
             block_id: prev_block_id + 1,
-            raward_to: raward_to,
+            raward_to: raward_to.get_public_key(),
 
             pages: Vec::new(),
             transactions: Vec::new(),
@@ -195,6 +195,20 @@ impl Block
             }
         }
 
+        for page in &self.pages 
+        {
+            if !account_map.contains_key(&page.header.site_id) {
+                account_map.insert(page.header.site_id, 0);
+            }
+            *account_map.get_mut(&page.header.site_id).unwrap() += page.header.page_fee;
+
+            let wallet = PublicWallet::from_public_key_e(page.header.site_id, page.e);
+            let header = page.header.hash().unwrap();
+            if wallet.varify(&header, &page.signature) {
+                return false;
+            }
+        }
+
         for (public_key, balance_out) in &account_map
         {
             let wallet = PublicWallet::from_public_key(*public_key);
@@ -249,7 +263,7 @@ impl Block
             }
         }
 
-        return self.validate_transactions(chain);
+        self.validate_transactions(chain)
     }
 
     pub fn validate_pow(&self) -> bool

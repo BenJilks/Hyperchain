@@ -1,4 +1,5 @@
-use super::Block;
+use super::{Block, Page, DataFormat};
+use crate::wallet::{Wallet, PublicWallet};
 use std::fs::{self, File};
 use std::io::{Write, Read};
 use std::path::PathBuf;
@@ -60,6 +61,45 @@ impl BlockChain
         }
     }
 
+    fn apply_page(&self, page: &Page) -> std::io::Result<()>
+    {
+        let owner = PublicWallet::from_public_key(page.header.site_id);
+        let path = self.sites_path
+            .join(base_62::encode(&owner.get_address()))
+            .join(&page.header.page_name);
+        let directroy = path.parent().unwrap();
+
+        if !directroy.exists() {
+            std::fs::create_dir_all(&directroy)?;
+        }
+
+        match DataFormat::from_u8(page.header.data_format)
+        {
+            Some( DataFormat::NewRaw ) =>
+            {
+                let mut file = File::create(&path)?;
+                file.write(&page.header.page_data)?;
+            },
+
+            Some( DataFormat::DiffRaw ) =>
+            {
+                let mut buffer = Vec::<u8>::new();
+                {
+                    let file = File::open(&path)?;
+                    let mut reader = bipatch::Reader::new(&page.header.page_data[..], file).unwrap();
+                    reader.read_to_end(&mut buffer)?;
+                }
+
+                let mut file = File::create(&path)?;
+                file.write(&buffer)?;
+            },
+
+            None => panic!("Invlid data format!"),
+        }
+
+        Ok(())
+    }
+
     pub fn add(&self, block: &Block) -> std::io::Result<()>
     {
         if block.block_id > 1
@@ -80,6 +120,10 @@ impl BlockChain
 
         let mut file = File::create(self.blocks_path.join(block.block_id.to_string()))?;
         file.write(&bytes.unwrap())?;
+
+        for page in &block.pages {
+            self.apply_page(page)?;
+        }
         Ok(())
     }
 
@@ -97,6 +141,19 @@ impl BlockChain
             let block = self.block(id).unwrap();
             callback(&block);
             id += 1;
+        }
+    }
+
+    pub fn page<W: Wallet>(&self, site: &W, page_name: &str) -> Option<File>
+    {
+        let path = self.sites_path
+            .join(base_62::encode(&site.get_address()))
+            .join(page_name);
+
+        if path.exists() {
+            Some( File::open(path).unwrap() )
+        } else {
+            None
         }
     }
 

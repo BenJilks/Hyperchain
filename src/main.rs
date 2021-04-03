@@ -13,13 +13,16 @@ extern crate bincode;
 extern crate rsa;
 extern crate rand;
 extern crate num_traits;
+extern crate bidiff;
+extern crate bipatch;
+extern crate base_62;
 
 mod block;
 mod miner;
 mod wallet;
 use wallet::{PrivateWallet, Wallet};
 use std::path::PathBuf;
-use block::{Block, Transaction, BlockChain};
+use block::{Block, Page, BlockChain};
 
 fn main()
 {
@@ -29,13 +32,12 @@ fn main()
     let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet")).unwrap();
     let other = PrivateWallet::read_from_file(&PathBuf::from("other.wallet")).unwrap();
 
-    miner::mine(&mut chain, &wallet, 25).unwrap();
+    //miner::mine(&mut chain, &wallet, 25).unwrap();
 
     if true
     {
-        let mut block = Block::new(&chain, other.get_public_key()).unwrap();
-        block.add_transaction(Transaction::for_block(&chain, &wallet, other.get_public_key(), 40, 3).unwrap());
-        block.add_transaction(Transaction::for_block(&chain, &wallet, other.get_public_key(), 6, 1).unwrap());
+        let mut block = Block::new(&chain, &other).unwrap();
+        block.add_page(Page::from_file(&chain, "<video src=\"dogecoin.mp4\" autoplay loop/>".as_bytes(), &other, "index.html", 1));
         miner::mine_block(&mut chain, block);
     }
 

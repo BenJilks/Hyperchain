@@ -62,7 +62,7 @@ impl Transaction
         }
     }
 
-    pub fn for_block(chain: &BlockChain, from: &PrivateWallet, to: Signature, amount: u32, fee: u32) -> Option<Self>
+    pub fn for_block<W: Wallet>(chain: &BlockChain, from: &PrivateWallet, to: &W, amount: u32, fee: u32) -> Option<Self>
     {
         let status = from.calculate_status(chain);
         if amount + fee > status.balance {
@@ -73,7 +73,7 @@ impl Transaction
         { 
             id: status.max_id + 1,
             from: from.get_public_key(),
-            to,
+            to: to.get_public_key(),
             amount,
             transaction_fee: fee,
         };

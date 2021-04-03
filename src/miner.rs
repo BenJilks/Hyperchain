@@ -1,5 +1,5 @@
 use crate::block::{Block, BlockChain};
-use crate::wallet::{PrivateWallet, Wallet};
+use crate::wallet::PrivateWallet;
 
 pub fn mine_block(chain: &mut BlockChain, mut block: Block)
 {
@@ -25,9 +25,7 @@ pub fn mine_block(chain: &mut BlockChain, mut block: Block)
 
 pub fn mine(chain: &mut BlockChain, wallet: &PrivateWallet, blocks_to_mine: i32) -> Option<()>
 {    
-    let for_pub_key = wallet.get_public_key();
-
-    let mut block = Block::new(chain, for_pub_key)?;
+    let mut block = Block::new(chain, wallet)?;
     let mut blocks_found = 0;
     if !block.validate(chain)
     {
@@ -43,7 +41,7 @@ pub fn mine(chain: &mut BlockChain, wallet: &PrivateWallet, blocks_to_mine: i32)
             chain.add(&block).unwrap();
             blocks_found += 1;
 
-            block = Block::new(chain, for_pub_key)?;
+            block = Block::new(chain, wallet)?;
             if !block.validate(chain)
             {
                 println!("Block is not valid!!");
