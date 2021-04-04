@@ -3,7 +3,7 @@ mod transaction;
 mod chain;
 pub use page::{Page, DataFormat};
 pub use transaction::Transaction;
-pub use chain::BlockChain;
+pub use chain::{BlockChain, BlockChainBranch};
 use crate::wallet::{PublicWallet, Wallet};
 
 use sha2::{Sha256, Digest};
@@ -56,7 +56,7 @@ fn current_timestamp() -> u128
 impl Block
 {
 
-    fn time_for_last_ten_blocks(chain: &BlockChain, top: &Block) -> u128
+    fn time_for_last_ten_blocks(chain: &BlockChainBranch, top: &Block) -> u128
     {
         let mut current_block = top.clone();
         for _ in 0..10
@@ -72,7 +72,7 @@ impl Block
         return top.timestamp - current_block.timestamp;
     }
 
-    fn calculate_target(chain: &BlockChain, top_or_none: &Option<Block>) -> [u8; HASH_LEN]
+    fn calculate_target(chain: &BlockChainBranch, top_or_none: &Option<Block>) -> [u8; HASH_LEN]
     {
         if top_or_none.is_none() {
             return MIN_TARGET;
@@ -99,7 +99,7 @@ impl Block
         return *slice_as_array!(&new_target, [u8; HASH_LEN]).unwrap();
     }
 
-    pub fn new<W: Wallet>(chain: &BlockChain, raward_to: &W) -> Option<Self>
+    pub fn new<W: Wallet>(chain: &BlockChainBranch, raward_to: &W) -> Result<Self, String>
     {
         let top_or_none = chain.top();
         let mut prev_block_id: u64 = 0;
@@ -114,7 +114,7 @@ impl Block
         }
 
         let timestamp = current_timestamp();
-        Some(Block
+        Ok(Block
         {
             prev_hash: prev_block_hash,
             block_id: prev_block_id + 1,
@@ -138,18 +138,18 @@ impl Block
         self.transactions.push(transaction);
     }
 
-    pub fn as_bytes(&self) -> Option<Vec<u8>>
+    pub fn as_bytes(&self) -> Result<Vec<u8>, String>
     {
         let bytes_or_error = bincode::serialize(self);
         if bytes_or_error.is_err() {
-            return None;
+            return Err(bytes_or_error.err().unwrap().to_string());
         }
 
         let bytes = bytes_or_error.unwrap();
         if bytes.len() > BLOCK_SIZE {
-            None
+            Err("Block to large".to_owned())
         } else {
-            Some( bytes )
+            Ok(bytes)
         }
     }
 
@@ -163,14 +163,14 @@ impl Block
         return Some( result_or_error.unwrap() );
     }
 
-    pub fn hash(&self) -> Option<Hash>
+    pub fn hash(&self) -> Result<Hash, String>
     {
         let bytes = self.as_bytes()?;
         let mut hasher = Sha256::new();
         hasher.update(&bytes);
 
         let hash = hasher.finalize();
-        return Some( *slice_as_array!(&hash[0..HASH_LEN], [u8; HASH_LEN]).unwrap() );
+        return Ok( *slice_as_array!(&hash[0..HASH_LEN], [u8; HASH_LEN]).unwrap() );
     }
 
     pub fn calculate_reward(&self) -> u32
@@ -178,7 +178,7 @@ impl Block
         10u32 // FIXME: do real reward calc
     }
 
-    fn validate_transactions(&self, chain: &BlockChain) -> bool
+    fn validate_transactions(&self, chain: &BlockChainBranch) -> Result<(), String>
     {
         let mut account_map = HashMap::<[u8; PUB_KEY_LEN], u32>::new();
         for transaction in &self.transactions
@@ -191,7 +191,7 @@ impl Block
             let wallet = PublicWallet::from_public_key_e(transaction.header.from, transaction.e);
             let header = transaction.header.hash().unwrap();
             if wallet.varify(&header, &transaction.signature) {
-                return false;
+                return Err("Invalid transaction signature".to_owned());
             }
         }
 
@@ -205,7 +205,7 @@ impl Block
             let wallet = PublicWallet::from_public_key_e(page.header.site_id, page.e);
             let header = page.header.hash().unwrap();
             if wallet.varify(&header, &page.signature) {
-                return false;
+                return Err("Invalid page signature".to_owned());
             }
         }
 
@@ -214,52 +214,39 @@ impl Block
             let wallet = PublicWallet::from_public_key(*public_key);
             let balance = wallet.calculate_balance(chain);
             if balance < *balance_out {
-                return false;
+                return Err("Invalid page signature".to_owned());
             }
         }
 
-        return true;
+        Ok(())
     }
 
-    pub fn validate(&self, chain: &BlockChain) -> bool
+    pub fn validate(&self, chain: &BlockChainBranch) -> Result<(), String>
     {
         if self.block_id > 1
         {
             let last_block_or_none = chain.block(self.block_id - 1);
-            if last_block_or_none.is_none() 
-            {
-                println!("prev is none");
-                return false;
+            if last_block_or_none.is_none() {
+                return Err("Prev is none".to_owned());
             }
 
             let last_block = last_block_or_none.unwrap();
-            if self.block_id != last_block.block_id + 1 
-            {
-                println!("prev is not the last block");
-                return false;
+            if self.block_id != last_block.block_id + 1 {
+                return Err("Prev is not the last block".to_owned());
             }
 
-            let prev_hash = last_block.hash();
-            if prev_hash.is_none() 
-            {
-                println!("prev faild to hash");
-                return false;
-            }
-
-            if self.prev_hash != prev_hash.unwrap() 
-            {
-                println!("prev hash does not match this hash");
-                return false;
+            if self.prev_hash != last_block.hash()? {
+                return Err("Prev hash does not match this hash".to_owned());
             }
 
             let now = current_timestamp();
             if self.timestamp < last_block.timestamp || self.timestamp > now {
-                return false;
+                return Err("Timestamp is invalid".to_owned());
             }
 
             let expected_target = Self::calculate_target(chain, &Some( last_block ));
             if self.target != expected_target {
-                return false;
+                return Err("Wrong target".to_owned());
             }
         }
 
@@ -269,9 +256,9 @@ impl Block
     pub fn validate_pow(&self) -> bool
     {
         let hash_or_none = self.hash();
-        if hash_or_none.is_none() 
+        if hash_or_none.is_err() 
         {
-            println!("faild to hash");
+            println!("Faild to hash: {}", hash_or_none.err().unwrap());
             return false;
         }
 

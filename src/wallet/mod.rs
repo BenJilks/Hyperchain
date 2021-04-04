@@ -2,7 +2,7 @@ mod private_wallet;
 mod public_wallet;
 pub use private_wallet::PrivateWallet;
 pub use public_wallet::PublicWallet;
-use crate::block::{BlockChain, Block, PUB_KEY_LEN, HASH_LEN};
+use crate::block::{BlockChainBranch, Block, PUB_KEY_LEN, HASH_LEN};
 
 use sha2::{Sha256, Digest};
 
@@ -26,7 +26,7 @@ pub trait Wallet
         *slice_as_array!(&hash, [u8; HASH_LEN]).unwrap()
     }
 
-    fn calculate_status(&self, chain: &BlockChain) -> WalletStatus
+    fn calculate_status(&self, chain: &BlockChainBranch) -> WalletStatus
     {
         let pub_key = self.get_public_key();
         let mut balance: u32 = 0;
@@ -78,7 +78,7 @@ pub trait Wallet
         }
     }
 
-    fn calculate_balance(&self, chain: &BlockChain) -> u32
+    fn calculate_balance(&self, chain: &BlockChainBranch) -> u32
     {
         self.calculate_status(chain).balance
     }

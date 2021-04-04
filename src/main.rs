@@ -16,13 +16,16 @@ extern crate num_traits;
 extern crate bidiff;
 extern crate bipatch;
 extern crate base_62;
+extern crate serde_json;
 
 mod block;
 mod miner;
 mod wallet;
+mod node;
 use wallet::{PrivateWallet, Wallet};
-use std::path::PathBuf;
 use block::{Block, Page, BlockChain};
+use std::path::PathBuf;
+use std::fs::File;
 
 fn main()
 {
@@ -30,10 +33,14 @@ fn main()
 
     let mut chain = BlockChain::new(PathBuf::from("blockchain"));
     let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet")).unwrap();
-    let other = PrivateWallet::read_from_file(&PathBuf::from("other.wallet")).unwrap();
-
-    //miner::mine(&mut chain, &wallet, 25).unwrap();
-
+    
+    miner::mine(chain.longest_branch(), &wallet, 2).unwrap();
+    
+    let test = bincode::deserialize_from::<File, Block>(File::open("6").unwrap()).unwrap();
+    chain.add(&test).unwrap();
+    
+    //let other = PrivateWallet::read_from_file(&PathBuf::from("other.wallet")).unwrap();
+    /*
     if true
     {
         let mut block = Block::new(&chain, &other).unwrap();
@@ -45,4 +52,5 @@ fn main()
     println!("{:?}", top);
     println!("Balance N4L8: {}", wallet.calculate_balance(&chain));
     println!("Balance Other: {}", other.calculate_balance(&chain));
+    */
 }

@@ -1,14 +1,10 @@
-use crate::block::{Block, BlockChain};
+use crate::block::{Block, BlockChainBranch};
 use crate::wallet::PrivateWallet;
 
-pub fn mine_block(chain: &mut BlockChain, mut block: Block)
+pub fn mine_block(chain: &mut BlockChainBranch, mut block: Block) -> Result<(), String>
 {
     println!("Started mining");
-    if !block.validate(chain)
-    {
-        println!("Block is not valid!!");
-        return;
-    }
+    block.validate(chain)?;
 
     loop
     {
@@ -21,17 +17,15 @@ pub fn mine_block(chain: &mut BlockChain, mut block: Block)
 
         block.pow += 1;
     }
+
+    Ok(())
 }
 
-pub fn mine(chain: &mut BlockChain, wallet: &PrivateWallet, blocks_to_mine: i32) -> Option<()>
+pub fn mine(chain: &mut BlockChainBranch, wallet: &PrivateWallet, blocks_to_mine: i32) -> Result<(), String>
 {    
     let mut block = Block::new(chain, wallet)?;
     let mut blocks_found = 0;
-    if !block.validate(chain)
-    {
-        println!("Block is not valid!!");
-        return None;
-    }
+    block.validate(chain)?;
 
     while blocks_found < blocks_to_mine
     {
@@ -42,16 +36,12 @@ pub fn mine(chain: &mut BlockChain, wallet: &PrivateWallet, blocks_to_mine: i32)
             blocks_found += 1;
 
             block = Block::new(chain, wallet)?;
-            if !block.validate(chain)
-            {
-                println!("Block is not valid!!");
-                return None;
-            }
+            block.validate(chain)?;
             continue;
         }
 
         block.pow += 1;
     }
 
-    Some(())
+    Ok(())
 }
