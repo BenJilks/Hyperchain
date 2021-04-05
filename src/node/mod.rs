@@ -9,6 +9,7 @@ use network::{NetworkConnection, Packet};
 use std::sync::mpsc::{channel, Sender, Receiver};
 use std::sync::{Mutex, Arc};
 use std::path::PathBuf;
+use std::time::Instant;
 
 pub struct Node
 {
@@ -52,6 +53,7 @@ impl Node
             Self::miner_thread(blocks_to_mine_recv, blocks_done_send);
         });
 
+        let mut start_prune_timer = Instant::now();
         loop
         {
             for block in NetworkConnection::process_new_blocks(&mut self.connection) 
@@ -115,6 +117,11 @@ impl Node
             }
 
             std::thread::sleep_ms(100);
+            if start_prune_timer.elapsed().as_secs() >= 1 
+            {
+                chain.prune_branches();
+                start_prune_timer = Instant::now();
+            }
         }
     }
 

@@ -1,12 +1,11 @@
-use super::{Block, Page, DataFormat};
-use crate::wallet::{Wallet, PublicWallet};
+use super::Block;
 use crate::error::Error;
 use std::fs::{self, File};
 use std::io::{Write, Read};
 use std::path::PathBuf;
 use rand::RngCore;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct BlockChainBranch
 {
     path: PathBuf,
@@ -162,18 +161,31 @@ impl BlockChain
         }
     }
 
-    pub fn block(&self, id: u64) -> Vec<Block>
+    pub fn prune_branches(&mut self)
     {
-        let mut blocks = Vec::<Block>::new();
+        let longest_branch_top = self.longest_branch().top_index;
+        if longest_branch_top <= 10 {
+            return;
+        }
+
+        let mut branches_to_remove = Vec::<BlockChainBranch>::new();
         for branch in &self.branches
         {
-            let block = branch.block(id);
-            if block.is_some() {
-                blocks.push(block.unwrap());
+            if branch.top_index < longest_branch_top - 10 {
+                branches_to_remove.push(branch.clone());
             }
         }
 
-        blocks
+        for branch in &branches_to_remove
+        {
+            let index = self.branches.iter().position(|x| *x == *branch).unwrap();
+            self.branches.remove(index);
+            std::fs::remove_dir_all(&branch.path).unwrap();
+        }
+
+        if branches_to_remove.len() > 0 {
+            println!("Pruned {} branches", branches_to_remove.len());
+        }
     }
 
     pub fn longest_branch(&mut self) -> &mut BlockChainBranch
