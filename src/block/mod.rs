@@ -5,6 +5,7 @@ pub use page::{Page, DataFormat};
 pub use transaction::Transaction;
 pub use chain::{BlockChain, BlockChainBranch};
 use crate::wallet::{PublicWallet, Wallet};
+use crate::error::Error;
 
 use sha2::{Sha256, Digest};
 use serde::{Serialize, Deserialize};
@@ -17,7 +18,7 @@ use slice_as_array;
 
 pub const PUB_KEY_LEN: usize = 256;
 pub const HASH_LEN: usize = 32;
-pub const MS_TO_FIND_BLOCK: usize = 1000;
+pub const MS_TO_FIND_BLOCK: usize = 5000;
 type Signature = [u8; PUB_KEY_LEN];
 type Hash = [u8; HASH_LEN];
 
@@ -99,7 +100,7 @@ impl Block
         return *slice_as_array!(&new_target, [u8; HASH_LEN]).unwrap();
     }
 
-    pub fn new<W: Wallet>(chain: &BlockChainBranch, raward_to: &W) -> Result<Self, String>
+    pub fn new<W: Wallet>(chain: &BlockChainBranch, raward_to: &W) -> Result<Self, Error>
     {
         let top_or_none = chain.top();
         let mut prev_block_id: u64 = 0;
@@ -138,16 +139,16 @@ impl Block
         self.transactions.push(transaction);
     }
 
-    pub fn as_bytes(&self) -> Result<Vec<u8>, String>
+    pub fn as_bytes(&self) -> Result<Vec<u8>, Error>
     {
         let bytes_or_error = bincode::serialize(self);
         if bytes_or_error.is_err() {
-            return Err(bytes_or_error.err().unwrap().to_string());
+            return Err(Error::Other(bytes_or_error.err().unwrap().to_string()));
         }
 
         let bytes = bytes_or_error.unwrap();
         if bytes.len() > BLOCK_SIZE {
-            Err("Block to large".to_owned())
+            Err(Error::BlockTooLarge)
         } else {
             Ok(bytes)
         }
@@ -163,7 +164,7 @@ impl Block
         return Some( result_or_error.unwrap() );
     }
 
-    pub fn hash(&self) -> Result<Hash, String>
+    pub fn hash(&self) -> Result<Hash, Error>
     {
         let bytes = self.as_bytes()?;
         let mut hasher = Sha256::new();
@@ -178,7 +179,7 @@ impl Block
         10u32 // FIXME: do real reward calc
     }
 
-    fn validate_transactions(&self, chain: &BlockChainBranch) -> Result<(), String>
+    fn validate_transactions(&self, chain: &BlockChainBranch) -> Result<(), Error>
     {
         let mut account_map = HashMap::<[u8; PUB_KEY_LEN], u32>::new();
         for transaction in &self.transactions
@@ -191,7 +192,7 @@ impl Block
             let wallet = PublicWallet::from_public_key_e(transaction.header.from, transaction.e);
             let header = transaction.header.hash().unwrap();
             if wallet.varify(&header, &transaction.signature) {
-                return Err("Invalid transaction signature".to_owned());
+                return Err(Error::InvalidTransactionSignature);
             }
         }
 
@@ -205,7 +206,7 @@ impl Block
             let wallet = PublicWallet::from_public_key_e(page.header.site_id, page.e);
             let header = page.header.hash().unwrap();
             if wallet.varify(&header, &page.signature) {
-                return Err("Invalid page signature".to_owned());
+                return Err(Error::InvalidPageSignature);
             }
         }
 
@@ -214,39 +215,39 @@ impl Block
             let wallet = PublicWallet::from_public_key(*public_key);
             let balance = wallet.calculate_balance(chain);
             if balance < *balance_out {
-                return Err("Invalid page signature".to_owned());
+                return Err(Error::InvalidBalance);
             }
         }
 
         Ok(())
     }
 
-    pub fn validate(&self, chain: &BlockChainBranch) -> Result<(), String>
+    pub fn validate(&self, chain: &BlockChainBranch) -> Result<(), Error>
     {
         if self.block_id > 1
         {
             let last_block_or_none = chain.block(self.block_id - 1);
             if last_block_or_none.is_none() {
-                return Err("Prev is none".to_owned());
+                return Err(Error::PrevNone);
             }
 
             let last_block = last_block_or_none.unwrap();
             if self.block_id != last_block.block_id + 1 {
-                return Err("Prev is not the last block".to_owned());
+                return Err(Error::NotNextBlock);
             }
 
             if self.prev_hash != last_block.hash()? {
-                return Err("Prev hash does not match this hash".to_owned());
+                return Err(Error::PrevInvalidHash);
             }
 
             let now = current_timestamp();
             if self.timestamp < last_block.timestamp || self.timestamp > now {
-                return Err("Timestamp is invalid".to_owned());
+                return Err(Error::InvalidTimestamp);
             }
 
             let expected_target = Self::calculate_target(chain, &Some( last_block ));
             if self.target != expected_target {
-                return Err("Wrong target".to_owned());
+                return Err(Error::InvalidTarget);
             }
         }
 
@@ -256,14 +257,14 @@ impl Block
     pub fn validate_pow(&self) -> bool
     {
         let hash_or_none = self.hash();
-        if hash_or_none.is_err() 
+        if hash_or_none.is_err()
         {
-            println!("Faild to hash: {}", hash_or_none.err().unwrap());
+            println!("Faild to hash: {}", hash_or_none.err().unwrap().to_string());
             return false;
         }
 
         // Validate POW
-        let hash = hash_or_none.unwrap();
+        let hash = hash_or_none.ok().unwrap();
         let hash_num = BigUint::from_bytes_le(&hash);
         let target_num = BigUint::from_bytes_le(&self.target);
         if hash_num > target_num {

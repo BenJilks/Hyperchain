@@ -22,23 +22,33 @@ mod block;
 mod miner;
 mod wallet;
 mod node;
-use wallet::{PrivateWallet, Wallet};
-use block::{Block, Page, BlockChain};
+mod error;
+use wallet::PrivateWallet;
+use block::BlockChain;
 use std::path::PathBuf;
-use std::fs::File;
+use node::Node;
+use std::env;
 
 fn main()
 {
     println!("Hello, Blockchains!!");
 
-    let mut chain = BlockChain::new(PathBuf::from("blockchain"));
     let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet")).unwrap();
-    
-    miner::mine(chain.longest_branch(), &wallet, 2).unwrap();
-    
-    let test = bincode::deserialize_from::<File, Block>(File::open("6").unwrap()).unwrap();
-    chain.add(&test).unwrap();
-    
+
+    if env::args().len() <= 1
+    {
+        let mut chain = BlockChain::new(PathBuf::from("blockchain_a"));
+        Node::new(8585, PathBuf::from("known_nodes_a"))
+            .run(&mut chain, &wallet);
+    }
+    else
+    {
+        let mut chain = BlockChain::new(PathBuf::from("blockchain_b"));
+        let mut node = Node::new(8686, PathBuf::from("known_nodes_b"));
+        node.add_known_node("127.0.0.1:8585");
+        node.run(&mut chain, &wallet);
+    }
+
     //let other = PrivateWallet::read_from_file(&PathBuf::from("other.wallet")).unwrap();
     /*
     if true

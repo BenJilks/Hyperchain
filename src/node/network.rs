@@ -31,7 +31,7 @@ pub enum Packet
 {
     Hello(OtherNode),
     KnownNode(String),
-    NewBlock(String, Block),
+    NewBlock(Block),
     Ping,
 }
 
@@ -44,7 +44,7 @@ pub struct NetworkConnection
     broadcaster: Broadcaster<(Option<String>, Packet)>,
 
     other_nodes: HashMap<String, OtherNode>,
-    new_blocks: Vec<(String, Block)>,
+    new_blocks: Vec<Block>,
     my_top: u64,
 }
 
@@ -235,7 +235,7 @@ impl NetworkConnection
             },
 
             Packet::KnownNode(address) => self.update_known_nodes(&address),
-            Packet::NewBlock(address, block) => self.new_blocks.push((address, block)),
+            Packet::NewBlock(block) => self.new_blocks.push(block),
             Packet::Ping => println!("Ping!!"),
         }
     }
@@ -264,7 +264,7 @@ impl NetworkConnection
         this.lock().unwrap().other_nodes.clone()
     }
 
-    pub fn process_new_blocks(this: &mut Arc<Mutex<Self>>) -> Vec<(String, Block)>
+    pub fn process_new_blocks(this: &mut Arc<Mutex<Self>>) -> Vec<Block>
     {
         let mut this_lock = this.lock().unwrap();
         let blocks = this_lock.new_blocks.clone();

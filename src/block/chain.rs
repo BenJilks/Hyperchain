@@ -1,5 +1,6 @@
 use super::{Block, Page, DataFormat};
 use crate::wallet::{Wallet, PublicWallet};
+use crate::error::Error;
 use std::fs::{self, File};
 use std::io::{Write, Read};
 use std::path::PathBuf;
@@ -14,12 +15,12 @@ pub struct BlockChainBranch
     top_index: u64,
 }
 
-fn io_error<T>(result: std::io::Result<T>) -> Result<T, String>
+fn io_error<T>(result: std::io::Result<T>) -> Result<T, Error>
 {
     if result.is_ok() {
         Ok(result.ok().unwrap())
     } else {
-        Err(result.err().unwrap().to_string())
+        Err(Error::Other(result.err().unwrap().to_string()))
     }
 }
 
@@ -80,10 +81,10 @@ impl BlockChainBranch
         }
     }
 
-    pub fn add(&mut self, block: &Block) -> Result<(), String>
+    pub fn add(&mut self, block: &Block) -> Result<(), Error>
     {
         if block.block_id != self.top_index + 1 {
-            return Err("Not next block".to_owned());
+            return Err(Error::NotNextBlock);
         }
 
         if block.block_id > 1 {
@@ -91,7 +92,7 @@ impl BlockChainBranch
         }
 
         if !block.validate_pow() {
-            return Err("Invalid block (POW)".to_owned());
+            return Err(Error::InvalidPOW);
         }
 
         let bytes = block.as_bytes()?;
@@ -203,7 +204,17 @@ impl BlockChain
         self.longest_branch().top()
     }
 
-    fn branch(&mut self, old_branch: &BlockChainBranch, block: &Block) -> Result<(), String>
+    pub fn top_id(&mut self) -> u64
+    {
+        let top = self.top();
+        if top.is_some() {
+            top.unwrap().block_id
+        } else {
+            0
+        }
+    }
+
+    fn branch(&mut self, old_branch: &BlockChainBranch, block: &Block) -> Result<(), Error>
     {
         let mut new_branch_id = [0u8; 5];
         rand::thread_rng().fill_bytes(&mut new_branch_id);
@@ -219,7 +230,7 @@ impl BlockChain
         Ok(())
     }
 
-    pub fn add(&mut self, block: &Block) -> Result<(),String>
+    pub fn add(&mut self, block: &Block) -> Result<(), Error>
     {
         let mut valid_to_branch_from = None;
         for branch in &mut self.branches
@@ -231,6 +242,14 @@ impl BlockChain
                 }
             }
 
+            if block.block_id > branch.top_index {
+                continue;
+            }
+
+            if &branch.block(block.block_id).unwrap() == block {
+                return Err(Error::DuplicateBlock);
+            }
+
             if block.validate(&branch).is_ok()
             {
                 valid_to_branch_from = Some( branch.clone() );
@@ -239,7 +258,7 @@ impl BlockChain
         }
 
         if valid_to_branch_from.is_none() {
-            return Err("No valid branches".to_owned())
+            return Err(Error::NoValidBranches)
         }
 
         self.branch(&valid_to_branch_from.unwrap(), block)?;
