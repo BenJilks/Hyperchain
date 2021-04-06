@@ -1,6 +1,8 @@
 mod transaction;
+mod page;
 mod balance;
 pub use transaction::TransactionCommand;
+pub use page::PageCommand;
 pub use balance::BalanceCommand;
 use crate::node::network::{NetworkConnection, Packet};
 use crate::block::{Block, BlockChain};

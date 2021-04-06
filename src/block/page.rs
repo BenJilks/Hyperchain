@@ -4,6 +4,7 @@ use crate::wallet::{Wallet, PrivateWallet};
 use serde::{Serialize, Deserialize};
 use sha2::{Sha256, Digest};
 use std::io::Read;
+use std::string::ToString;
 
 big_array! { BigArray; }
 
@@ -69,6 +70,18 @@ pub struct Page
     pub e: [u8; 3],
 }
 
+impl ToString for Page
+{
+
+    fn to_string(&self) -> String
+    {
+        format!("{}.. -> {}",
+            &base_62::encode(&self.header.site_id)[10..],
+            &self.header.page_name)
+    }
+
+}
+
 impl Page
 {
 
@@ -92,7 +105,6 @@ impl Page
         }
     }
 
-    /*
     pub fn from_file(chain: &BlockChainBranch, new_page: &[u8], owner: &PrivateWallet, page_name: &str, fee: f64) -> Self
     {
         let existing_page_file = chain.page(owner, page_name);
@@ -106,6 +118,5 @@ impl Page
         bidiff::simple_diff(&existing_page, new_page, &mut diff).unwrap();
         Self::new(DataFormat::DiffRaw, diff, owner, page_name, fee)
     }
-    */
 
 }

@@ -1,6 +1,4 @@
-use crate::block::{Block, BlockChainBranch};
-use crate::wallet::PrivateWallet;
-use crate::error::Error;
+use crate::block::Block;
 
 pub fn mine_block(mut block: Block) -> Block
 {

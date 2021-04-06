@@ -88,7 +88,9 @@ impl Command for TransactionCommand
         for transaction in &block.transactions
         {
             let index = self.transaction_queue.iter().position(|x| x == transaction);
-            if index.is_some() {
+            if index.is_some() 
+            {
+                println!("Got {} in block {}", transaction.to_string(), block.block_id);
                 self.transaction_queue.remove(index.unwrap());
             }
         }

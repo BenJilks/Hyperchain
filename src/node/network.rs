@@ -1,5 +1,4 @@
-use crate::block::{Block, Transaction};
-use crate::wallet::{Wallet, PublicWallet};
+use crate::block::{Block, Transaction, Page};
 use super::broadcast::Broadcaster;
 use std::net::{TcpListener, TcpStream};
 use std::io::{BufReader, BufWriter, Write};
@@ -37,6 +36,10 @@ pub enum Packet
     TransactionRequest(Transaction),
     TransactionRequestAccepted(Transaction),
     TransactionRequestRejected(Transaction),
+
+    PageRequest(Page),
+    PageRequestAccepted(Page),
+    PageRequestRejected(Page),
     Ping,
 }
 

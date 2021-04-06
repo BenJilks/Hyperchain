@@ -6,7 +6,7 @@ use crate::block::{Block, BlockChain};
 use crate::wallet::PrivateWallet;
 use crate::error::Error;
 use network::{NetworkConnection, Packet};
-use command::{Command, TransactionCommand, BalanceCommand};
+use command::{Command, TransactionCommand, PageCommand, BalanceCommand};
 
 use std::sync::mpsc::{channel, Sender, Receiver};
 use std::sync::{Mutex, Arc};
@@ -42,6 +42,7 @@ impl Node
             commands: vec![
                 Box::from(TransactionCommand::default()),
                 Box::from(BalanceCommand::default()),
+                Box::from(PageCommand::default()),
             ],
         }
     }
