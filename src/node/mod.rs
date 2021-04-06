@@ -85,6 +85,7 @@ impl Node
             match packet
             {
                 Packet::NewBlock(block) => self.process_received_block(chain, block),
+
                 _ =>
                 {
                     for command in &mut self.commands {

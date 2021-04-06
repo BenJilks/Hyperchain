@@ -76,6 +76,7 @@ impl Command for TransactionCommand
 
     fn on_create_block(&mut self, block: &mut Block) 
     {
+        // FIXME: If this fills up the block, we have a big problem
         for transaction in &self.transaction_queue 
         {
             println!("Adding {} to block {}", transaction.to_string(), block.block_id);

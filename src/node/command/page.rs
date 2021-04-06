@@ -79,6 +79,7 @@ impl Command for PageCommand
 
     fn on_create_block(&mut self, block: &mut Block) 
     {
+        // FIXME: If this fills up the block, we have a big problem
         for page in &self.page_queue 
         {
             println!("Adding {} to block {}", page.to_string(), block.block_id);
