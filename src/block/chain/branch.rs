@@ -184,7 +184,7 @@ impl BlockChainBranch
     fn lookup_chunks<Callback>(&self, callback: &mut Callback)
         where Callback: FnMut(&BlockChainChunk)
     {
-        let mut chunk_id = 1;
+        let mut chunk_id = 0;
         loop
         {
             // FIXME: Still not good but better :|

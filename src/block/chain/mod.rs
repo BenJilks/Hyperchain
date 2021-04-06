@@ -3,6 +3,7 @@ mod chunk;
 pub use branch::BlockChainBranch;
 use super::Block;
 use crate::error::Error;
+use chunk::CHUNK_SIZE;
 
 use std::fs;
 use std::path::PathBuf;
@@ -71,6 +72,20 @@ impl BlockChain
         }
     }
 
+    fn generate_new_branch_name(&self) -> String
+    {
+        let mut new_branch_id = [0u8; 5];
+        rand::thread_rng().fill_bytes(&mut new_branch_id);
+
+        loop
+        {
+            let name = base_62::encode(&new_branch_id);
+            if !self.path.join(&name).exists() {
+                return name;
+            }
+        }
+    }
+
     pub fn longest_branch(&mut self) -> &mut BlockChainBranch
     {
         let mut max_branch_index = None;
@@ -88,7 +103,8 @@ impl BlockChain
         // If no branches exist, add a new one
         if max_branch_index.is_none() 
         {
-            self.branches.push(BlockChainBranch::new(self.path.join("master")));
+            let branch_name = self.generate_new_branch_name();
+            self.branches.push(BlockChainBranch::new(self.path.join(branch_name)));
             max_branch_index = Some( 0 );
         }
 
@@ -111,12 +127,21 @@ impl BlockChain
 
     fn branch(&mut self, old_branch: &BlockChainBranch, block: &Block) -> Result<(), Error>
     {
-        let mut new_branch_id = [0u8; 5];
-        rand::thread_rng().fill_bytes(&mut new_branch_id);
+        let old_branch_path = old_branch.path.clone();
+        let new_branch_path = self.path.join(self.generate_new_branch_name());
+        let mut branch = BlockChainBranch::new(new_branch_path.clone());
+        for chunk_id in 0..((block.block_id - 1) / CHUNK_SIZE) 
+        {
+            std::fs::copy(
+                old_branch_path.join("blocks").join(chunk_id.to_string()),
+                new_branch_path.join("blocks").join(chunk_id.to_string()), 
+            ).unwrap();
+        }
         
-        let new_branch_path = self.path.join(base_62::encode(&new_branch_id));
-        let mut branch = BlockChainBranch::new(new_branch_path);
-        for i in 1..=(block.block_id - 1) {
+        let last_chunk_bottom = (block.block_id - 1) / CHUNK_SIZE * CHUNK_SIZE;
+        branch.top_index = last_chunk_bottom - 1;
+
+        for i in last_chunk_bottom..=(block.block_id - 1) {
             branch.add(&old_branch.block(i).unwrap())?;
         }
         branch.add(block)?;

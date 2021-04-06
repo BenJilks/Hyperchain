@@ -28,7 +28,7 @@ const MIN_TARGET: [u8; HASH_LEN] =
     0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8,
     0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8,
     0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8,
-    0xFFu8, 0xF0u8,
+    0xFFu8, 0xF2u8,
 ];
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
@@ -71,9 +71,6 @@ impl Block
 
     fn calculate_target(chain: &BlockChainBranch, top_or_none: &Option<Block>) -> [u8; HASH_LEN]
     {
-        return MIN_TARGET;
-
-        /*
         if top_or_none.is_none() {
             return MIN_TARGET;
         }
@@ -95,9 +92,8 @@ impl Block
         let mut new_target = new_target_num.to_bytes_le();
         new_target.resize(HASH_LEN, 0);
         
-        //println!("{} in {}, {} H/ms", last_difficualty, average_time, hash_rate);
+        println!("{} in {}, {} H/ms", last_difficualty, average_time, hash_rate);
         return *slice_as_array!(&new_target, [u8; HASH_LEN]).unwrap();
-        */
     }
 
     pub fn new<W: Wallet>(chain: &BlockChainBranch, raward_to: &W) -> Result<Self, Error>
@@ -106,7 +102,7 @@ impl Block
         let mut prev_block_id: u64 = 0;
         let mut prev_block_hash = [0u8; HASH_LEN];
         let target = Self::calculate_target(chain, &top_or_none);
-
+        
         if top_or_none.is_some()
         {
             let top = top_or_none.unwrap();
@@ -154,19 +150,14 @@ impl Block
         }
     }
 
-    pub fn hash_with_hasher(&self, hasher: &mut Sha256) -> Result<Hash, Error>
+    pub fn hash(&self) -> Result<Hash, Error>
     {
+        let mut hasher = Sha256::default();
         let bytes = self.as_bytes()?;
         hasher.update(&bytes);
 
         let hash = hasher.clone().finalize();
         Ok( *slice_as_array!(&hash[0..HASH_LEN], [u8; HASH_LEN]).unwrap() )
-    }
-
-    pub fn hash(&self) -> Result<Hash, Error>
-    {
-        let mut hasher = Sha256::default();
-        self.hash_with_hasher(&mut hasher)
     }
 
     pub fn calculate_reward(&self) -> f64
@@ -249,9 +240,9 @@ impl Block
         self.validate_transactions(chain)
     }
 
-    pub fn validate_pow_with_hasher(&self, hasher: &mut Sha256) -> bool
+    pub fn validate_pow(&self) -> bool
     {
-        let hash_or_none = self.hash_with_hasher(hasher);
+        let hash_or_none = self.hash();
         if hash_or_none.is_err()
         {
             println!("Faild to hash: {}", hash_or_none.err().unwrap().to_string());
@@ -267,12 +258,6 @@ impl Block
         }
 
         true
-    }
-
-    pub fn validate_pow(&self) -> bool
-    {
-        let mut hasher = Sha256::default();
-        self.validate_pow_with_hasher(&mut hasher)
     }
 
 }

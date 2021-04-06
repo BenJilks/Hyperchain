@@ -24,7 +24,7 @@ mod wallet;
 mod node;
 mod error;
 use wallet::PrivateWallet;
-use block::BlockChain;
+use block::{Block, BlockChain};
 use std::path::PathBuf;
 use node::Node;
 

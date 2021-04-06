@@ -103,19 +103,22 @@ impl Node
             self.blocks_being_mined -= 1;
             if block.block_id != chain.top_id() + 1 
             {
-                println!("Mined block {} not at top {}", block.block_id, chain.top_id());
+                //println!("Mined block {} not at top {}", block.block_id, chain.top_id());
                 continue;
             }
             if block.validate(chain.longest_branch()).is_err() 
             {
-                println!("Mined block not valid on longest branch");
+                //println!("Mined block not valid on longest branch");
                 continue;
             }
-            if chain.add(&block).is_err() {
+            let test = chain.add(&block);
+            if test.is_err()
+            {
+                //println!("Unable to add block {} {}", block.block_id, test.unwrap_err().to_string());
                 continue;
             }
             
-            println!("Accepted our block {}!!", block.block_id);
+            //println!("Accepted our block {}!!", block.block_id);
             for command in &mut self.commands {
                 command.on_accepted_block(&block);
             }
@@ -234,8 +237,6 @@ impl Node
         std::thread::spawn(move || {
             Self::command_line_thread(lines_send);
         });
-
-        //std::thread::sleep(Duration::from_secs(5));
 
         loop
         {
