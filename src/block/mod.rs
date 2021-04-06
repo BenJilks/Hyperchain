@@ -96,7 +96,7 @@ impl Block
         let mut new_target = new_target_num.to_bytes_le();
         new_target.resize(HASH_LEN, 0);
         
-        println!("{} in {}, {} H/ms", last_difficualty, average_time, hash_rate);
+        //println!("{} in {}, {} H/ms", last_difficualty, average_time, hash_rate);
         return *slice_as_array!(&new_target, [u8; HASH_LEN]).unwrap();
     }
 

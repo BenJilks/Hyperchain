@@ -1,15 +1,19 @@
-mod network;
+pub mod network;
 mod broadcast;
+mod command;
 use crate::miner;
-use crate::block::{Block, Transaction, BlockChain};
-use crate::wallet::{PrivateWallet, PublicWallet, Wallet};
+use crate::block::{Block, BlockChain};
+use crate::wallet::PrivateWallet;
 use crate::error::Error;
 use network::{NetworkConnection, Packet};
+use command::{Command, TransactionCommand, BalanceCommand};
 
 use std::sync::mpsc::{channel, Sender, Receiver};
 use std::sync::{Mutex, Arc};
 use std::path::PathBuf;
 use std::time::{Instant, Duration};
+use rustyline::Editor;
+use rustyline::config::Configurer;
 
 pub struct Node
 {
@@ -18,9 +22,8 @@ pub struct Node
     blocks_being_mined: i32,
     at_top: bool,
     start_prune_timer: Instant,
-    port: i32,
 
-    transaction_queue: Vec<Transaction>,
+    commands: Vec<Box<dyn Command>>,
 }
 
 impl Node
@@ -36,9 +39,10 @@ impl Node
             blocks_being_mined: 0,
             at_top: false,
             start_prune_timer: Instant::now(),
-            port: port,
-
-            transaction_queue: Vec::new(),
+            commands: vec![
+                Box::from(TransactionCommand::default()),
+                Box::from(BalanceCommand::default()),
+            ],
         }
     }
 
@@ -54,25 +58,16 @@ impl Node
         }
     }
 
-    fn remove_completed_transactions(&mut self, block: &Block)
-    {
-        for transaction in &block.transactions
-        {
-            let index = self.transaction_queue.iter().position(|x| x == transaction);
-            if index.is_some() {
-                self.transaction_queue.remove(index.unwrap());
-            }
-        }
-    }
-
     fn process_received_block(&mut self, chain: &mut BlockChain, block: Block)
     {
-        println!("Got block {}", block.block_id);
+        //println!("Got block {}", block.block_id);
         match chain.add(&block)
         {
             Ok(_) => 
             {
-                self.remove_completed_transactions(&block);
+                for command in &mut self.commands {
+                    command.on_accepted_block(&block);
+                }
                 self.top = chain.top_id();
             },
             Err(Error::NoValidBranches) => self.top -= 1,
@@ -82,24 +77,6 @@ impl Node
         NetworkConnection::set_top(&mut self.connection, self.top);
     }
 
-    fn process_received_transaction(&mut self, chain: &mut BlockChain, transaction: Transaction)
-    {
-        println!("Got tranaction {}", transaction.to_string());
-        let wallet = PublicWallet::from_public_key_e(transaction.header.from, transaction.e);
-        let balance = wallet.calculate_balance(chain.longest_branch());
-
-        if balance < transaction.header.amount + transaction.header.transaction_fee 
-            || !wallet.varify(&transaction.header.hash().unwrap(), &transaction.signature)
-        {
-            println!("{} < {}", balance, transaction.header.amount + transaction.header.transaction_fee);
-            NetworkConnection::broadcast(&mut self.connection, None, Packet::TransactionRequestRejected(transaction));
-            return;
-        }
-
-        self.transaction_queue.push(transaction.clone());
-        NetworkConnection::broadcast(&mut self.connection, None, Packet::TransactionRequestAccepted(transaction));
-    }
-
     fn process_packets(&mut self, chain: &mut BlockChain)
     {
         for packet in NetworkConnection::process_packets(&mut self.connection)
@@ -107,10 +84,12 @@ impl Node
             match packet
             {
                 Packet::NewBlock(block) => self.process_received_block(chain, block),
-                Packet::TransactionRequest(transaction) => self.process_received_transaction(chain, transaction),
-                Packet::TransactionRequestAccepted(transaction) => println!("Accepted {}", transaction.to_string()),
-                Packet::TransactionRequestRejected(transaction) => println!("Rejected {}", transaction.to_string()),
-                _ => panic!(),
+                _ =>
+                {
+                    for command in &mut self.commands {
+                        command.on_packet(packet.clone(), &mut self.connection, chain);
+                    }
+                },
             }
         }
     }
@@ -122,20 +101,22 @@ impl Node
             self.blocks_being_mined -= 1;
             if block.block_id != chain.top_id() + 1 
             {
-                println!("Mined block {} not at top {}", block.block_id, chain.top_id());
+                //println!("Mined block {} not at top {}", block.block_id, chain.top_id());
                 continue;
             }
             if block.validate(chain.longest_branch()).is_err() 
             {
-                println!("Mined block not valid on longest branch");
+                //println!("Mined block not valid on longest branch");
                 continue;
             }
             if chain.add(&block).is_err() {
                 continue;
             }
             
-            println!("Accepted our block {}!!", block.block_id);
-            self.remove_completed_transactions(&block);
+            //println!("Accepted our block {}!!", block.block_id);
+            for command in &mut self.commands {
+                command.on_accepted_block(&block);
+            }
             self.top = chain.top_id();
             NetworkConnection::set_top(&mut self.connection, self.top);
         }
@@ -167,10 +148,8 @@ impl Node
         if self.at_top && self.blocks_being_mined == 0
         {
             let mut block = Block::new(chain.longest_branch(), wallet).expect("Can make block");
-            for transaction in &self.transaction_queue 
-            {
-                println!("Adding {} to block {}", transaction.to_string(), block.block_id);
-                block.add_transaction(transaction.clone());
+            for command in &mut self.commands {
+                command.on_create_block(&mut block);
             }
 
             self.blocks_being_mined += 1;
@@ -187,12 +166,46 @@ impl Node
         }
     }
 
-    fn make_transaction(&mut self, transaction: Transaction)
+    fn process_commands(&mut self, lines_recv: &Receiver<Vec<String>>, chain: &mut BlockChain)
     {
-        NetworkConnection::broadcast(&mut self.connection, None, 
-            Packet::TransactionRequest(transaction.clone()));
-        
-        self.transaction_queue.push(transaction);
+        for line in lines_recv.try_iter() 
+        {
+            if line.len() == 0 {
+                continue;
+            }
+
+            for command in &mut self.commands 
+            {
+                if command.name() == line[0] {
+                    command.invoke(&line[1..], &mut self.connection, chain);
+                }
+            }
+        }
+    }
+
+    fn command_line_thread(send: Sender<Vec<String>>)
+    {
+        let mut line_editor = Editor::<()>::new();
+        line_editor.set_auto_add_history(true);
+
+        loop
+        {
+            match line_editor.readline(">> ")
+            {
+                Ok(line) => 
+                {
+                    send.send(line.split(' ')
+                        .map(|x| x.to_owned())
+                        .collect::<Vec<String>>()).unwrap();
+                },
+
+                Err(err) => 
+                {
+                    println!("Error: {:?}", err);
+                    break;
+                },
+            }
+        }
     }
 
     pub fn run(&mut self, chain: &mut BlockChain, wallet: &PrivateWallet)
@@ -207,9 +220,13 @@ impl Node
             Self::miner_thread(blocks_to_mine_recv, blocks_done_send);
         });
 
+        let (lines_send, lines_recv) = channel::<Vec<String>>();
+        std::thread::spawn(move || {
+            Self::command_line_thread(lines_send);
+        });
+
         std::thread::sleep(Duration::from_secs(5));
 
-        let mut has_made_debug_transaction = false;
         loop
         {
             self.process_packets(chain);
@@ -217,13 +234,7 @@ impl Node
             self.process_nodes(chain);
             self.process_new_blocks_to_mine(chain, wallet, &blocks_to_mine_send);
             self.prune_branches(chain);
-
-            if !has_made_debug_transaction && self.port == 8686 && self.at_top
-            {
-                let other = PrivateWallet::read_from_file(&std::path::PathBuf::from("other.wallet")).unwrap();
-                self.make_transaction(Transaction::for_block(chain.longest_branch(), wallet, &other, 10.0, 1.0).unwrap());
-                has_made_debug_transaction = true;
-            }
+            self.process_commands(&lines_recv, chain);
 
             std::thread::sleep(Duration::from_millis(100));
         }
