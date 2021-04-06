@@ -164,14 +164,19 @@ impl Block
         return Some( result_or_error.unwrap() );
     }
 
-    pub fn hash(&self) -> Result<Hash, Error>
+    pub fn hash_with_hasher(&self, hasher: &mut Sha256) -> Result<Hash, Error>
     {
         let bytes = self.as_bytes()?;
-        let mut hasher = Sha256::new();
         hasher.update(&bytes);
 
-        let hash = hasher.finalize();
-        return Ok( *slice_as_array!(&hash[0..HASH_LEN], [u8; HASH_LEN]).unwrap() );
+        let hash = hasher.clone().finalize();
+        Ok( *slice_as_array!(&hash[0..HASH_LEN], [u8; HASH_LEN]).unwrap() )
+    }
+
+    pub fn hash(&self) -> Result<Hash, Error>
+    {
+        let mut hasher = Sha256::default();
+        self.hash_with_hasher(&mut hasher)
     }
 
     pub fn calculate_reward(&self) -> f64
@@ -254,9 +259,9 @@ impl Block
         self.validate_transactions(chain)
     }
 
-    pub fn validate_pow(&self) -> bool
+    pub fn validate_pow_with_hasher(&self, hasher: &mut Sha256) -> bool
     {
-        let hash_or_none = self.hash();
+        let hash_or_none = self.hash_with_hasher(hasher);
         if hash_or_none.is_err()
         {
             println!("Faild to hash: {}", hash_or_none.err().unwrap().to_string());
@@ -272,6 +277,12 @@ impl Block
         }
 
         true
+    }
+
+    pub fn validate_pow(&self) -> bool
+    {
+        let mut hasher = Sha256::default();
+        self.validate_pow_with_hasher(&mut hasher)
     }
 
 }
