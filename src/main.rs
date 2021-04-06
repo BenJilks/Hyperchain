@@ -41,8 +41,14 @@ fn main()
         println!("N4L8: {}", chain.longest_branch().lockup_wallet_status(&wallet).balance);
         println!("other: {}", chain.longest_branch().lockup_wallet_status(&other).balance);
 
-        Node::new(8585, PathBuf::from("known_nodes_a.json"))
-            .run(&mut chain, &wallet);
+        let top_index = chain.top_id();
+        let mut block = chain.longest_branch().block(top_index - 2).unwrap();
+        block.timestamp += 1;
+        block.pow = 0;
+        chain.add(&miner::mine_block(block)).unwrap();
+
+        //Node::new(8585, PathBuf::from("known_nodes_a.json"))
+        //    .run(&mut chain, &wallet);
     }
     else
     {

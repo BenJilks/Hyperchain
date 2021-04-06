@@ -1,10 +1,20 @@
-use crate::block::{Hash, Block};
+use crate::block::{Hash, Block, PageHeader, DataFormat};
 use crate::wallet::{PublicWallet, Wallet, WalletStatus};
 
 use std::collections::HashMap;
+use std::io::{Cursor, Read, Write};
+use std::path::PathBuf;
+use std::fs::File;
 use serde::{Serialize, Deserialize};
 
 pub const CHUNK_SIZE: u64 = 100;
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum CumulativeDiff
+{
+    New(Vec<u8>),
+    Diffs(Vec<Vec<u8>>),
+}
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct BlockChainChunk
@@ -14,6 +24,7 @@ pub struct BlockChainChunk
     top: u64,
 
     ledger: HashMap<Hash, WalletStatus>,
+    cumulative_page_diffs: HashMap<(Hash, String), CumulativeDiff>,
 }
 
 impl BlockChainChunk
@@ -26,7 +37,9 @@ impl BlockChainChunk
             bottom_id: chunk_id * CHUNK_SIZE,
             blocks: vec![None; CHUNK_SIZE as usize],
             top: 0u64,
+
             ledger: HashMap::new(),
+            cumulative_page_diffs: HashMap::new(),
         }
     }
 
@@ -51,6 +64,53 @@ impl BlockChainChunk
         }
     }
 
+    fn register_page_diff(&mut self, address: Hash, page: &PageHeader)
+    {
+        match self.cumulative_page_diffs.get_mut(&(address, page.page_name.clone()))
+        {
+            Some(CumulativeDiff::New(data)) =>
+            {
+                let patch = Cursor::new(page.page_data.clone());
+                let older = Cursor::new(data.clone());
+                let mut out_reader = bipatch::Reader::new(patch, older).unwrap();
+        
+                data.clear();
+                out_reader.read_to_end(data).unwrap();
+            },
+
+            Some(CumulativeDiff::Diffs(diffs)) =>
+            {
+                diffs.push(page.page_data.clone());
+            },
+
+            None => 
+            {
+                self.cumulative_page_diffs.insert((address, page.page_name.clone()), 
+                    CumulativeDiff::Diffs(vec![page.page_data.clone()]));
+            },
+        }
+    }
+
+    fn register_page_data(&mut self, page: &PageHeader)
+    {
+        let address = PublicWallet::from_public_key(page.site_id).get_address();
+        match DataFormat::from_u8(page.data_format)
+        {
+            Some(DataFormat::NewRaw) => 
+            {
+                self.cumulative_page_diffs.insert((address, page.page_name.clone()), 
+                    CumulativeDiff::New(page.page_data.clone()));
+            },
+
+            Some(DataFormat::DiffRaw) => 
+            {
+                self.register_page_diff(address, page);
+            },
+            
+            None => panic!(),
+        }
+    }
+
     pub fn add(&mut self, block: &Block)
     {
         self.change_ledger(&block.raward_to, block.calculate_reward(), 0);
@@ -66,6 +126,7 @@ impl BlockChainChunk
         for page in &block.pages
         {
             let owner_address = PublicWallet::from_public_key(page.header.site_id).get_address();
+            self.register_page_data(&page.header);
             self.change_ledger(&owner_address, -page.header.page_fee, 0);
             self.change_ledger(&block.raward_to, page.header.page_fee, 0);
         }
@@ -99,6 +160,37 @@ impl BlockChainChunk
                 balance: 0f64,
                 max_id: 0,
             },
+        }
+    }
+
+    pub fn apply_cumulative_page_diffs(&self, sites_path: &PathBuf)
+    {
+        for ((site_id, page_name), cumulative_diffs) in &self.cumulative_page_diffs
+        {
+            let page_path = sites_path
+                .join(base_62::encode(site_id))
+                .join(&page_name);
+            
+            std::fs::create_dir_all(page_path.parent().unwrap()).unwrap();
+            match cumulative_diffs
+            {
+                CumulativeDiff::New(data) =>
+                {
+                    let mut file = File::create(&page_path).unwrap();
+                    file.write(&data).unwrap();
+                },
+
+                CumulativeDiff::Diffs(diffs) =>
+                {
+                    for diff in diffs
+                    {
+                        let mut out = bipatch::Reader::new(&diff[..], File::open(&page_path).unwrap()).unwrap();
+                        let mut buffer = Vec::<u8>::new();
+                        out.read_to_end(&mut buffer).unwrap();
+                        File::create(&page_path).unwrap().write(&buffer).unwrap();
+                    }
+                }
+            }
         }
     }
 

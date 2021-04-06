@@ -136,12 +136,17 @@ impl BlockChain
                 old_branch_path.join("blocks").join(chunk_id.to_string()),
                 new_branch_path.join("blocks").join(chunk_id.to_string()), 
             ).unwrap();
+
+            BlockChainBranch::chunk(&old_branch_path.join("blocks"), chunk_id).unwrap()
+                .apply_cumulative_page_diffs(&new_branch_path.join("sites"));
         }
         
-        let last_chunk_bottom = (block.block_id - 1) / CHUNK_SIZE * CHUNK_SIZE;
+        let last_chunk_bottom = std::cmp::max((block.block_id - 1) / CHUNK_SIZE * CHUNK_SIZE, 1);
         branch.top_index = last_chunk_bottom - 1;
 
-        for i in last_chunk_bottom..=(block.block_id - 1) {
+        for i in last_chunk_bottom..=(block.block_id - 1) 
+        {
+            println!("Block: {}", i);
             branch.add(&old_branch.block(i).unwrap())?;
         }
         branch.add(block)?;

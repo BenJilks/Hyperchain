@@ -28,7 +28,7 @@ pub struct BlockChainBranch
 impl BlockChainBranch
 {
 
-    fn chunk(blocks_path: &PathBuf, chunk_id: u64) -> Option<BlockChainChunk>
+    pub fn chunk(blocks_path: &PathBuf, chunk_id: u64) -> Option<BlockChainChunk>
     {
         let path = blocks_path.join(chunk_id.to_string());
         if !path.exists() {

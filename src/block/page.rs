@@ -8,6 +8,7 @@ use std::string::ToString;
 
 big_array! { BigArray; }
 
+#[derive(Serialize, Deserialize, Debug)]
 pub enum DataFormat
 {
     NewRaw = 0,

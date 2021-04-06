@@ -118,7 +118,7 @@ impl Node
                 continue;
             }
             
-            //println!("Accepted our block {}!!", block.block_id);
+            println!("Accepted our block {}!!", block.block_id);
             for command in &mut self.commands {
                 command.on_accepted_block(&block);
             }
