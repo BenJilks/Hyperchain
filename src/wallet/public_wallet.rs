@@ -47,7 +47,7 @@ impl PublicWallet
         let n = BigUint::from_bytes_le(&self.public_key);
         let e = BigUint::from_bytes_le(&self.e.unwrap());
         let key = RSAPublicKey::new(n, e).unwrap();
-        key.verify(PaddingScheme::new_pkcs1v15_sign(None), hash, signature).is_err()
+        key.verify(PaddingScheme::new_pkcs1v15_sign(None), hash, signature).is_ok()
     }
 
 }

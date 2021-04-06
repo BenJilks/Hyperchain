@@ -18,6 +18,7 @@ pub struct Node
     blocks_being_mined: i32,
     at_top: bool,
     start_prune_timer: Instant,
+    port: i32,
 
     transaction_queue: Vec<Transaction>,
 }
@@ -35,6 +36,7 @@ impl Node
             blocks_being_mined: 0,
             at_top: false,
             start_prune_timer: Instant::now(),
+            port: port,
 
             transaction_queue: Vec::new(),
         }
@@ -52,12 +54,27 @@ impl Node
         }
     }
 
+    fn remove_completed_transactions(&mut self, block: &Block)
+    {
+        for transaction in &block.transactions
+        {
+            let index = self.transaction_queue.iter().position(|x| x == transaction);
+            if index.is_some() {
+                self.transaction_queue.remove(index.unwrap());
+            }
+        }
+    }
+
     fn process_received_block(&mut self, chain: &mut BlockChain, block: Block)
     {
         println!("Got block {}", block.block_id);
         match chain.add(&block)
         {
-            Ok(_) => self.top = chain.top_id(),
+            Ok(_) => 
+            {
+                self.remove_completed_transactions(&block);
+                self.top = chain.top_id();
+            },
             Err(Error::NoValidBranches) => self.top -= 1,
             Err(Error::DuplicateBlock) => {},
             Err(_) => panic!(),
@@ -74,6 +91,7 @@ impl Node
         if balance < transaction.header.amount + transaction.header.transaction_fee 
             || !wallet.varify(&transaction.header.hash().unwrap(), &transaction.signature)
         {
+            println!("{} < {}", balance, transaction.header.amount + transaction.header.transaction_fee);
             NetworkConnection::broadcast(&mut self.connection, None, Packet::TransactionRequestRejected(transaction));
             return;
         }
@@ -117,7 +135,7 @@ impl Node
             }
             
             println!("Accepted our block {}!!", block.block_id);
-            self.transaction_queue.clear();
+            self.remove_completed_transactions(&block);
             self.top = chain.top_id();
             NetworkConnection::set_top(&mut self.connection, self.top);
         }
@@ -189,9 +207,9 @@ impl Node
             Self::miner_thread(blocks_to_mine_recv, blocks_done_send);
         });
 
-        let other = PrivateWallet::read_from_file(&std::path::PathBuf::from("other.wallet")).unwrap();
-        self.make_transaction(Transaction::for_block(chain.longest_branch(), wallet, &other, 10.0, 1.0).unwrap());
+        std::thread::sleep(Duration::from_secs(5));
 
+        let mut has_made_debug_transaction = false;
         loop
         {
             self.process_packets(chain);
@@ -199,6 +217,13 @@ impl Node
             self.process_nodes(chain);
             self.process_new_blocks_to_mine(chain, wallet, &blocks_to_mine_send);
             self.prune_branches(chain);
+
+            if !has_made_debug_transaction && self.port == 8686 && self.at_top
+            {
+                let other = PrivateWallet::read_from_file(&std::path::PathBuf::from("other.wallet")).unwrap();
+                self.make_transaction(Transaction::for_block(chain.longest_branch(), wallet, &other, 10.0, 1.0).unwrap());
+                has_made_debug_transaction = true;
+            }
 
             std::thread::sleep(Duration::from_millis(100));
         }

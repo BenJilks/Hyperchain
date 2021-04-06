@@ -144,7 +144,12 @@ impl NetworkConnection
 
             // Send them every node we know about
             send.send(&Packet::KnownNode(format!("{}:{}", THIS_NODE_ID, port))).unwrap();
-            for node in &known_nodes {
+            for node in &known_nodes 
+            {
+                if node == &address_owned {
+                    continue;
+                }
+
                 send.send(&Packet::KnownNode(node.clone())).unwrap();
             }
             send.flush().unwrap();
@@ -293,7 +298,7 @@ impl NetworkConnection
             });
         }
 
-        std::thread::spawn(move || 
+        std::thread::spawn(move ||
         {
             loop
             {

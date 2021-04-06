@@ -191,7 +191,7 @@ impl Block
 
             let wallet = PublicWallet::from_public_key_e(transaction.header.from, transaction.e);
             let header = transaction.header.hash().unwrap();
-            if wallet.varify(&header, &transaction.signature) {
+            if !wallet.varify(&header, &transaction.signature) {
                 return Err(Error::InvalidTransactionSignature);
             }
         }
@@ -205,7 +205,7 @@ impl Block
 
             let wallet = PublicWallet::from_public_key_e(page.header.site_id, page.e);
             let header = page.header.hash().unwrap();
-            if wallet.varify(&header, &page.signature) {
+            if !wallet.varify(&header, &page.signature) {
                 return Err(Error::InvalidPageSignature);
             }
         }
