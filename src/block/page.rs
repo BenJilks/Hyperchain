@@ -38,7 +38,7 @@ pub struct PageHeader
     pub site_id: Signature,
 
     pub page_name: String,
-    pub page_fee: u32,
+    pub page_fee: f64,
 }
 
 impl PageHeader
@@ -72,7 +72,7 @@ pub struct Page
 impl Page
 {
 
-    pub fn new(format: DataFormat, data: Vec<u8>, owner: &PrivateWallet, page_name: &str, fee: u32) -> Self
+    pub fn new(format: DataFormat, data: Vec<u8>, owner: &PrivateWallet, page_name: &str, fee: f64) -> Self
     {
         let header = PageHeader
         {
@@ -93,7 +93,7 @@ impl Page
     }
 
     /*
-    pub fn from_file(chain: &BlockChainBranch, new_page: &[u8], owner: &PrivateWallet, page_name: &str, fee: u32) -> Self
+    pub fn from_file(chain: &BlockChainBranch, new_page: &[u8], owner: &PrivateWallet, page_name: &str, fee: f64) -> Self
     {
         let existing_page_file = chain.page(owner, page_name);
         if existing_page_file.is_none() {

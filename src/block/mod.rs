@@ -174,18 +174,18 @@ impl Block
         return Ok( *slice_as_array!(&hash[0..HASH_LEN], [u8; HASH_LEN]).unwrap() );
     }
 
-    pub fn calculate_reward(&self) -> u32
+    pub fn calculate_reward(&self) -> f64
     {
-        10u32 // FIXME: do real reward calc
+        10f64 // FIXME: do real reward calc
     }
 
     fn validate_transactions(&self, chain: &BlockChainBranch) -> Result<(), Error>
     {
-        let mut account_map = HashMap::<[u8; PUB_KEY_LEN], u32>::new();
+        let mut account_map = HashMap::<[u8; PUB_KEY_LEN], f64>::new();
         for transaction in &self.transactions
         {
             if !account_map.contains_key(&transaction.header.from) {
-                account_map.insert(transaction.header.from, 0);
+                account_map.insert(transaction.header.from, 0f64);
             }
             *account_map.get_mut(&transaction.header.from).unwrap() += transaction.header.amount + transaction.header.transaction_fee;
 
@@ -199,7 +199,7 @@ impl Block
         for page in &self.pages 
         {
             if !account_map.contains_key(&page.header.site_id) {
-                account_map.insert(page.header.site_id, 0);
+                account_map.insert(page.header.site_id, 0f64);
             }
             *account_map.get_mut(&page.header.site_id).unwrap() += page.header.page_fee;
 

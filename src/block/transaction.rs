@@ -4,6 +4,8 @@ use sha2::{Sha256, Digest};
 use serde::{Serialize, Deserialize};
 use bincode;
 
+use std::string::ToString;
+
 big_array! { BigArray; }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
@@ -17,8 +19,8 @@ pub struct TransactionHeader
     #[serde(with = "BigArray")]
     pub to: Signature,
     
-    pub amount: u32,
-    pub transaction_fee: u32,
+    pub amount: f64,
+    pub transaction_fee: f64,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
@@ -62,7 +64,7 @@ impl Transaction
         }
     }
 
-    pub fn for_block<W: Wallet>(chain: &BlockChainBranch, from: &PrivateWallet, to: &W, amount: u32, fee: u32) -> Option<Self>
+    pub fn for_block<W: Wallet>(chain: &BlockChainBranch, from: &PrivateWallet, to: &W, amount: f64, fee: f64) -> Option<Self>
     {
         let status = from.calculate_status(chain);
         if amount + fee > status.balance {
@@ -81,6 +83,20 @@ impl Transaction
         let signature_vec = from.sign(&header.hash().unwrap()).unwrap();
         let signature = *slice_as_array!(&signature_vec, [u8; PUB_KEY_LEN]).unwrap();
         Some( Self::new(header, signature, from.get_e()) )
+    }
+
+}
+
+impl ToString for Transaction
+{
+
+    fn to_string(&self) -> String
+    {
+        format!("{}... -- {} + {}tx --> {}...", 
+            &base_62::encode(&self.header.from)[0..10],
+            self.header.amount,
+            self.header.transaction_fee,
+            &base_62::encode(&self.header.to)[0..10])
     }
 
 }

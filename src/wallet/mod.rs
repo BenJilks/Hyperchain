@@ -8,7 +8,7 @@ use sha2::{Sha256, Digest};
 
 pub struct WalletStatus
 {
-    pub balance: u32,
+    pub balance: f64,
     pub max_id: u32,
 }
 
@@ -29,8 +29,8 @@ pub trait Wallet
     fn calculate_status(&self, chain: &BlockChainBranch) -> WalletStatus
     {
         let pub_key = self.get_public_key();
-        let mut balance: u32 = 0;
-        let mut max_id: u32 = 0;
+        let mut balance = 0f64;
+        let mut max_id = 0u32;
 
         chain.lookup(&mut |block: &Block|
         {
@@ -73,12 +73,12 @@ pub trait Wallet
 
         WalletStatus
         {
-            balance: balance as u32,
+            balance: balance,
             max_id,
         }
     }
 
-    fn calculate_balance(&self, chain: &BlockChainBranch) -> u32
+    fn calculate_balance(&self, chain: &BlockChainBranch) -> f64
     {
         self.calculate_status(chain).balance
     }

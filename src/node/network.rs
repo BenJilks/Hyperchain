@@ -1,4 +1,5 @@
-use crate::block::Block;
+use crate::block::{Block, Transaction};
+use crate::wallet::{Wallet, PublicWallet};
 use super::broadcast::Broadcaster;
 use std::net::{TcpListener, TcpStream};
 use std::io::{BufReader, BufWriter, Write};
@@ -32,6 +33,10 @@ pub enum Packet
     Hello(OtherNode),
     KnownNode(String),
     NewBlock(Block),
+
+    TransactionRequest(Transaction),
+    TransactionRequestAccepted(Transaction),
+    TransactionRequestRejected(Transaction),
     Ping,
 }
 
@@ -44,7 +49,7 @@ pub struct NetworkConnection
     broadcaster: Broadcaster<(Option<String>, Packet)>,
 
     other_nodes: HashMap<String, OtherNode>,
-    new_blocks: Vec<Block>,
+    packet_queue: Vec<Packet>,
     my_top: u64,
 }
 
@@ -67,8 +72,9 @@ impl NetworkConnection
             know_nodes_path,
             open_connections: Arc::from(Mutex::from(HashSet::new())),
             broadcaster: Broadcaster::new(),
+
             other_nodes: HashMap::new(),
-            new_blocks: Vec::new(),
+            packet_queue: Vec::new(),
             my_top: 0,
         })
     }
@@ -235,8 +241,8 @@ impl NetworkConnection
             },
 
             Packet::KnownNode(address) => self.update_known_nodes(&address),
-            Packet::NewBlock(block) => self.new_blocks.push(block),
             Packet::Ping => println!("Ping!!"),
+            packet => self.packet_queue.push(packet),
         }
     }
 
@@ -264,13 +270,13 @@ impl NetworkConnection
         this.lock().unwrap().other_nodes.clone()
     }
 
-    pub fn process_new_blocks(this: &mut Arc<Mutex<Self>>) -> Vec<Block>
+    pub fn process_packets(this: &mut Arc<Mutex<Self>>) -> Vec<Packet>
     {
         let mut this_lock = this.lock().unwrap();
-        let blocks = this_lock.new_blocks.clone();
-        this_lock.new_blocks.clear();
+        let packets = this_lock.packet_queue.clone();
+        this_lock.packet_queue.clear();
 
-        blocks
+        packets
     }
 
     pub fn run(this: Arc<Mutex<Self>>)
