@@ -1,5 +1,5 @@
 use super::Command;
-use crate::wallet::{PrivateWallet, PublicWallet, Wallet};
+use crate::wallet::{PrivateWallet, PublicWallet};
 use crate::node::network::{NetworkConnection, Packet};
 use crate::block::{Transaction, Block, BlockChain};
 
@@ -54,7 +54,7 @@ impl Command for TransactionCommand
             {
                 println!("Got tranaction {}", transaction.to_string());
                 let wallet = PublicWallet::from_public_key_e(transaction.header.from, transaction.e);
-                let balance = wallet.calculate_balance(chain.longest_branch());
+                let balance = chain.longest_branch().lockup_wallet_status(&wallet).balance;
         
                 if balance < transaction.header.amount + transaction.header.transaction_fee 
                     || !wallet.varify(&transaction.header.hash().unwrap(), &transaction.signature)

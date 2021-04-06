@@ -1,4 +1,5 @@
 mod branch;
+mod chunk;
 pub use branch::BlockChainBranch;
 use super::Block;
 use crate::error::Error;
@@ -101,11 +102,10 @@ impl BlockChain
 
     pub fn top_id(&mut self) -> u64
     {
-        let top = self.top();
-        if top.is_some() {
-            top.unwrap().block_id
-        } else {
-            0
+        match self.top()
+        {
+            Some(top) => top.block_id,
+            None => 0,
         }
     }
 

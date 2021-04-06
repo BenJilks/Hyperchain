@@ -28,19 +28,15 @@ const MIN_TARGET: [u8; HASH_LEN] =
     0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8,
     0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8,
     0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8,
-    0xFFu8, 0xF2u8,
+    0xFFu8, 0xF0u8,
 ];
-
-big_array! { BigArray; }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct Block
 {
     pub prev_hash: Hash,
     pub block_id: u64,
-
-    #[serde(with = "BigArray")]
-    pub raward_to: Signature,
+    pub raward_to: Hash,
 
     pub pages: Vec<Page>,
     pub transactions: Vec<Transaction>,
@@ -75,6 +71,9 @@ impl Block
 
     fn calculate_target(chain: &BlockChainBranch, top_or_none: &Option<Block>) -> [u8; HASH_LEN]
     {
+        return MIN_TARGET;
+
+        /*
         if top_or_none.is_none() {
             return MIN_TARGET;
         }
@@ -98,6 +97,7 @@ impl Block
         
         //println!("{} in {}, {} H/ms", last_difficualty, average_time, hash_rate);
         return *slice_as_array!(&new_target, [u8; HASH_LEN]).unwrap();
+        */
     }
 
     pub fn new<W: Wallet>(chain: &BlockChainBranch, raward_to: &W) -> Result<Self, Error>
@@ -119,7 +119,7 @@ impl Block
         {
             prev_hash: prev_block_hash,
             block_id: prev_block_id + 1,
-            raward_to: raward_to.get_public_key(),
+            raward_to: raward_to.get_address(),
 
             pages: Vec::new(),
             transactions: Vec::new(),
@@ -152,16 +152,6 @@ impl Block
         } else {
             Ok(bytes)
         }
-    }
-
-    pub fn from_bytes(bytes: &[u8]) -> Option<Self>
-    {
-        let result_or_error = bincode::deserialize::<Self>(bytes);
-        if result_or_error.is_err() {
-            return None;
-        }
-
-        return Some( result_or_error.unwrap() );
     }
 
     pub fn hash_with_hasher(&self, hasher: &mut Sha256) -> Result<Hash, Error>
@@ -218,7 +208,7 @@ impl Block
         for (public_key, balance_out) in &account_map
         {
             let wallet = PublicWallet::from_public_key(*public_key);
-            let balance = wallet.calculate_balance(chain);
+            let balance = chain.lockup_wallet_status(&wallet).balance;
             if balance < *balance_out {
                 return Err(Error::InvalidBalance);
             }

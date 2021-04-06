@@ -2,10 +2,12 @@ mod private_wallet;
 mod public_wallet;
 pub use private_wallet::PrivateWallet;
 pub use public_wallet::PublicWallet;
-use crate::block::{BlockChainBranch, Block, PUB_KEY_LEN, HASH_LEN};
+use crate::block::{PUB_KEY_LEN, HASH_LEN};
 
 use sha2::{Sha256, Digest};
+use serde::{Serialize, Deserialize};
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct WalletStatus
 {
     pub balance: f64,
@@ -24,63 +26,6 @@ pub trait Wallet
 
         let hash = hasher.finalize();
         *slice_as_array!(&hash, [u8; HASH_LEN]).unwrap()
-    }
-
-    fn calculate_status(&self, chain: &BlockChainBranch) -> WalletStatus
-    {
-        let pub_key = self.get_public_key();
-        let mut balance = 0f64;
-        let mut max_id = 0u32;
-
-        chain.lookup(&mut |block: &Block|
-        {
-            let mut is_miner = false;
-            if block.raward_to == pub_key 
-            {
-                balance += block.calculate_reward();
-                is_miner = true;
-            }
-
-            for transaction in &block.transactions
-            {
-                if transaction.header.to == pub_key {
-                    balance += transaction.header.amount;
-                }
-
-                if transaction.header.from == pub_key 
-                {
-                    balance -= transaction.header.amount;
-                    balance -= transaction.header.transaction_fee;
-                    max_id = std::cmp::max(max_id, transaction.header.id);
-                }
-
-                if is_miner {
-                    balance += transaction.header.transaction_fee;
-                }
-            }
-
-            for page in &block.pages 
-            {
-                if page.header.site_id == pub_key {
-                    balance -= page.header.page_fee;
-                }
-
-                if is_miner {
-                    balance += page.header.page_fee;
-                }
-            }
-        });
-
-        WalletStatus
-        {
-            balance: balance,
-            max_id,
-        }
-    }
-
-    fn calculate_balance(&self, chain: &BlockChainBranch) -> f64
-    {
-        self.calculate_status(chain).balance
     }
 
 }

@@ -1,4 +1,4 @@
-use super::{Signature, BlockChainBranch, PUB_KEY_LEN};
+use super::{Signature, Hash, BlockChainBranch, PUB_KEY_LEN};
 use crate::wallet::{PrivateWallet, Wallet};
 use sha2::{Sha256, Digest};
 use serde::{Serialize, Deserialize};
@@ -16,9 +16,7 @@ pub struct TransactionHeader
     #[serde(with = "BigArray")]
     pub from: Signature,
     
-    #[serde(with = "BigArray")]
-    pub to: Signature,
-    
+    pub to: Hash,
     pub amount: f64,
     pub transaction_fee: f64,
 }
@@ -66,7 +64,7 @@ impl Transaction
 
     pub fn for_block<W: Wallet>(chain: &BlockChainBranch, from: &PrivateWallet, to: &W, amount: f64, fee: f64) -> Option<Self>
     {
-        let status = from.calculate_status(chain);
+        let status = chain.lockup_wallet_status(from);
         if amount + fee > status.balance {
             return None; // FIXME: Report invalid transaction error
         }
@@ -75,7 +73,7 @@ impl Transaction
         { 
             id: status.max_id + 1,
             from: from.get_public_key(),
-            to: to.get_public_key(),
+            to: to.get_address(),
             amount,
             transaction_fee: fee,
         };

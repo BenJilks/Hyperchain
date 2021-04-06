@@ -103,19 +103,19 @@ impl Node
             self.blocks_being_mined -= 1;
             if block.block_id != chain.top_id() + 1 
             {
-                //println!("Mined block {} not at top {}", block.block_id, chain.top_id());
+                println!("Mined block {} not at top {}", block.block_id, chain.top_id());
                 continue;
             }
             if block.validate(chain.longest_branch()).is_err() 
             {
-                //println!("Mined block not valid on longest branch");
+                println!("Mined block not valid on longest branch");
                 continue;
             }
             if chain.add(&block).is_err() {
                 continue;
             }
             
-            //println!("Accepted our block {}!!", block.block_id);
+            println!("Accepted our block {}!!", block.block_id);
             for command in &mut self.commands {
                 command.on_accepted_block(&block);
             }
@@ -168,12 +168,16 @@ impl Node
         }
     }
 
-    fn process_commands(&mut self, lines_recv: &Receiver<Vec<String>>, chain: &mut BlockChain)
+    fn process_commands(&mut self, lines_recv: &Receiver<Vec<String>>, chain: &mut BlockChain) -> bool
     {
         for line in lines_recv.try_iter() 
         {
             if line.len() == 0 {
                 continue;
+            }
+
+            if line[0] == "exit" {
+                return true;
             }
 
             for command in &mut self.commands 
@@ -183,6 +187,8 @@ impl Node
                 }
             }
         }
+
+        false
     }
 
     fn command_line_thread(send: Sender<Vec<String>>)
@@ -208,6 +214,8 @@ impl Node
                 },
             }
         }
+
+        send.send(vec!["exit".to_owned()]).unwrap();
     }
 
     pub fn run(&mut self, chain: &mut BlockChain, wallet: &PrivateWallet)
@@ -227,7 +235,7 @@ impl Node
             Self::command_line_thread(lines_send);
         });
 
-        std::thread::sleep(Duration::from_secs(5));
+        //std::thread::sleep(Duration::from_secs(5));
 
         loop
         {
@@ -236,7 +244,9 @@ impl Node
             self.process_nodes(chain);
             self.process_new_blocks_to_mine(chain, wallet, &blocks_to_mine_send);
             self.prune_branches(chain);
-            self.process_commands(&lines_recv, chain);
+            if self.process_commands(&lines_recv, chain) {
+                break;
+            }
 
             std::thread::sleep(Duration::from_millis(100));
         }

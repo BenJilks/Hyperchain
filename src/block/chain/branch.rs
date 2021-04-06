@@ -1,6 +1,7 @@
+use super::chunk::{BlockChainChunk, CHUNK_SIZE};
 use crate::block::{Block, Page, DataFormat};
 use crate::error::Error;
-use crate::wallet::{PublicWallet, Wallet};
+use crate::wallet::{PublicWallet, Wallet, WalletStatus};
 use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::PathBuf;
@@ -27,22 +28,34 @@ pub struct BlockChainBranch
 impl BlockChainBranch
 {
 
+    fn chunk(blocks_path: &PathBuf, chunk_id: u64) -> Option<BlockChainChunk>
+    {
+        let path = blocks_path.join(chunk_id.to_string());
+        if !path.exists() {
+            return None;
+        }
+
+        let file = File::open(&path).unwrap();
+        Some( bincode::deserialize_from(file).unwrap() )
+    }
+
     fn find_top_index(blocks_path: &PathBuf) -> u64
     {
-        let mut id = 1;
+        let mut chunk_id = 0;
         loop
         {
             // FIXME: This is not good, not good at all :(
-            if !blocks_path.join(id.to_string()).exists()
+            if !blocks_path.join(chunk_id.to_string()).exists()
             {
-                if id <= 1 {
+                if chunk_id == 0 {
                     return 0;
                 }
 
-                return id - 1;
+                let chunk = Self::chunk(blocks_path, chunk_id - 1).unwrap();
+                return chunk.top_index();
             }
 
-            id += 1;
+            chunk_id += 1;
         }
     }
 
@@ -65,14 +78,13 @@ impl BlockChainBranch
 
     pub fn block(&self, id: u64) -> Option<Block>
     {
-        let file = File::open(self.blocks_path.join(id.to_string()));
-        if file.is_err() {
+        if id == 0 {
             return None;
         }
 
-        let mut bytes = Vec::<u8>::new();
-        file.unwrap().read_to_end(&mut bytes).unwrap();
-        return Block::from_bytes(&bytes);
+        let chunk_id = id / CHUNK_SIZE;
+        let chunk = Self::chunk(&self.blocks_path, chunk_id);
+        chunk?.block(id)
     }
 
     pub fn page<W: Wallet>(&self, site: &W, page_name: &str) -> Option<File>
@@ -90,11 +102,7 @@ impl BlockChainBranch
 
     pub fn top(&self) -> Option<Block>
     {
-        if self.top_index == 0 {
-            None
-        } else {
-            self.block(self.top_index)
-        }
+        self.block(self.top_index)
     }
 
     pub fn add(&mut self, block: &Block) -> Result<(), Error>
@@ -111,9 +119,19 @@ impl BlockChainBranch
             return Err(Error::InvalidPOW);
         }
 
-        let bytes = block.as_bytes()?;
-        let block_path = self.blocks_path.join(block.block_id.to_string());
-        let mut file = io_error(File::create(block_path))?;
+        let chunk_id = block.block_id / CHUNK_SIZE;
+        let chunk_or_none = Self::chunk(&self.blocks_path, chunk_id);
+        let mut chunk = 
+            if chunk_or_none.is_some() {
+                chunk_or_none.unwrap()
+            } else {
+                BlockChainChunk::new(chunk_id)
+            };
+        chunk.add(block);
+
+        let bytes = bincode::serialize(&chunk).unwrap();
+        let chunk_path = self.blocks_path.join(chunk_id.to_string());
+        let mut file = io_error(File::create(chunk_path))?;
         io_error(file.write(&bytes))?;
 
         for page in &block.pages {
@@ -163,21 +181,39 @@ impl BlockChainBranch
         Ok(())
     }
 
-    pub fn lookup<Callback>(&self, callback: &mut Callback)
-        where Callback: FnMut(&Block)
+    fn lookup_chunks<Callback>(&self, callback: &mut Callback)
+        where Callback: FnMut(&BlockChainChunk)
     {
-        let mut id = 1;
+        let mut chunk_id = 1;
         loop
         {
-            // FIXME: This is not good, not good at all :(
-            if !self.blocks_path.join(id.to_string()).exists() {
-                break;
+            // FIXME: Still not good but better :|
+            match Self::chunk(&self.blocks_path, chunk_id)
+            {
+                Some(chunk) => callback(&chunk),
+                None => break,
             }
 
-            let block = self.block(id).unwrap();
-            callback(&block);
-            id += 1;
+            chunk_id += 1;
         }
+    }
+
+    pub fn lockup_wallet_status<W: Wallet>(&self, wallet: &W) -> WalletStatus
+    {
+        let mut status = WalletStatus
+        {
+            balance: 0f64,
+            max_id: 0,
+        };
+
+        self.lookup_chunks(&mut |chunk: &BlockChainChunk| 
+        {
+            let status_change = chunk.wallet_status_change(wallet);
+            status.balance += status_change.balance;
+            status.max_id = std::cmp::max(status.max_id, status_change.max_id);
+        });
+
+        status
     }
 
 }

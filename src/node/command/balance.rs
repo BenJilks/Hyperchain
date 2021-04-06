@@ -1,5 +1,5 @@
 use super::Command;
-use crate::wallet::{PrivateWallet, Wallet};
+use crate::wallet::PrivateWallet;
 use crate::block::BlockChain;
 use crate::node::network::NetworkConnection;
 
@@ -23,7 +23,7 @@ impl Command for BalanceCommand
     fn invoke(&mut self, args: &[String], _: &mut Arc<Mutex<NetworkConnection>>, chain: &mut BlockChain)
     {
         let wallet = PrivateWallet::read_from_file(&PathBuf::from(&args[0])).unwrap();
-        let balance = wallet.calculate_balance(chain.longest_branch());
+        let balance = chain.longest_branch().lockup_wallet_status(&wallet).balance;
         println!("Balance: {}", balance);
     }
 

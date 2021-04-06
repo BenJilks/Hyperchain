@@ -23,7 +23,7 @@ mod miner;
 mod wallet;
 mod node;
 mod error;
-use wallet::{PrivateWallet, Wallet};
+use wallet::PrivateWallet;
 use block::BlockChain;
 use std::path::PathBuf;
 use node::Node;
@@ -38,8 +38,8 @@ fn main()
     {
         let mut chain = BlockChain::new(PathBuf::from("blockchain_a"));
         let other = PrivateWallet::read_from_file(&PathBuf::from("other.wallet")).unwrap();
-        println!("N4L8: {}", wallet.calculate_balance(chain.longest_branch()));
-        println!("other: {}", other.calculate_balance(chain.longest_branch()));
+        println!("N4L8: {}", chain.longest_branch().lockup_wallet_status(&wallet).balance);
+        println!("other: {}", chain.longest_branch().lockup_wallet_status(&other).balance);
 
         Node::new(8585, PathBuf::from("known_nodes_a.json"))
             .run(&mut chain, &wallet);
@@ -48,8 +48,8 @@ fn main()
     {
         let mut chain = BlockChain::new(PathBuf::from("blockchain_b"));
         let other = PrivateWallet::read_from_file(&PathBuf::from("other.wallet")).unwrap();
-        println!("N4L8: {}", wallet.calculate_balance(chain.longest_branch()));
-        println!("other: {}", other.calculate_balance(chain.longest_branch()));
+        println!("N4L8: {}", chain.longest_branch().lockup_wallet_status(&wallet).balance);
+        println!("other: {}", chain.longest_branch().lockup_wallet_status(&other).balance);
 
         let mut node = Node::new(8686, PathBuf::from("known_nodes_b.json"));
         node.add_known_node("127.0.0.1:8585");

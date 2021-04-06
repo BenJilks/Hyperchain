@@ -1,5 +1,5 @@
 use super::Command;
-use crate::wallet::{PrivateWallet, PublicWallet, Wallet};
+use crate::wallet::{PrivateWallet, PublicWallet};
 use crate::node::network::{NetworkConnection, Packet};
 use crate::block::{Page, Block, BlockChain};
 
@@ -57,7 +57,7 @@ impl Command for PageCommand
             {
                 println!("Got page {}", page.to_string());
                 let wallet = PublicWallet::from_public_key_e(page.header.site_id, page.e);
-                let balance = wallet.calculate_balance(chain.longest_branch());
+                let balance = chain.longest_branch().lockup_wallet_status(&wallet).balance;
         
                 // FIXME: Check if we can apply the diff
                 if balance < page.header.page_fee
