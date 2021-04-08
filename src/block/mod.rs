@@ -12,13 +12,13 @@ use serde::{Serialize, Deserialize};
 use rsa::BigUint;
 use std::collections::HashMap;
 use std::time::SystemTime;
-use num_traits::pow::Pow;
+// use num_traits::pow::Pow;
 use bincode;
 use slice_as_array;
 
 pub const PUB_KEY_LEN: usize = 256;
 pub const HASH_LEN: usize = 32;
-pub const MS_TO_FIND_BLOCK: usize = 5000;
+// pub const MS_TO_FIND_BLOCK: usize = 5000;
 type Signature = [u8; PUB_KEY_LEN];
 type Hash = [u8; HASH_LEN];
 
@@ -53,7 +53,7 @@ fn current_timestamp() -> u128
 impl Block
 {
 
-    fn time_for_last_ten_blocks(chain: &BlockChainBranch, top: &Block) -> u128
+    fn _time_for_last_ten_blocks(chain: &BlockChainBranch, top: &Block) -> u128
     {
         let mut current_block = top.clone();
         for _ in 0..10
@@ -69,8 +69,11 @@ impl Block
         return top.timestamp - current_block.timestamp;
     }
 
-    fn calculate_target(chain: &BlockChainBranch, top_or_none: &Option<Block>) -> [u8; HASH_LEN]
+    fn calculate_target(_chain: &BlockChainBranch, _top_or_none: &Option<Block>) -> [u8; HASH_LEN]
     {
+        return MIN_TARGET;
+
+        /*
         if top_or_none.is_none() {
             return MIN_TARGET;
         }
@@ -94,6 +97,7 @@ impl Block
         
         println!("{} in {}, {} H/ms", last_difficualty, average_time, hash_rate);
         return *slice_as_array!(&new_target, [u8; HASH_LEN]).unwrap();
+        */
     }
 
     pub fn new<W: Wallet>(chain: &BlockChainBranch, raward_to: &W) -> Result<Self, Error>

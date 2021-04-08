@@ -61,7 +61,7 @@ impl Node
 
     fn process_received_block(&mut self, chain: &mut BlockChain, block: Block)
     {
-        //println!("Got block {}", block.block_id);
+        println!("Got block {}", block.block_id);
         match chain.add(&block)
         {
             Ok(_) => 
@@ -98,23 +98,27 @@ impl Node
 
     fn process_mined_blocks(&mut self, chain: &mut BlockChain, blocks_done_recv: &Receiver<Block>)
     {
+        if !self.at_top {
+            return;
+        }
+
         for block in blocks_done_recv.try_iter() 
         {
             self.blocks_being_mined -= 1;
             if block.block_id != chain.top_id() + 1 
             {
-                //println!("Mined block {} not at top {}", block.block_id, chain.top_id());
+                println!("Mined block {} not at top {}", block.block_id, chain.top_id());
                 continue;
             }
             if block.validate(chain.longest_branch()).is_err() 
             {
-                //println!("Mined block not valid on longest branch");
+                println!("Mined block not valid on longest branch");
                 continue;
             }
             let test = chain.add(&block);
             if test.is_err()
             {
-                //println!("Unable to add block {} {}", block.block_id, test.unwrap_err().to_string());
+                println!("Unable to add block {} {}", block.block_id, test.unwrap_err().to_string());
                 continue;
             }
             

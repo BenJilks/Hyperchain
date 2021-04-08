@@ -144,9 +144,7 @@ impl BlockChain
         let last_chunk_bottom = std::cmp::max((block.block_id - 1) / CHUNK_SIZE * CHUNK_SIZE, 1);
         branch.top_index = last_chunk_bottom - 1;
 
-        for i in last_chunk_bottom..=(block.block_id - 1) 
-        {
-            println!("Block: {}", i);
+        for i in last_chunk_bottom..=(block.block_id - 1) {
             branch.add(&old_branch.block(i).unwrap())?;
         }
         branch.add(block)?;
