@@ -75,13 +75,13 @@ impl SubChain
         if self.bottom.unwrap() < other.top.unwrap() 
         {
             for i in other.bottom.unwrap()..=other.top.unwrap() {
-                assert_eq!(self.add_block(&other.block(i).unwrap()), true);
+                self.add_block(&other.block(i).unwrap());
             }
         }
         else
         {
             for i in (other.bottom.unwrap()..=other.top.unwrap()).rev() {
-                assert_eq!(self.add_block(&other.block(i).unwrap()), true);
+                self.add_block(&other.block(i).unwrap());
             }
         }
     }

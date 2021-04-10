@@ -82,6 +82,7 @@ impl<W: Write> Node<W>
         {
             match packet
             {
+                Packet::Hello(address) => self.process_block_request(chain, address, chain.top_id(), logger),
                 Packet::NewBlock(block) => self.process_received_block(chain, block, logger),
                 Packet::BlockRequest(address, block_id) => self.process_block_request(chain, address, block_id, logger),
 

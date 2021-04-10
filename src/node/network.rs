@@ -21,6 +21,7 @@ type TCPSender = tcp_channel::Sender<Packet, LittleEndian>;
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Packet
 {
+    Hello(String),
     KnownNode(String),
     BlockRequest(String, u64),
     NewBlock(Block),
@@ -151,33 +152,31 @@ impl NetworkConnection
 
     fn client(server_ip: &str, mut recv: TCPReceiver, send_packet: Sender<Packet>)
     {
+        let precess_address = |address: String|
+        {
+            if address.starts_with(THIS_NODE_ID) {
+                address.replace(THIS_NODE_ID, server_ip)
+            } else {
+                address
+            }
+        };
+
         loop 
         {
             match recv.recv()
             {
-                Ok(Packet::KnownNode(connection_data)) =>
-                {
-                    let data = 
-                        if connection_data.starts_with(THIS_NODE_ID) {
-                            connection_data.replace(THIS_NODE_ID, server_ip)
-                        } else {
-                            connection_data
-                        };
-                    send_packet.send(Packet::KnownNode(data)).unwrap();
-                },
+                Ok(Packet::Hello(address)) => 
+                    send_packet.send(Packet::Hello(precess_address(address))).unwrap(),
 
-                Ok(Packet::BlockRequest(address, block_id)) =>
-                {
-                    let new_address = 
-                        if address.starts_with(THIS_NODE_ID) {
-                            address.replace(THIS_NODE_ID, server_ip)
-                        } else {
-                            address
-                        };
-                    send_packet.send(Packet::BlockRequest(new_address, block_id)).unwrap();
-                }
+                Ok(Packet::KnownNode(connection_data)) => 
+                    send_packet.send(Packet::KnownNode(precess_address(connection_data))).unwrap(),
 
-                Ok(packet) => send_packet.send(packet).unwrap(),
+                Ok(Packet::BlockRequest(address, block_id)) => 
+                    send_packet.send(Packet::BlockRequest(precess_address(address), block_id)).unwrap(),
+
+                Ok(packet) => 
+                    send_packet.send(packet).unwrap(),
+                    
                 Err(_) => break,
             }
         }

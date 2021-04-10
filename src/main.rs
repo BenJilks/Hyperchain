@@ -55,7 +55,7 @@ fn main()
         println!("other: {}", chain.lockup_wallet_status(&other).balance);
 
         let mut node = Node::new(8686, PathBuf::from("known_nodes_b.json"));
-        node.add_known_node("127.0.0.1:8585");
+        node.add_known_node("pi:8585");
         node.run(&mut chain, &other, &mut logger);
     }
 }
