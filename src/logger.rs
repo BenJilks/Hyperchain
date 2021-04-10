@@ -3,7 +3,8 @@ use std::io::Write;
 #[derive(PartialEq, PartialOrd, Debug)]
 pub enum LoggerLevel
 {
-    Info = 0,
+    Verbose = 0,
+    Info,
     Warning,
     Error,
 }

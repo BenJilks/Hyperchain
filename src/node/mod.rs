@@ -57,13 +57,13 @@ impl<W: Write> Node<W>
 
     fn process_received_block(&mut self, chain: &mut BlockChain, block: Block, logger: &mut Logger<W>)
     {
-        logger.log(LoggerLevel::Info, &format!("Got block {}", block.block_id));
+        logger.log(LoggerLevel::Verbose, &format!("Got block {}", block.block_id));
         chain.add(block.clone(), logger);
     }
 
     fn process_block_request(&mut self, chain: &mut BlockChain, address: String, block_id: u64, logger: &mut Logger<W>)
     {
-        logger.log(LoggerLevel::Info, &format!("Got request from {} for {}", address, block_id));
+        logger.log(LoggerLevel::Verbose, &format!("Got request from {} for {}", address, block_id));
         if block_id > chain.top_id() {
             return;
         }
@@ -102,20 +102,15 @@ impl<W: Write> Node<W>
         {
             self.blocks_being_mined -= 1;
 
-            let top_or_none = chain.top();
-            if top_or_none.is_some() 
+            if block.block_id != chain.top_id() + 1
             {
-                let top = top_or_none.unwrap();
-                if block.block_id != top.block_id + 1
-                {
-                    logger.log(LoggerLevel::Info, &format!("Mined block {} not at top {}", block.block_id, top.block_id));
-                    continue;
-                }
+                logger.log(LoggerLevel::Verbose, &format!("Mined block {} not at top {}", block.block_id, chain.top_id()));
+                continue;
             }
 
             if block.validate(chain).is_err() 
             {
-                logger.log(LoggerLevel::Info, "Mined block not valid");
+                logger.log(LoggerLevel::Verbose, "Mined block not valid");
                 continue;
             }
             
@@ -130,7 +125,8 @@ impl<W: Write> Node<W>
         }
     }
 
-    fn process_new_blocks_to_mine(&mut self, chain: &mut BlockChain, wallet: &PrivateWallet, blocks_to_mine_send: &Sender<Block>)
+    fn process_new_blocks_to_mine(&mut self, chain: &mut BlockChain, wallet: &PrivateWallet, 
+        blocks_to_mine: &Sender<Block>, blocks_done: &Receiver<Block>, logger: &mut Logger<W>)
     {
         let next_block_needed = chain.next_block_needed();
         if next_block_needed != chain.top_id() + 1
@@ -148,7 +144,11 @@ impl<W: Write> Node<W>
             }
 
             self.blocks_being_mined += 1;
-            blocks_to_mine_send.send(block).expect("Worked");
+            blocks_to_mine.send(block).expect("Worked");
+        }
+        else
+        {
+            self.process_mined_blocks(chain, blocks_done, logger);
         }
     }
 
@@ -227,7 +227,7 @@ impl<W: Write> Node<W>
         {
             self.process_packets(chain, logger);
             self.process_mined_blocks(chain, &blocks_done_recv, logger);
-            self.process_new_blocks_to_mine(chain, wallet, &blocks_to_mine_send);
+            self.process_new_blocks_to_mine(chain, wallet, &blocks_to_mine_send, &blocks_done_recv, logger);
             //if self.process_commands(&lines_recv, chain, logger) {
             //    break;
             //}
