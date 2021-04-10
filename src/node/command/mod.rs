@@ -6,15 +6,18 @@ pub use page::PageCommand;
 pub use balance::BalanceCommand;
 use crate::node::network::{NetworkConnection, Packet};
 use crate::block::{Block, BlockChain};
+use crate::logger::Logger;
 
 use std::sync::{Arc, Mutex};
+use std::io::Write;
 
-pub trait Command
+pub trait Command<W: Write>
 {
 
     fn name(&self) -> &'static str;
 
-    fn invoke(&mut self, args: &[String], connection: &mut Arc<Mutex<NetworkConnection>>, chain: &mut BlockChain);
+    fn invoke(&mut self, args: &[String], connection: &mut Arc<Mutex<NetworkConnection>>, 
+        chain: &mut BlockChain, logger: &mut Logger<W>);
 
     fn on_packet(&mut self, _packet: Packet, _connection: &mut Arc<Mutex<NetworkConnection>>, _chain: &mut BlockChain) {}
 

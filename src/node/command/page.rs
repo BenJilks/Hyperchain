@@ -2,11 +2,12 @@ use super::Command;
 use crate::wallet::{PrivateWallet, PublicWallet};
 use crate::node::network::{NetworkConnection, Packet};
 use crate::block::{Page, Block, BlockChain};
+use crate::logger::Logger;
 
 use std::sync::{Arc, Mutex};
 use std::path::PathBuf;
 use std::fs::File;
-use std::io::Read;
+use std::io::{Read, Write};
 
 pub struct PageCommand
 {
@@ -26,15 +27,16 @@ impl Default for PageCommand
 
 }
 
-impl Command for PageCommand
+impl<W: Write> Command<W> for PageCommand
 {
 
     fn name(&self) -> &'static str { "page" }
 
-    fn invoke(&mut self, args: &[String], connection: &mut Arc<Mutex<NetworkConnection>>, chain: &mut BlockChain)
+    fn invoke(&mut self, args: &[String], connection: &mut Arc<Mutex<NetworkConnection>>, 
+        chain: &mut BlockChain, logger: &mut Logger<W>)
     {
         println!("{:?}", args);
-        let owner = PrivateWallet::read_from_file(&PathBuf::from(&args[0])).unwrap();
+        let owner = PrivateWallet::read_from_file(&PathBuf::from(&args[0]), logger).unwrap();
         let name = args[1].clone();
         let fee = args[2].parse::<f64>().unwrap();
 
@@ -42,11 +44,11 @@ impl Command for PageCommand
         File::open(&PathBuf::from(&args[3])).unwrap()
             .read_to_end(&mut data).unwrap();
 
-        let page = Page::from_file(chain.longest_branch(), &data, &owner, &name, fee);
-        NetworkConnection::broadcast(connection, None, 
-            Packet::PageRequest(page.clone()));
+        //let page = Page::from_file(chain.longest_branch(), &data, &owner, &name, fee);
+        //NetworkConnection::broadcast(connection, None, 
+        //    Packet::PageRequest(page.clone()));
         
-        self.page_queue.push(page);
+        //self.page_queue.push(page);
     }
 
     fn on_packet(&mut self, packet: Packet, connection: &mut Arc<Mutex<NetworkConnection>>, chain: &mut BlockChain)
@@ -57,7 +59,7 @@ impl Command for PageCommand
             {
                 println!("Got page {}", page.to_string());
                 let wallet = PublicWallet::from_public_key_e(page.header.site_id, page.e);
-                let balance = chain.longest_branch().lockup_wallet_status(&wallet).balance;
+                let balance = chain.lockup_wallet_status(&wallet).balance;
         
                 // FIXME: Check if we can apply the diff
                 if balance < page.header.page_fee

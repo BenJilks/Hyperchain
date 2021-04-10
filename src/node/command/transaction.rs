@@ -2,9 +2,11 @@ use super::Command;
 use crate::wallet::{PrivateWallet, PublicWallet};
 use crate::node::network::{NetworkConnection, Packet};
 use crate::block::{Transaction, Block, BlockChain};
+use crate::logger::Logger;
 
 use std::sync::{Arc, Mutex};
 use std::path::PathBuf;
+use std::io::Write;
 
 pub struct TransactionCommand
 {
@@ -24,7 +26,7 @@ impl Default for TransactionCommand
 
 }
 
-impl Command for TransactionCommand
+impl<W: Write> Command<W> for TransactionCommand
 {
 
     fn name(&self) -> &'static str 
@@ -32,14 +34,15 @@ impl Command for TransactionCommand
         "transaction"
     }
 
-    fn invoke(&mut self, args: &[String], connection: &mut Arc<Mutex<NetworkConnection>>, chain: &mut BlockChain)
+    fn invoke(&mut self, args: &[String], connection: &mut Arc<Mutex<NetworkConnection>>, 
+        chain: &mut BlockChain, logger: &mut Logger<W>)
     {
-        let from = PrivateWallet::read_from_file(&PathBuf::from(&args[0])).unwrap();
-        let to = PrivateWallet::read_from_file(&PathBuf::from(&args[1])).unwrap();
+        let from = PrivateWallet::read_from_file(&PathBuf::from(&args[0]), logger).unwrap();
+        let to = PrivateWallet::read_from_file(&PathBuf::from(&args[1]), logger).unwrap();
         let amount = args[2].parse::<f64>().unwrap();
         let fee = args[2].parse::<f64>().unwrap();
 
-        let transaction = Transaction::for_block(chain.longest_branch(), &from, &to, amount, fee).unwrap();
+        let transaction = Transaction::for_block(chain, &from, &to, amount, fee).unwrap();
         NetworkConnection::broadcast(connection, None, 
             Packet::TransactionRequest(transaction.clone()));
         
@@ -54,7 +57,7 @@ impl Command for TransactionCommand
             {
                 println!("Got tranaction {}", transaction.to_string());
                 let wallet = PublicWallet::from_public_key_e(transaction.header.from, transaction.e);
-                let balance = chain.longest_branch().lockup_wallet_status(&wallet).balance;
+                let balance = chain.lockup_wallet_status(&wallet).balance;
         
                 if balance < transaction.header.amount + transaction.header.transaction_fee 
                     || !wallet.varify(&transaction.header.hash().unwrap(), &transaction.signature)

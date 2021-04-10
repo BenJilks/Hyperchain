@@ -3,7 +3,7 @@ mod transaction;
 mod chain;
 pub use page::{Page, PageHeader, DataFormat};
 pub use transaction::Transaction;
-pub use chain::{BlockChain, BlockChainBranch};
+pub use chain::BlockChain;
 use crate::wallet::{PublicWallet, Wallet};
 use crate::error::Error;
 
@@ -28,7 +28,7 @@ const MIN_TARGET: [u8; HASH_LEN] =
     0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8,
     0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8,
     0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8,
-    0xFFu8, 0xF2u8,
+    0x10u8, 0x00u8,
 ];
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
@@ -53,7 +53,7 @@ fn current_timestamp() -> u128
 impl Block
 {
 
-    fn _time_for_last_ten_blocks(chain: &BlockChainBranch, top: &Block) -> u128
+    fn _time_for_last_ten_blocks(chain: &BlockChain, top: &Block) -> u128
     {
         let mut current_block = top.clone();
         for _ in 0..10
@@ -69,7 +69,7 @@ impl Block
         return top.timestamp - current_block.timestamp;
     }
 
-    fn calculate_target(_chain: &BlockChainBranch, _top_or_none: &Option<Block>) -> [u8; HASH_LEN]
+    fn calculate_target(_chain: &BlockChain, _top_or_none: &Option<Block>) -> [u8; HASH_LEN]
     {
         return MIN_TARGET;
 
@@ -100,7 +100,7 @@ impl Block
         */
     }
 
-    pub fn new<W: Wallet>(chain: &BlockChainBranch, raward_to: &W) -> Result<Self, Error>
+    pub fn new<W: Wallet>(chain: &BlockChain, raward_to: &W) -> Result<Self, Error>
     {
         let top_or_none = chain.top();
         let mut prev_block_id: u64 = 0;
@@ -169,7 +169,7 @@ impl Block
         10f64 // FIXME: do real reward calc
     }
 
-    fn validate_transactions(&self, chain: &BlockChainBranch) -> Result<(), Error>
+    fn validate_transactions(&self, chain: &BlockChain) -> Result<(), Error>
     {
         let mut account_map = HashMap::<[u8; PUB_KEY_LEN], f64>::new();
         for transaction in &self.transactions
@@ -212,7 +212,28 @@ impl Block
         Ok(())
     }
 
-    pub fn validate(&self, chain: &BlockChainBranch) -> Result<(), Error>
+    pub fn is_next_block(&self, prev: &Block) -> Result<(), Error>
+    {
+        if self.block_id > 1
+        {
+            if self.block_id != prev.block_id + 1 {
+                return Err(Error::NotNextBlock);
+            }
+
+            if self.prev_hash != prev.hash()? {
+                return Err(Error::PrevInvalidHash);
+            }
+
+            let now = current_timestamp();
+            if self.timestamp < prev.timestamp || self.timestamp > now {
+                return Err(Error::InvalidTimestamp);
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn validate(&self, chain: &BlockChain) -> Result<(), Error>
     {
         if self.block_id > 1
         {
@@ -222,18 +243,7 @@ impl Block
             }
 
             let last_block = last_block_or_none.unwrap();
-            if self.block_id != last_block.block_id + 1 {
-                return Err(Error::NotNextBlock);
-            }
-
-            if self.prev_hash != last_block.hash()? {
-                return Err(Error::PrevInvalidHash);
-            }
-
-            let now = current_timestamp();
-            if self.timestamp < last_block.timestamp || self.timestamp > now {
-                return Err(Error::InvalidTimestamp);
-            }
+            self.is_next_block(&last_block)?;
 
             let expected_target = Self::calculate_target(chain, &Some( last_block ));
             if self.target != expected_target {

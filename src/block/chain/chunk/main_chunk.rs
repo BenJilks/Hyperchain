@@ -1,42 +1,42 @@
+use super::{Chunk, CHUNK_SIZE};
 use crate::block::{Hash, Block, PageHeader, DataFormat};
 use crate::wallet::{PublicWallet, Wallet, WalletStatus};
+use crate::error::Error;
 
-use std::collections::HashMap;
-use std::io::{Cursor, Read, Write};
 use std::path::PathBuf;
 use std::fs::File;
+use std::collections::HashMap;
+use std::io::{Cursor, Read, Write};
 use serde::{Serialize, Deserialize};
 
-pub const CHUNK_SIZE: u64 = 100;
-
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum CumulativeDiff
 {
     New(Vec<u8>),
     Diffs(Vec<Vec<u8>>),
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct BlockChainChunk
+#[derive(Serialize, Deserialize, Clone)]
+pub struct MainChunk
 {
-    bottom_id: u64,
+    pub chunk_id: u64,
+    local_top: usize,
     blocks: Vec<Option<Block>>,
-    top: u64,
 
     ledger: HashMap<Hash, WalletStatus>,
     cumulative_page_diffs: HashMap<(Hash, String), CumulativeDiff>,
 }
 
-impl BlockChainChunk
+impl MainChunk
 {
 
-    pub fn new(chunk_id: u64) -> Self
+    fn new(chunk_id: u64) -> Self
     {
         Self
         {
-            bottom_id: chunk_id * CHUNK_SIZE,
+            chunk_id: chunk_id,
+            local_top: 0,
             blocks: vec![None; CHUNK_SIZE as usize],
-            top: 0u64,
 
             ledger: HashMap::new(),
             cumulative_page_diffs: HashMap::new(),
@@ -111,7 +111,12 @@ impl BlockChainChunk
         }
     }
 
-    pub fn add(&mut self, block: &Block)
+    fn block_id_to_local_id(block_id: u64) -> usize
+    {
+        (block_id % CHUNK_SIZE) as usize
+    }
+
+    fn accumulate_data(&mut self, block: &Block)
     {
         self.change_ledger(&block.raward_to, block.calculate_reward(), 0);
 
@@ -130,23 +135,6 @@ impl BlockChainChunk
             self.change_ledger(&owner_address, -page.header.page_fee, 0);
             self.change_ledger(&block.raward_to, page.header.page_fee, 0);
         }
-
-        self.blocks[(block.block_id - self.bottom_id) as usize] = Some( block.clone() );
-        self.top = std::cmp::max(self.top, block.block_id - self.bottom_id);
-    }
-
-    pub fn block(&self, id: u64) -> Option<Block>
-    {
-        if id < self.bottom_id || id > self.bottom_id + self.top {
-            return None
-        } else {
-            self.blocks[(id - self.bottom_id) as usize].clone()
-        }
-    }
-
-    pub fn top_index(&self) -> u64
-    {
-        self.bottom_id + self.top
     }
 
     pub fn wallet_status_change<W: Wallet>(&self, wallet: &W) -> WalletStatus
@@ -192,6 +180,56 @@ impl BlockChainChunk
                 }
             }
         }
+    }
+
+    pub fn top(&self) -> Option<Block>
+    {
+        self.blocks[self.local_top].clone()
+    }
+
+}
+
+impl Chunk for MainChunk
+{
+
+    fn from(path: PathBuf, chunk_id: u64) -> Self
+    {
+        let chunk_path = path.join(chunk_id.to_string());
+        if !chunk_path.exists() {
+            return Self::new(chunk_id);
+        }
+
+        let chunk_file = File::open(chunk_path).unwrap();
+        bincode::deserialize_from::<File, Self>(chunk_file).unwrap()
+    }
+
+    fn write(&self, path: PathBuf)
+    {
+        let chunk_path = path.join(self.chunk_id.to_string());
+        let chunk_file = File::create(chunk_path).unwrap();
+        bincode::serialize_into(chunk_file, self).unwrap();
+    }
+
+    fn block(&self, block_id: u64) -> Option<Block>
+    {
+        let local_id = Self::block_id_to_local_id(block_id);
+        self.blocks[local_id].clone()
+    }
+
+    fn set_block(&mut self, block: Block) -> Result<(), Error>
+    {
+        let local_id = Self::block_id_to_local_id(block.block_id);
+        if block.block_id > 1 && local_id != 0
+        {
+            if local_id != self.local_top + 1 {
+                return Err(Error::NotNextBlock);
+            }
+        }
+
+        self.accumulate_data(&block);
+        self.blocks[local_id] = Some( block );
+        self.local_top = local_id;
+        Ok(())
     }
 
 }

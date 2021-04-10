@@ -7,7 +7,7 @@ use std::fs::File;
 use std::sync::mpsc::{self, channel, Sender, Receiver};
 use std::sync::{Mutex, Arc};
 use std::time::Duration;
-use std::collections::{HashSet, HashMap};
+use std::collections::HashSet;
 use tcp_channel::{ReceiverBuilder, ChannelRecv};
 use tcp_channel::{SenderBuilder, ChannelSend};
 use tcp_channel::LittleEndian;
@@ -19,18 +19,10 @@ type TCPReceiver = tcp_channel::Receiver<Packet, LittleEndian>;
 type TCPSender = tcp_channel::Sender<Packet, LittleEndian>;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct OtherNode
-{
-    pub ip: String,
-    pub port: i32,
-    pub top: u64,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Packet
 {
-    Hello(OtherNode),
     KnownNode(String),
+    BlockRequest(String, u64),
     NewBlock(Block),
 
     TransactionRequest(Transaction),
@@ -51,9 +43,7 @@ pub struct NetworkConnection
     open_connections: Arc<Mutex<HashSet<String>>>,
     broadcaster: Broadcaster<(Option<String>, Packet)>,
 
-    other_nodes: HashMap<String, OtherNode>,
     packet_queue: Vec<Packet>,
-    my_top: u64,
 }
 
 impl NetworkConnection
@@ -76,9 +66,7 @@ impl NetworkConnection
             open_connections: Arc::from(Mutex::from(HashSet::new())),
             broadcaster: Broadcaster::new(),
 
-            other_nodes: HashMap::new(),
             packet_queue: Vec::new(),
-            my_top: 0,
         })
     }
 
@@ -149,11 +137,9 @@ impl NetworkConnection
             send.send(&Packet::KnownNode(format!("{}:{}", THIS_NODE_ID, port))).unwrap();
             for node in &known_nodes 
             {
-                if node == &address_owned {
-                    continue;
+                if node != &address_owned {
+                    send.send(&Packet::KnownNode(node.clone())).unwrap();
                 }
-
-                send.send(&Packet::KnownNode(node.clone())).unwrap();
             }
             send.flush().unwrap();
 
@@ -169,14 +155,6 @@ impl NetworkConnection
         {
             match recv.recv()
             {
-                Ok(Packet::Hello(mut hello)) =>
-                {
-                    if hello.ip == THIS_NODE_ID {
-                        hello.ip = server_ip.to_owned();
-                    }
-                    send_packet.send(Packet::Hello(hello)).unwrap();
-                },
-
                 Ok(Packet::KnownNode(connection_data)) =>
                 {
                     let data = 
@@ -187,6 +165,17 @@ impl NetworkConnection
                         };
                     send_packet.send(Packet::KnownNode(data)).unwrap();
                 },
+
+                Ok(Packet::BlockRequest(address, block_id)) =>
+                {
+                    let new_address = 
+                        if address.starts_with(THIS_NODE_ID) {
+                            address.replace(THIS_NODE_ID, server_ip)
+                        } else {
+                            address
+                        };
+                    send_packet.send(Packet::BlockRequest(new_address, block_id)).unwrap();
+                }
 
                 Ok(packet) => send_packet.send(packet).unwrap(),
                 Err(_) => break,
@@ -234,20 +223,6 @@ impl NetworkConnection
     {
         match packet
         {
-            Packet::Hello(hello) =>
-            { 
-                let address = format!("{}:{}", hello.ip, hello.port);
-                if self.other_nodes.insert(address.clone(), hello).is_none()
-                {
-                    self.broadcaster.broadcast((Some( address ), Packet::Hello(OtherNode
-                    {
-                        ip: THIS_NODE_ID.to_owned(),
-                        port: self.port,
-                        top: self.my_top,
-                    })));
-                }
-            },
-
             Packet::KnownNode(address) => self.update_known_nodes(&address),
             Packet::Ping => println!("Ping!!"),
             packet => self.packet_queue.push(packet),
@@ -260,22 +235,12 @@ impl NetworkConnection
         this_lock.broadcaster.broadcast((address, packet));
     }
 
-    pub fn set_top(this: &mut Arc<Mutex<Self>>, top: u64)
+    pub fn request_block(this: &mut Arc<Mutex<Self>>, block_id: u64)
     {
         let mut this_lock = this.lock().unwrap();
-        let port = this_lock.port;
-        this_lock.my_top = top;
-        this_lock.broadcaster.broadcast((None, Packet::Hello(OtherNode 
-        {
-            ip: THIS_NODE_ID.to_owned(),
-            port: port,
-            top: top,
-        })));
-    }
-
-    pub fn nodes(this: &mut Arc<Mutex<Self>>) -> HashMap<String, OtherNode>
-    {
-        this.lock().unwrap().other_nodes.clone()
+        let address = format!("{}:{}", THIS_NODE_ID, this_lock.port);
+        let packet = Packet::BlockRequest(address, block_id);
+        this_lock.broadcaster.broadcast((None, packet));
     }
 
     pub fn process_packets(this: &mut Arc<Mutex<Self>>) -> Vec<Packet>

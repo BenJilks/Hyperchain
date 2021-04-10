@@ -1,4 +1,4 @@
-use super::{Signature, Hash, BlockChainBranch, PUB_KEY_LEN};
+use super::{Signature, Hash, BlockChain, PUB_KEY_LEN};
 use crate::wallet::{PrivateWallet, Wallet};
 use sha2::{Sha256, Digest};
 use serde::{Serialize, Deserialize};
@@ -62,7 +62,7 @@ impl Transaction
         }
     }
 
-    pub fn for_block<W: Wallet>(chain: &BlockChainBranch, from: &PrivateWallet, to: &W, amount: f64, fee: f64) -> Option<Self>
+    pub fn for_block<W: Wallet>(chain: &BlockChain, from: &PrivateWallet, to: &W, amount: f64, fee: f64) -> Option<Self>
     {
         let status = chain.lockup_wallet_status(from);
         if amount + fee > status.balance {

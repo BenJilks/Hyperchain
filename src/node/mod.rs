@@ -4,29 +4,27 @@ mod command;
 use crate::miner;
 use crate::block::{Block, BlockChain};
 use crate::wallet::PrivateWallet;
-use crate::error::Error;
+use crate::logger::{Logger, LoggerLevel};
 use network::{NetworkConnection, Packet};
 use command::{Command, TransactionCommand, PageCommand, BalanceCommand};
 
 use std::sync::mpsc::{channel, Sender, Receiver};
 use std::sync::{Mutex, Arc};
 use std::path::PathBuf;
-use std::time::{Instant, Duration};
+use std::time::Duration;
+use std::io::Write;
 use rustyline::Editor;
 use rustyline::config::Configurer;
 
-pub struct Node
+pub struct Node<W: Write>
 {
     connection: Arc<Mutex<NetworkConnection>>,
-    top: u64,
     blocks_being_mined: i32,
-    at_top: bool,
-    start_prune_timer: Instant,
 
-    commands: Vec<Box<dyn Command>>,
+    commands: Vec<Box<dyn Command<W>>>,
 }
 
-impl Node
+impl<W: Write> Node<W>
 {
 
     pub fn new(port: i32, known_nodes: PathBuf) -> Self
@@ -35,10 +33,8 @@ impl Node
         Self
         {
             connection: Arc::from(Mutex::from(connection)),
-            top: 0,
             blocks_being_mined: 0,
-            at_top: false,
-            start_prune_timer: Instant::now(),
+            
             commands: vec![
                 Box::from(TransactionCommand::default()),
                 Box::from(BalanceCommand::default()),
@@ -59,32 +55,35 @@ impl Node
         }
     }
 
-    fn process_received_block(&mut self, chain: &mut BlockChain, block: Block)
+    fn process_received_block(&mut self, chain: &mut BlockChain, block: Block, logger: &mut Logger<W>)
     {
-        println!("Got block {}", block.block_id);
-        match chain.add(&block)
-        {
-            Ok(_) => 
-            {
-                for command in &mut self.commands {
-                    command.on_accepted_block(&block);
-                }
-                self.top = chain.top_id();
-            },
-            Err(Error::NoValidBranches) => self.top -= 1,
-            Err(Error::DuplicateBlock) => {},
-            Err(_) => panic!(),
-        }
-        NetworkConnection::set_top(&mut self.connection, self.top);
+        logger.log(LoggerLevel::Info, &format!("Got block {}", block.block_id));
+        chain.add(block.clone(), logger);
     }
 
-    fn process_packets(&mut self, chain: &mut BlockChain)
+    fn process_block_request(&mut self, chain: &mut BlockChain, address: String, block_id: u64, logger: &mut Logger<W>)
+    {
+        logger.log(LoggerLevel::Info, &format!("Got request from {} for {}", address, block_id));
+        if block_id > chain.top_id() {
+            return;
+        }
+
+        let block = chain.block(block_id);
+        if block.is_some() 
+        {
+            NetworkConnection::broadcast(&mut self.connection, 
+                Some( address ), Packet::NewBlock(block.unwrap()));
+        }
+    }
+
+    fn process_packets(&mut self, chain: &mut BlockChain, logger: &mut Logger<W>)
     {
         for packet in NetworkConnection::process_packets(&mut self.connection)
         {
             match packet
             {
-                Packet::NewBlock(block) => self.process_received_block(chain, block),
+                Packet::NewBlock(block) => self.process_received_block(chain, block, logger),
+                Packet::BlockRequest(address, block_id) => self.process_block_request(chain, address, block_id, logger),
 
                 _ =>
                 {
@@ -96,67 +95,53 @@ impl Node
         }
     }
 
-    fn process_mined_blocks(&mut self, chain: &mut BlockChain, blocks_done_recv: &Receiver<Block>)
+    fn process_mined_blocks(&mut self, chain: &mut BlockChain, blocks_done_recv: &Receiver<Block>, logger: &mut Logger<W>)
     {
-        if !self.at_top {
-            return;
-        }
-
         for block in blocks_done_recv.try_iter() 
         {
             self.blocks_being_mined -= 1;
-            if block.block_id != chain.top_id() + 1 
-            {
-                println!("Mined block {} not at top {}", block.block_id, chain.top_id());
-                continue;
-            }
-            if block.validate(chain.longest_branch()).is_err() 
-            {
-                println!("Mined block not valid on longest branch");
-                continue;
-            }
-            let test = chain.add(&block);
-            if test.is_err()
-            {
-                println!("Unable to add block {} {}", block.block_id, test.unwrap_err().to_string());
-                continue;
-            }
-            
-            println!("Accepted our block {}!!", block.block_id);
-            for command in &mut self.commands {
-                command.on_accepted_block(&block);
-            }
-            self.top = chain.top_id();
-            NetworkConnection::set_top(&mut self.connection, self.top);
-        }
-    }
 
-    fn process_nodes(&mut self, chain: &mut BlockChain)
-    {
-        self.at_top = true;
-        for (address, node) in NetworkConnection::nodes(&mut self.connection) 
-        {
-            if node.top < self.top 
+            let top_or_none = chain.top();
+            if top_or_none.is_some() 
             {
-                let block = chain.longest_branch().block(node.top + 1);
-                if block.is_some()
+                let top = top_or_none.unwrap();
+                if block.block_id != top.block_id + 1
                 {
-                    NetworkConnection::broadcast(&mut self.connection, 
-                        Some( address ), Packet::NewBlock(block.unwrap()));
+                    logger.log(LoggerLevel::Info, &format!("Mined block {} not at top {}", block.block_id, top.block_id));
+                    continue;
                 }
             }
 
-            if node.top > self.top {
-                self.at_top = false;
+            if block.validate(chain).is_err() 
+            {
+                logger.log(LoggerLevel::Info, "Mined block not valid");
+                continue;
             }
+            
+            logger.log(LoggerLevel::Info, &format!("Accepted our block {}!!", block.block_id));
+            for command in &mut self.commands {
+                command.on_accepted_block(&block);
+            }
+
+            chain.add(block.clone(), logger);
+            NetworkConnection::broadcast(&mut self.connection, 
+                None, Packet::NewBlock(block));
         }
     }
 
     fn process_new_blocks_to_mine(&mut self, chain: &mut BlockChain, wallet: &PrivateWallet, blocks_to_mine_send: &Sender<Block>)
     {
-        if self.at_top && self.blocks_being_mined == 0
+        let next_block_needed = chain.next_block_needed();
+        if next_block_needed != chain.top_id() + 1
         {
-            let mut block = Block::new(chain.longest_branch(), wallet).expect("Can make block");
+            NetworkConnection::request_block(&mut self.connection, 
+                next_block_needed);
+            return;
+        }
+
+        if self.blocks_being_mined == 0
+        {
+            let mut block = Block::new(chain, wallet).expect("Can make block");
             for command in &mut self.commands {
                 command.on_create_block(&mut block);
             }
@@ -166,16 +151,7 @@ impl Node
         }
     }
 
-    fn prune_branches(&mut self, chain: &mut BlockChain)
-    {
-        if self.start_prune_timer.elapsed().as_secs() >= 1 
-        {
-            chain.prune_branches();
-            self.start_prune_timer = Instant::now();
-        }
-    }
-
-    fn process_commands(&mut self, lines_recv: &Receiver<Vec<String>>, chain: &mut BlockChain) -> bool
+    fn _process_commands(&mut self, lines_recv: &Receiver<Vec<String>>, chain: &mut BlockChain, logger: &mut Logger<W>) -> bool
     {
         for line in lines_recv.try_iter() 
         {
@@ -190,7 +166,7 @@ impl Node
             for command in &mut self.commands 
             {
                 if command.name() == line[0] {
-                    command.invoke(&line[1..], &mut self.connection, chain);
+                    command.invoke(&line[1..], &mut self.connection, chain, logger);
                 }
             }
         }
@@ -198,7 +174,7 @@ impl Node
         false
     }
 
-    fn command_line_thread(send: Sender<Vec<String>>)
+    fn _command_line_thread(send: Sender<Vec<String>>)
     {
         let mut line_editor = Editor::<()>::new();
         line_editor.set_auto_add_history(true);
@@ -225,33 +201,35 @@ impl Node
         send.send(vec!["exit".to_owned()]).unwrap();
     }
 
-    pub fn run(&mut self, chain: &mut BlockChain, wallet: &PrivateWallet)
+    pub fn run(&mut self, chain: &mut BlockChain, wallet: &PrivateWallet, logger: &mut Logger<W>)
     {
-        self.top = chain.top_id();
         NetworkConnection::run(self.connection.clone());
-        NetworkConnection::set_top(&mut self.connection, self.top);
 
+        if chain.top_id() != 0
+        {
+            NetworkConnection::broadcast(&mut self.connection, 
+                None, Packet::NewBlock(chain.top().unwrap()));
+        }
+    
         let (blocks_to_mine_send, blocks_to_mine_recv) = channel::<Block>();
         let (blocks_done_send, blocks_done_recv) = channel::<Block>();
         std::thread::spawn(move || {
             Self::miner_thread(blocks_to_mine_recv, blocks_done_send);
         });
 
-        let (lines_send, lines_recv) = channel::<Vec<String>>();
-        std::thread::spawn(move || {
-            Self::command_line_thread(lines_send);
-        });
+        //let (lines_send, lines_recv) = channel::<Vec<String>>();
+        //std::thread::spawn(move || {
+        //    Self::command_line_thread(lines_send);
+        //});
 
         loop
         {
-            self.process_packets(chain);
-            self.process_mined_blocks(chain, &blocks_done_recv);
-            self.process_nodes(chain);
+            self.process_packets(chain, logger);
+            self.process_mined_blocks(chain, &blocks_done_recv, logger);
             self.process_new_blocks_to_mine(chain, wallet, &blocks_to_mine_send);
-            self.prune_branches(chain);
-            if self.process_commands(&lines_recv, chain) {
-                break;
-            }
+            //if self.process_commands(&lines_recv, chain, logger) {
+            //    break;
+            //}
 
             std::thread::sleep(Duration::from_millis(100));
         }

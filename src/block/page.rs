@@ -1,4 +1,4 @@
-use super::{Signature, BlockChainBranch, PUB_KEY_LEN};
+use super::{Signature, BlockChain, PUB_KEY_LEN};
 use crate::wallet::{Wallet, PrivateWallet};
 
 use serde::{Serialize, Deserialize};
@@ -106,7 +106,8 @@ impl Page
         }
     }
 
-    pub fn from_file(chain: &BlockChainBranch, new_page: &[u8], owner: &PrivateWallet, page_name: &str, fee: f64) -> Self
+    /*
+    pub fn from_file(chain: &BlockChain, new_page: &[u8], owner: &PrivateWallet, page_name: &str, fee: f64) -> Self
     {
         let existing_page_file = chain.page(owner, page_name);
         if existing_page_file.is_none() {
@@ -119,5 +120,6 @@ impl Page
         bidiff::simple_diff(&existing_page, new_page, &mut diff).unwrap();
         Self::new(DataFormat::DiffRaw, diff, owner, page_name, fee)
     }
+    */
 
 }
