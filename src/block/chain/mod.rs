@@ -2,7 +2,7 @@ mod chunk;
 mod block_storage;
 mod main_branch;
 mod sub_branch;
-mod block_buffer;
+// mod block_buffer;
 use super::Block;
 use crate::error::Error;
 use crate::wallet::{Wallet, WalletStatus};
@@ -10,7 +10,7 @@ use crate::logger::{Logger, LoggerLevel};
 use block_storage::BlockStorage;
 use main_branch::MainBranch;
 use sub_branch::SubBranch;
-use block_buffer::BlockBuffer;
+// use block_buffer::BlockBuffer;
 
 use std::fs;
 use std::path::PathBuf;
@@ -21,7 +21,7 @@ pub struct BlockChain
     path: PathBuf,
     main_chain: MainBranch,
     sub_chains: Vec<SubBranch>,
-    buffer: BlockBuffer,
+    // buffer: BlockBuffer,
 }
 
 impl BlockChain
@@ -35,7 +35,7 @@ impl BlockChain
             path: path.clone(),
             main_chain: MainBranch::new(path.join("main").clone()),
             sub_chains: SubBranch::load_sub_branches(&path.join("sub_branches")),
-            buffer: BlockBuffer::new(),
+            // buffer: BlockBuffer::new(),
         };
 
         logger.log(LoggerLevel::Info, &format!("Open blockchain '{:?}', with top {}", 
@@ -171,61 +171,62 @@ impl BlockChain
         self.combine_sub_chains_if_possible(logger);
     }
 
-    pub fn buffer_block(&mut self, block: Block) -> Option<Block>
-    {
-        match self.buffer.push(block.clone())
-        {
-            Ok(buffered_block) => buffered_block,
-            Err(_) => Some( block ),
-        }
-    }
+    // pub fn buffer_block(&mut self, block: Block) -> Option<Block>
+    // {
+    //     match self.buffer.push(block.clone())
+    //     {
+    //         Ok(buffered_block) => buffered_block,
+    //         Err(_) => Some( block ),
+    //     }
+    // }
 
     pub fn add<W: Write>(&mut self, block: Block, logger: &mut Logger<W>)
     {
-        let buffered_block_or_none = self.buffer_block(block);
-        if buffered_block_or_none.is_none() {
-            return;
-        }
+        // let buffered_block_or_none = self.buffer_block(block);
+        // if buffered_block_or_none.is_none() {
+        //     return;
+        // }
 
-        let buffered_block = buffered_block_or_none.unwrap();
-        let existing_block = self.main_chain.block(buffered_block.block_id);
-        if existing_block.is_some() && existing_block.unwrap() == buffered_block 
+        // let buffered_block = buffered_block_or_none.unwrap();
+        let existing_block = self.main_chain.block(block.block_id);
+        if existing_block.is_some() && existing_block.unwrap() == block 
         {
-            logger.log(LoggerLevel::Info, &format!("Ignoring duplicate block {}", buffered_block.block_id));
+            logger.log(LoggerLevel::Info, &format!("Ignoring duplicate block {}", block.block_id));
             self.clean_sub_chains(logger);
             return;
         }
 
-        if self.is_valid_next_block(&buffered_block).is_err() 
+        if self.is_valid_next_block(&block).is_err() 
         {
-            self.on_unplaced_block(buffered_block, logger);
+            self.on_unplaced_block(block, logger);
             return;
         }
 
-        self.main_chain.add(buffered_block).unwrap();
+        self.main_chain.add(block).unwrap();
         return;
     }
 
     pub fn block(&self, block_id: u64) -> Option<Block>
     {
-        if self.buffer.base_id().is_none() || 
-            block_id < self.buffer.base_id().unwrap()
-        {
+        // if self.buffer.base_id().is_none() || 
+        //     block_id < self.buffer.base_id().unwrap()
+        // {
             self.main_chain.block(block_id)
-        } 
-        else 
-        {
-            self.buffer.block(block_id)
-        }
+        // } 
+        // else 
+        // {
+        //     self.buffer.block(block_id)
+        // }
     }
 
     pub fn top(&self) -> Option<Block>
     {
-        match self.buffer.top()
-        {
-            Some(top) => Some( top ),
-            None => self.main_chain.top(),
-        }
+        self.main_chain.top()
+        // match self.buffer.top()
+        // {
+        //     Some(top) => Some( top ),
+        //     None => self.main_chain.top(),
+        // }
     }
 
     pub fn top_id(&self) -> u64

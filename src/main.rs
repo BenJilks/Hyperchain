@@ -34,7 +34,7 @@ fn main()
 {
     println!("Hello, Blockchains!!");
 
-    let mut logger = Logger::new(std::io::stdout(), LoggerLevel::Info);
+    let mut logger = Logger::new(std::io::stdout(), LoggerLevel::Verbose);
     let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet"), &mut logger).unwrap();
     let other = PrivateWallet::read_from_file(&PathBuf::from("other.wallet"), &mut logger).unwrap();
     
