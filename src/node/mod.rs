@@ -64,11 +64,11 @@ impl<W: Write> Node<W>
     fn process_block_request(&mut self, chain: &mut BlockChain, address: String, block_id: u64, logger: &mut Logger<W>)
     {
         logger.log(LoggerLevel::Verbose, &format!("Got request from {} for {}", address, block_id));
-        if block_id > chain.top_id() {
+        if block_id > chain.main_chain().top_id() {
             return;
         }
 
-        let block = chain.block(block_id);
+        let block = chain.main_chain().block(block_id);
         if block.is_some() 
         {
             NetworkConnection::broadcast(&mut self.connection, 
@@ -82,7 +82,7 @@ impl<W: Write> Node<W>
         {
             match packet
             {
-                Packet::Hello(address) => self.process_block_request(chain, address, chain.top_id(), logger),
+                Packet::Hello(address) => self.process_block_request(chain, address, chain.main_chain().top_id(), logger),
                 Packet::NewBlock(block) => self.process_received_block(chain, block, logger),
                 Packet::BlockRequest(address, block_id) => self.process_block_request(chain, address, block_id, logger),
 
@@ -102,9 +102,10 @@ impl<W: Write> Node<W>
         {
             self.blocks_being_mined -= 1;
 
-            if block.block_id != chain.top_id() + 1
+            if block.block_id != chain.main_chain().top_id() + 1
             {
-                logger.log(LoggerLevel::Verbose, &format!("Mined block {} not at top {}", block.block_id, chain.top_id()));
+                logger.log(LoggerLevel::Verbose, &format!("Mined block {} not at top {}", 
+                    block.block_id, chain.main_chain().top_id()));
                 continue;
             }
 
@@ -129,7 +130,7 @@ impl<W: Write> Node<W>
         blocks_to_mine: &Sender<Block>, blocks_done: &Receiver<Block>, logger: &mut Logger<W>)
     {
         let next_block_needed = chain.next_block_needed();
-        if next_block_needed != chain.top_id() + 1
+        if next_block_needed != chain.main_chain().top_id() + 1
         {
             NetworkConnection::request_block(&mut self.connection, 
                 next_block_needed);
@@ -206,10 +207,10 @@ impl<W: Write> Node<W>
     {
         NetworkConnection::run(self.connection.clone());
 
-        if chain.top_id() != 0
+        if chain.main_chain().top_id() != 0
         {
             NetworkConnection::broadcast(&mut self.connection, 
-                None, Packet::NewBlock(chain.top().unwrap()));
+                None, Packet::NewBlock(chain.main_chain().top().unwrap()));
         }
     
         let (blocks_to_mine_send, blocks_to_mine_recv) = channel::<Block>();

@@ -58,7 +58,7 @@ impl Block
         let mut current_block = top.clone();
         for _ in 0..10
         {
-            let next = chain.block(current_block.block_id - 1);
+            let next = chain.main_chain().block(current_block.block_id - 1);
             if next.is_none() {
                 break;
             }
@@ -102,7 +102,7 @@ impl Block
 
     pub fn new<W: Wallet>(chain: &BlockChain, raward_to: &W) -> Result<Self, Error>
     {
-        let top_or_none = chain.top();
+        let top_or_none = chain.main_chain().top();
         let mut prev_block_id: u64 = 0;
         let mut prev_block_hash = [0u8; HASH_LEN];
         let target = Self::calculate_target(chain, &top_or_none);
@@ -237,7 +237,7 @@ impl Block
     {
         if self.block_id > 1
         {
-            let last_block_or_none = chain.block(self.block_id - 1);
+            let last_block_or_none = chain.main_chain().block(self.block_id - 1);
             if last_block_or_none.is_none() {
                 return Err(Error::PrevNone);
             }
