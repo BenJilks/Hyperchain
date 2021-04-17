@@ -33,7 +33,7 @@ impl BlockChain
         let chain = Self
         {
             path: path.clone(),
-            main_chain: MainBranch::new(path.join("main").clone()),
+            main_chain: MainBranch::new(path.clone()),
             sub_chains: SubBranch::load_sub_branches(&path.join("sub_branches")),
             // buffer: BlockBuffer::new(),
         };

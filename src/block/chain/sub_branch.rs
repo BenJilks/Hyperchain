@@ -71,7 +71,7 @@ impl SubBranch
         bincode::deserialize_from::<File, Self>(file).unwrap()
     }
 
-    pub fn write(&self)
+    fn write(&self)
     {
         let file = File::create(&self.path.join("header")).unwrap();
         bincode::serialize_into(file, self).unwrap();
@@ -160,6 +160,115 @@ impl SubBranch
         }
 
         false
+    }
+
+}
+
+#[cfg(test)]
+mod tests
+{
+    use super::*;
+
+    fn build_branches()
+    {
+        let block_a = Block
+        {
+            prev_hash: [0u8; 32],
+            block_id: 16,
+            raward_to: [0u8; 32],
+            pages: Vec::new(),
+            transactions: Vec::new(),
+            timestamp: 0,
+            target: [0u8; 32],
+            pow: 0,
+        };
+        let block_b = Block
+        {
+            prev_hash: block_a.hash().unwrap(),
+            block_id: 17,
+            raward_to: [0u8; 32],
+            pages: Vec::new(),
+            transactions: Vec::new(),
+            timestamp: 0,
+            target: [0u8; 32],
+            pow: 0,
+        };
+        let block_c = Block
+        {
+            prev_hash: block_b.hash().unwrap(),
+            block_id: 18,
+            raward_to: [0u8; 32],
+            pages: Vec::new(),
+            transactions: Vec::new(),
+            timestamp: 0,
+            target: [0u8; 32],
+            pow: 0,
+        };
+
+        let mut branch_a = SubBranch::from(PathBuf::from("sub_branch_tests_temp/branch_a"));
+        assert_eq!(branch_a.add_block(&block_c), true);
+        assert_eq!(branch_a.add_block(&block_b), true);
+
+        let mut branch_b = SubBranch::from(PathBuf::from("sub_branch_tests_temp/branch_b"));
+        assert_eq!(branch_b.add_block(&block_a), true);
+
+        let block_other = Block
+        {
+            prev_hash: block_b.hash().unwrap(),
+            block_id: 15,
+            raward_to: [0u8; 32],
+            pages: Vec::new(),
+            transactions: Vec::new(),
+            timestamp: 0,
+            target: [0u8; 32],
+            pow: 0,
+        };
+
+        let mut branch_c = SubBranch::from(PathBuf::from("sub_branch_tests_temp/branch_c"));
+        assert_eq!(branch_c.add_block(&block_other), true);
+    }
+
+    fn test_branches()
+    {
+        let mut branch_a = SubBranch::from(PathBuf::from("sub_branch_tests_temp/branch_a"));
+        assert_eq!(branch_a.block(18).is_some(), true);
+        assert_eq!(branch_a.block(17).is_some(), true);
+
+        let branch_b = SubBranch::from(PathBuf::from("sub_branch_tests_temp/branch_b"));
+        assert_eq!(branch_b.block(16).is_some(), true);
+
+        let branch_c = SubBranch::from(PathBuf::from("sub_branch_tests_temp/branch_c"));
+        assert_eq!(branch_c.block(15).is_some(), true);
+
+        assert_eq!(SubBranch::can_combine(&branch_a, &branch_b), true);
+        assert_eq!(SubBranch::can_combine(&branch_b, &branch_a), true);
+        assert_eq!(SubBranch::can_combine(&branch_a, &branch_c), false);
+        assert_eq!(SubBranch::can_combine(&branch_b, &branch_c), true);
+
+        branch_a.combine_with(&branch_b);
+        assert_eq!(branch_a.block(18).is_some(), true);
+        assert_eq!(branch_a.block(17).is_some(), true);
+        assert_eq!(branch_a.block(16).is_some(), true);
+
+        assert_eq!(SubBranch::can_combine(&branch_a, &branch_c), true);
+        branch_a.combine_with(&branch_c);
+        assert_eq!(branch_a.block(18).is_some(), true);
+        assert_eq!(branch_a.block(17).is_some(), true);
+        assert_eq!(branch_a.block(16).is_some(), true);
+        assert_eq!(branch_a.block(15).is_some(), true);
+    }
+
+    fn clean_up()
+    {
+        assert_eq!(std::fs::remove_dir_all(PathBuf::from("sub_branch_tests_temp")).is_ok(), true);
+    }
+
+    #[test]
+    fn test_sub_branch()
+    {
+        build_branches();
+        test_branches();
+        clean_up();
     }
 
 }

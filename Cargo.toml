@@ -20,4 +20,3 @@ bidiff = { git = "https://github.com/divvun/bidiff" }
 bipatch = { git = "https://github.com/divvun/bidiff" }
 base-62 = { git = "https://github.com/kryptco/base62.rs" }
 tcp-channel = "0.3.2"
-rustyline = "8.0.0"

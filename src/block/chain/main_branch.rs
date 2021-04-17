@@ -22,7 +22,7 @@ impl MainBranch
         Self
         {
             path: path.clone(),
-            storage: BlockStorage::new(path.clone()),
+            storage: BlockStorage::new(path.join("main").clone()),
         }
     }
 
@@ -136,6 +136,19 @@ impl MainBranch
             callback(&chunk);
             chunk_id += 1;
         }
+    }
+
+}
+
+#[cfg(test)]
+mod tests
+{
+    use super::*;
+
+    #[test]
+    fn test_main_chain()
+    {
+        
     }
 
 }

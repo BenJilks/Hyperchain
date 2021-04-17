@@ -30,8 +30,10 @@ pub struct MainChunk
 impl MainChunk
 {
 
-    fn new(chunk_id: u64) -> Self
+    fn new(path: PathBuf, chunk_id: u64) -> Self
     {
+        std::fs::create_dir_all(path).unwrap();
+
         Self
         {
             chunk_id: chunk_id,
@@ -196,7 +198,7 @@ impl Chunk for MainChunk
     {
         let chunk_path = path.join(chunk_id.to_string());
         if !chunk_path.exists() {
-            return Self::new(chunk_id);
+            return Self::new(path, chunk_id);
         }
 
         let chunk_file = File::open(chunk_path).unwrap();
@@ -230,6 +232,126 @@ impl Chunk for MainChunk
         self.blocks[local_id] = Some( block );
         self.local_top = local_id;
         Ok(())
+    }
+
+}
+
+#[cfg(test)]
+mod tests
+{
+    use super::*;
+    use crate::block::{Transaction, TransactionHeader};
+    use crate::wallet::PublicWallet;
+
+    fn write_blocks_to_chunk()
+    {
+        let wallet = PublicWallet::from_public_key([0u8; 256]);
+        let other = PublicWallet::from_public_key([1u8; 256]);
+
+        let mut a: MainChunk = Chunk::from(PathBuf::from("main_chunk_tests_temp"), 0);
+        assert_eq!(a.set_block(Block
+        {
+            prev_hash: [0u8; 32],
+            block_id: 1,
+            raward_to: wallet.get_address(),
+            pages: Vec::new(),
+            transactions: vec![Transaction
+            {
+                header: TransactionHeader
+                {
+                    id: 0,
+                    from: wallet.get_public_key(),
+                    to: other.get_address(),
+                    amount: 1.0,
+                    transaction_fee: 1.0,
+                },
+                signature: [0u8; 256],
+                e: [0u8; 3],
+            }],
+            timestamp: 0,
+            target: [0u8; 32],
+            pow: 0,
+        }).is_ok(), true);
+
+        assert_eq!(a.set_block(Block
+        {
+            prev_hash: [0u8; 32],
+            block_id: 2,
+            raward_to: wallet.get_address(),
+            pages: Vec::new(),
+            transactions: vec![Transaction
+            {
+                header: TransactionHeader
+                {
+                    id: 1,
+                    from: wallet.get_public_key(),
+                    to: other.get_address(),
+                    amount: 1.0,
+                    transaction_fee: 1.0,
+                },
+                signature: [0u8; 256],
+                e: [0u8; 3],
+            }],
+            timestamp: 0,
+            target: [0u8; 32],
+            pow: 0,
+        }).is_ok(), true);
+
+        assert_eq!(a.set_block(Block
+        {
+            prev_hash: [0u8; 32],
+            block_id: 5,
+            raward_to: wallet.get_address(),
+            pages: Vec::new(),
+            transactions: Vec::new(),
+            timestamp: 0,
+            target: [0u8; 32],
+            pow: 0,
+        }).is_ok(), false);
+    
+        a.write(PathBuf::from("main_chunk_tests_temp"));
+    }
+
+    fn test_chunk_has_blocks()
+    {
+        let a: MainChunk = Chunk::from(PathBuf::from("main_chunk_tests_temp"), 0);
+        assert_eq!(a.blocks.iter().filter(|x| x.is_some()).count(), 2);
+
+        let wallet = PublicWallet::from_public_key([0u8; 256]);
+        let other = PublicWallet::from_public_key([1u8; 256]);
+
+        let test_block = |block_or_none: &Option<Block>, id: u64|
+        {
+            assert_eq!(block_or_none.is_some(), true);
+
+            let block = block_or_none.clone().unwrap();
+            assert_eq!(block.prev_hash, [0u8; 32]);
+            assert_eq!(block.block_id, id);
+            assert_eq!(block.raward_to, wallet.get_address());
+            assert_eq!(block.pages, Vec::new());
+            assert_eq!(block.timestamp, 0);
+            assert_eq!(block.target, [0u8; 32]);
+            assert_eq!(block.pow, 0);
+        };
+        test_block(&a.blocks[1], 1);
+        test_block(&a.blocks[2], 2);
+        assert_eq!(a.top(), a.blocks[2]);
+
+        assert_eq!(a.wallet_status_change(&wallet).balance, 18.0);
+        assert_eq!(a.wallet_status_change(&other).balance, 2.0);
+    }
+
+    fn clean_up()
+    {
+        assert_eq!(std::fs::remove_dir_all(PathBuf::from("main_chunk_tests_temp")).is_ok(), true);
+    }
+
+    #[test]
+    fn test_main_chunk()
+    {
+        write_blocks_to_chunk();
+        test_chunk_has_blocks();
+        clean_up();
     }
 
 }

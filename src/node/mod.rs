@@ -13,8 +13,6 @@ use std::sync::{Mutex, Arc};
 use std::path::PathBuf;
 use std::time::Duration;
 use std::io::Write;
-use rustyline::Editor;
-use rustyline::config::Configurer;
 
 pub struct Node<W: Write>
 {
@@ -153,56 +151,6 @@ impl<W: Write> Node<W>
         }
     }
 
-    fn _process_commands(&mut self, lines_recv: &Receiver<Vec<String>>, chain: &mut BlockChain, logger: &mut Logger<W>) -> bool
-    {
-        for line in lines_recv.try_iter() 
-        {
-            if line.len() == 0 {
-                continue;
-            }
-
-            if line[0] == "exit" {
-                return true;
-            }
-
-            for command in &mut self.commands 
-            {
-                if command.name() == line[0] {
-                    command.invoke(&line[1..], &mut self.connection, chain, logger);
-                }
-            }
-        }
-
-        false
-    }
-
-    fn _command_line_thread(send: Sender<Vec<String>>)
-    {
-        let mut line_editor = Editor::<()>::new();
-        line_editor.set_auto_add_history(true);
-
-        loop
-        {
-            match line_editor.readline(">> ")
-            {
-                Ok(line) => 
-                {
-                    send.send(line.split(' ')
-                        .map(|x| x.to_owned())
-                        .collect::<Vec<String>>()).unwrap();
-                },
-
-                Err(err) => 
-                {
-                    println!("Error: {:?}", err);
-                    break;
-                },
-            }
-        }
-
-        send.send(vec!["exit".to_owned()]).unwrap();
-    }
-
     pub fn run(&mut self, chain: &mut BlockChain, wallet: &PrivateWallet, logger: &mut Logger<W>)
     {
         NetworkConnection::run(self.connection.clone());
@@ -219,19 +167,11 @@ impl<W: Write> Node<W>
             Self::miner_thread(blocks_to_mine_recv, blocks_done_send);
         });
 
-        //let (lines_send, lines_recv) = channel::<Vec<String>>();
-        //std::thread::spawn(move || {
-        //    Self::command_line_thread(lines_send);
-        //});
-
         loop
         {
             self.process_packets(chain, logger);
             self.process_mined_blocks(chain, &blocks_done_recv, logger);
             self.process_new_blocks_to_mine(chain, wallet, &blocks_to_mine_send, &blocks_done_recv, logger);
-            //if self.process_commands(&lines_recv, chain, logger) {
-            //    break;
-            //}
 
             std::thread::sleep(Duration::from_millis(100));
         }

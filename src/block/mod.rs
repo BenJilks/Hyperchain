@@ -2,7 +2,7 @@ mod page;
 mod transaction;
 mod chain;
 pub use page::{Page, PageHeader, DataFormat};
-pub use transaction::Transaction;
+pub use transaction::{Transaction, TransactionHeader};
 pub use chain::BlockChain;
 use crate::wallet::{PublicWallet, Wallet};
 use crate::error::Error;
