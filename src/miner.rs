@@ -18,6 +18,6 @@ pub fn mine<W: Wallet>(chain: &mut BlockChain, wallet: &W, count: i32, logger: &
     for _ in 0..count
     {
         let block = Block::new(chain, wallet).expect("Can create new block");
-        chain.add(mine_block(block), logger);
+        chain.add(&mine_block(block), logger);
     }
 }

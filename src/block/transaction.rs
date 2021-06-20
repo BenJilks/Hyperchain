@@ -64,6 +64,9 @@ impl Transaction
 
     pub fn for_block<W: Wallet>(chain: &BlockChain, from: &PrivateWallet, to: &W, amount: f64, fee: f64) -> Option<Self>
     {
+        return None;
+
+        /*
         let status = chain.lockup_wallet_status(from);
         if amount + fee > status.balance {
             return None; // FIXME: Report invalid transaction error
@@ -81,6 +84,7 @@ impl Transaction
         let signature_vec = from.sign(&header.hash().unwrap()).unwrap();
         let signature = *slice_as_array!(&signature_vec, [u8; PUB_KEY_LEN]).unwrap();
         Some( Self::new(header, signature, from.get_e()) )
+        */
     }
 
 }

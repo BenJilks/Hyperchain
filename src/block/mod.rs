@@ -12,13 +12,11 @@ use serde::{Serialize, Deserialize};
 use rsa::BigUint;
 use std::collections::HashMap;
 use std::time::SystemTime;
-// use num_traits::pow::Pow;
 use bincode;
 use slice_as_array;
 
 pub const PUB_KEY_LEN: usize = 256;
 pub const HASH_LEN: usize = 32;
-// pub const MS_TO_FIND_BLOCK: usize = 5000;
 type Signature = [u8; PUB_KEY_LEN];
 type Hash = [u8; HASH_LEN];
 
@@ -28,7 +26,7 @@ const MIN_TARGET: [u8; HASH_LEN] =
     0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8,
     0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8,
     0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8,
-    0x10u8, 0x00u8,
+    0xFFu8, 0x00u8,
 ];
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
@@ -63,41 +61,22 @@ impl Block
                 break;
             }
 
-            current_block = next.unwrap();
+            current_block = next.unwrap().clone();
         }
 
         return top.timestamp - current_block.timestamp;
     }
 
-    fn calculate_target(_chain: &BlockChain, _top_or_none: &Option<Block>) -> [u8; HASH_LEN]
+    fn calculate_target(_chain: &BlockChain, _top_or_none: Option<&Block>) -> [u8; HASH_LEN]
     {
-        return MIN_TARGET;
+        // FIXME: Do actually hash target calc
+        MIN_TARGET
+    }
 
-        /*
-        if top_or_none.is_none() {
-            return MIN_TARGET;
-        }
-
-        let top = top_or_none.as_ref().unwrap();
-        if top.block_id % 10 != 0 {
-            return top.target;
-        }
-
-        let average_time = std::cmp::max(Self::time_for_last_ten_blocks(chain, top), 10) / 10;
-
-        let target_num = BigUint::from_bytes_le(&top.target);
-        let c_2_pow_256 = BigUint::from(2u32).pow(256u32);
-        let last_difficualty = c_2_pow_256.clone() / target_num;
-        let hash_rate = std::cmp::max(last_difficualty.clone() / average_time, BigUint::from(1u32));
-
-        let new_difficaulty = hash_rate.clone() * MS_TO_FIND_BLOCK;
-        let new_target_num = c_2_pow_256.clone() / new_difficaulty;
-        let mut new_target = new_target_num.to_bytes_le();
-        new_target.resize(HASH_LEN, 0);
-        
-        println!("{} in {}, {} H/ms", last_difficualty, average_time, hash_rate);
-        return *slice_as_array!(&new_target, [u8; HASH_LEN]).unwrap();
-        */
+    pub fn calculate_reward(&self) -> f64
+    {
+        // FIXME: do real reward calc
+        10f64
     }
 
     pub fn new<W: Wallet>(chain: &BlockChain, raward_to: &W) -> Result<Self, Error>
@@ -105,7 +84,7 @@ impl Block
         let top_or_none = chain.top();
         let mut prev_block_id: u64 = 0;
         let mut prev_block_hash = [0u8; HASH_LEN];
-        let target = Self::calculate_target(chain, &top_or_none);
+        let target = Self::calculate_target(chain, top_or_none);
         
         if top_or_none.is_some()
         {
@@ -127,6 +106,22 @@ impl Block
             target: target,
             pow: 0,
         })
+    }
+
+    pub fn new_debug(block_id: u64, prev_hash: Hash) -> Self
+    {
+        Block
+        {
+            prev_hash,
+            block_id,
+            raward_to: [0u8; HASH_LEN],
+
+            pages: Vec::new(),
+            transactions: Vec::new(),
+            timestamp: current_timestamp(),
+            target: MIN_TARGET,
+            pow: 0,
+        }
     }
 
     pub fn add_page(&mut self, page: Page)
@@ -164,11 +159,6 @@ impl Block
         Ok( *slice_as_array!(&hash[0..HASH_LEN], [u8; HASH_LEN]).unwrap() )
     }
 
-    pub fn calculate_reward(&self) -> f64
-    {
-        10f64 // FIXME: do real reward calc
-    }
-
     fn validate_transactions(&self, chain: &BlockChain) -> Result<(), Error>
     {
         let mut account_map = HashMap::<[u8; PUB_KEY_LEN], f64>::new();
@@ -203,7 +193,7 @@ impl Block
         for (public_key, balance_out) in &account_map
         {
             let wallet = PublicWallet::from_public_key(*public_key);
-            let balance = chain.lockup_wallet_status(&wallet).balance;
+            let balance = 0f64; //chain.lockup_wallet_status(&wallet).balance;
             if balance < *balance_out {
                 return Err(Error::InvalidBalance);
             }
@@ -243,9 +233,9 @@ impl Block
             }
 
             let last_block = last_block_or_none.unwrap();
-            self.is_next_block(&last_block)?;
+            self.is_next_block(last_block)?;
 
-            let expected_target = Self::calculate_target(chain, &Some( last_block ));
+            let expected_target = Self::calculate_target(chain, Some( last_block ));
             if self.target != expected_target {
                 return Err(Error::InvalidTarget);
             }
