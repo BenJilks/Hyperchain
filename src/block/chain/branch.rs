@@ -79,6 +79,13 @@ impl Branch
         }
     }
 
+    pub fn len(&self) -> u64
+    {
+        self
+            .length_if_complete()
+            .expect("Is complete")
+    }
+
     pub fn top(&self) -> Option<&Block>
     {
         let top_or_none = self.blocks.iter().max_by(|a, b| a.0.cmp(&b.0));

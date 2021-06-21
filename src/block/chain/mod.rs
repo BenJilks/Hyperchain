@@ -13,7 +13,7 @@ pub struct BlockChain
 impl BlockChain
 {
 
-    pub fn new<W: Write>(logger: &mut Logger<W>) -> Self
+    pub fn new(logger: &mut Logger<impl Write>) -> Self
     {
         logger.log(LoggerLevel::Info, "Create new chain");
         BlockChain
@@ -22,7 +22,7 @@ impl BlockChain
         }
     }
 
-    pub fn add<W: Write>(&mut self, block: &Block, logger: &mut Logger<W>)
+    pub fn add(&mut self, block: &Block, logger: &mut Logger<impl Write>)
     {
         let block_id = block.block_id;
 
@@ -90,6 +90,16 @@ impl BlockChain
         }
     }
 
+    pub fn top_id(&self) -> u64
+    {
+        let top = self.top();
+        if top.is_some() {
+            top.unwrap().block_id
+        } else {
+            0
+        }
+    }
+
     pub fn block(&self, block_id: u64) -> Option<&Block>
     {
         let lengest_branch = self.find_longest_complete_branch();
@@ -97,6 +107,24 @@ impl BlockChain
             lengest_branch.unwrap().block(block_id)
         } else {
             None
+        }
+    }
+
+    pub fn walk_chain(&self, on_block: &mut impl FnMut(&Block))
+    {
+        let longest_branch_or_none = self.find_longest_complete_branch();
+        if longest_branch_or_none.is_none() {
+            return;
+        }
+
+        let longest_branch = longest_branch_or_none.unwrap();
+        for i in 1..(longest_branch.len() + 1) 
+        {
+            let block = longest_branch
+                .block(i)
+                .expect(&format!("Has block {}", i));
+
+            on_block(block);
         }
     }
 
@@ -166,8 +194,7 @@ mod tests
         assert_eq!(chain.branches.len(), 2);
         assert_eq!(chain.branches[0].length_if_complete(), Some( 4 ));
         assert_eq!(chain.branches[1].length_if_complete(), Some( 3 ));
-        assert_eq!(chain.top().is_some(), true);
-        assert_eq!(chain.top().unwrap().block_id, 4);
+        assert_eq!(chain.top().expect("Has top").block_id, 4);
 
         // Add the rest of the second chain and a duplicate node from a third
         chain.add(&test_blocks_b[3], &mut logger);
@@ -177,8 +204,7 @@ mod tests
         assert_eq!(chain.branches[0].length_if_complete(), Some( 4 ));
         assert_eq!(chain.branches[1].length_if_complete(), Some( 5 ));
         assert_eq!(chain.branches[2].length_if_complete(), None);
-        assert_eq!(chain.top().is_some(), true);
-        assert_eq!(chain.top().unwrap().block_id, 5);
+        assert_eq!(chain.top().expect("Has top").block_id, 5);
     }
 
 }

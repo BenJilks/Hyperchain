@@ -73,10 +73,10 @@ impl Block
         MIN_TARGET
     }
 
-    pub fn calculate_reward(&self) -> f64
+    pub fn calculate_reward(&self) -> f32
     {
         // FIXME: do real reward calc
-        10f64
+        10.0
     }
 
     pub fn new<W: Wallet>(chain: &BlockChain, raward_to: &W) -> Result<Self, Error>
@@ -161,39 +161,30 @@ impl Block
 
     fn validate_transactions(&self, chain: &BlockChain) -> Result<(), Error>
     {
-        let mut account_map = HashMap::<[u8; PUB_KEY_LEN], f64>::new();
+        let mut account_map = HashMap::<[u8; PUB_KEY_LEN], f32>::new();
         for transaction in &self.transactions
         {
             if !account_map.contains_key(&transaction.header.from) {
-                account_map.insert(transaction.header.from, 0f64);
+                account_map.insert(transaction.header.from, 0.0);
             }
             *account_map.get_mut(&transaction.header.from).unwrap() += transaction.header.amount + transaction.header.transaction_fee;
-
-            let wallet = PublicWallet::from_public_key_e(transaction.header.from, transaction.e);
-            let header = transaction.header.hash().unwrap();
-            if !wallet.varify(&header, &transaction.signature) {
-                return Err(Error::InvalidTransactionSignature);
-            }
+            transaction.varify()?
         }
 
-        for page in &self.pages 
+        for page in &self.pages
         {
             if !account_map.contains_key(&page.header.site_id) {
-                account_map.insert(page.header.site_id, 0f64);
+                account_map.insert(page.header.site_id, 0.0);
             }
             *account_map.get_mut(&page.header.site_id).unwrap() += page.header.page_fee;
-
-            let wallet = PublicWallet::from_public_key_e(page.header.site_id, page.e);
-            let header = page.header.hash().unwrap();
-            if !wallet.varify(&header, &page.signature) {
-                return Err(Error::InvalidPageSignature);
-            }
+            // TODO: Varify page
         }
 
         for (public_key, balance_out) in &account_map
         {
+            // TODO: Actually calculate balance
             let wallet = PublicWallet::from_public_key(*public_key);
-            let balance = 0f64; //chain.lockup_wallet_status(&wallet).balance;
+            let balance = wallet.get_status(chain).balance;
             if balance < *balance_out {
                 return Err(Error::InvalidBalance);
             }
@@ -262,6 +253,56 @@ impl Block
         }
 
         true
+    }
+
+}
+
+#[cfg(test)]
+mod tests
+{
+
+    use super::*;
+    use crate::{Logger, LoggerLevel};
+    use crate::PrivateWallet;
+    use crate::miner;
+    use chain::BlockChain;
+    use std::path::PathBuf;
+
+    #[test]
+    fn test_block()
+    {
+        let mut logger = Logger::new(std::io::stdout(), LoggerLevel::Error);
+        let mut chain = BlockChain::new(&mut logger);
+        let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet"), &mut logger).unwrap();
+        let other = PrivateWallet::read_from_file(&PathBuf::from("other.wallet"), &mut logger).unwrap();
+
+        let block_a = miner::mine_block(Block::new(&chain, &wallet).expect("Can create block"));
+        chain.add(&block_a, &mut logger);
+        assert_eq!(block_a.block_id, 1);
+        assert_eq!(block_a.raward_to, wallet.get_address());
+        assert_eq!(block_a.prev_hash, [0u8; HASH_LEN]);
+        assert_eq!(block_a.validate_pow(), true);
+        block_a.validate(&chain).expect("Is valid");
+        
+        let mut block_c = Block::new_debug(3, [0u8; HASH_LEN]);
+        block_c.target = [0u8; HASH_LEN];
+        assert_eq!(block_c.is_next_block(&block_a).is_ok(), false);
+        assert_eq!(block_c.validate(&chain).err().expect("Not valid"), Error::PrevNone);
+        
+        let mut block_b = Block::new(&chain, &wallet).expect("Can create block");
+        block_b.add_transaction(Transaction::for_block(&chain, &wallet, &other, 2.5, 0.3).expect("Can create transaction"));
+        chain.add(&block_b, &mut logger);
+        assert_eq!(block_b.block_id, 2);
+        assert_eq!(block_b.raward_to, wallet.get_address());
+        assert_eq!(block_b.prev_hash, block_a.hash().expect("Hash worked"));
+        assert_eq!(block_b.validate_pow(), false);
+        block_b.validate(&chain).expect("Is valid");
+        
+        assert_eq!(block_c.validate(&chain).err().expect("Not valid"), Error::PrevInvalidHash);
+        block_c.prev_hash = block_b.hash().expect("Hash worked");
+        assert_eq!(block_c.validate(&chain).err().expect("Not valid"), Error::InvalidTimestamp);
+        block_c.timestamp = block_b.timestamp + 1;
+        assert_eq!(block_c.validate(&chain).err().expect("Not valid"), Error::InvalidTarget);
     }
 
 }

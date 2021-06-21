@@ -1,6 +1,6 @@
 use std::string::ToString;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Error
 {
     NotNextBlock,

@@ -23,6 +23,7 @@ mod miner;
 mod wallet;
 mod error;
 mod logger;
+mod node;
 use wallet::PrivateWallet;
 use block::BlockChain;
 use logger::{Logger, LoggerLevel};

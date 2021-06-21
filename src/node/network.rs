@@ -1,5 +1,5 @@
-use crate::block::{Block, Transaction, Page};
-use super::broadcast::Broadcaster;
+use crate::node::broadcast::Broadcaster;
+use crate::logger::{Logger, LoggerLevel};
 use std::net::{TcpListener, TcpStream};
 use std::io::{BufReader, BufWriter, Write};
 use std::path::PathBuf;
@@ -18,25 +18,15 @@ pub const THIS_NODE_ID: &str = "<<THIS NODE>>";
 type TCPReceiver = tcp_channel::Receiver<Packet, LittleEndian>;
 type TCPSender = tcp_channel::Sender<Packet, LittleEndian>;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum Packet
 {
-    Hello(String),
+    OnConnected(String),
     KnownNode(String),
-    BlockRequest(String, u64),
-    NewBlock(Block),
-
-    TransactionRequest(Transaction),
-    TransactionRequestAccepted(Transaction),
-    TransactionRequestRejected(Transaction),
-
-    PageRequest(Page),
-    PageRequestAccepted(Page),
-    PageRequestRejected(Page),
     Ping,
 }
 
-pub struct NetworkConnection
+pub struct NetworkConnection<W: Write + Clone + Sync + Send + 'static>
 {
     port: i32,
     known_nodes: HashSet<String>,
@@ -44,13 +34,13 @@ pub struct NetworkConnection
     open_connections: Arc<Mutex<HashSet<String>>>,
     broadcaster: Broadcaster<(Option<String>, Packet)>,
 
-    packet_queue: Vec<Packet>,
+    logger: Logger<W>,
 }
 
-impl NetworkConnection
+impl<W: Write + Clone + Sync + Send + 'static> NetworkConnection<W>
 {
 
-    pub fn new(port: i32, know_nodes_path: PathBuf) -> std::io::Result<Self>
+    pub fn new(port: i32, know_nodes_path: PathBuf, logger: Logger<W>) -> std::io::Result<Arc<Mutex<Self>>>
     {
         let known_nodes: HashSet<String> = 
             if know_nodes_path.exists() {
@@ -59,7 +49,7 @@ impl NetworkConnection
                 HashSet::new()
             };
 
-        Ok(Self
+        Ok(Arc::from(Mutex::from(Self
         {
             port,
             known_nodes,
@@ -67,8 +57,8 @@ impl NetworkConnection
             open_connections: Arc::from(Mutex::from(HashSet::new())),
             broadcaster: Broadcaster::new(),
 
-            packet_queue: Vec::new(),
-        })
+            logger,
+        })))
     }
 
     fn server(mut send: TCPSender, address: String, recv_broadcast: Receiver<(Option<String>, Packet)>, open_connections: Arc<Mutex<HashSet<String>>>)
@@ -95,11 +85,22 @@ impl NetworkConnection
 
     pub fn update_known_nodes(&mut self, address: &str)
     {
-        if self.known_nodes.contains(address) {
+        let address_owned = 
+            if address.starts_with("localhost") {
+                address.replace("localhost", "127.0.0.1")
+            } else {
+                address.to_owned()
+            };
+        
+        if address_owned == format!("127.0.0.1:{}", self.port) {
             return;
         }
 
-        self.known_nodes.insert(address.to_owned());
+        if self.known_nodes.contains(&address_owned) {
+            return;
+        }
+
+        self.known_nodes.insert(address_owned);
         let mut file = File::create(&self.know_nodes_path).unwrap();
         file.write(&serde_json::to_vec(&self.known_nodes).unwrap()).unwrap();
     }
@@ -114,17 +115,23 @@ impl NetworkConnection
         }
         self.open_connections.lock().unwrap().insert(address.to_owned());
 
+        self.logger.log(LoggerLevel::Info, 
+            &format!("[{}] Connecting to {}", self.port, address));
+
         let port = self.port;
         let address_owned = address.to_owned();
         let open_connections = self.open_connections.clone();
         let recv_broadcast = self.broadcaster.make_receiver();
         let known_nodes = self.known_nodes.clone();
+        let mut logger = self.logger.clone();
         std::thread::spawn(move || 
         {
             let stream_or_error = TcpStream::connect(&address_owned);
             if stream_or_error.is_err() 
             {
                 open_connections.lock().unwrap().remove(&address_owned);
+                logger.log(LoggerLevel::Warning,
+                    &format!("[{}] Unable to connect to {}", port, &address_owned));
                 return;
             }
             let stream = stream_or_error.unwrap();
@@ -138,12 +145,19 @@ impl NetworkConnection
             send.send(&Packet::KnownNode(format!("{}:{}", THIS_NODE_ID, port))).unwrap();
             for node in &known_nodes 
             {
-                if node != &address_owned {
+                if node != &address_owned 
+                {
+                    logger.log(LoggerLevel::Info, 
+                        &format!("[{}] Sending node {} to {}", port, node, &address_owned));
+
                     send.send(&Packet::KnownNode(node.clone())).unwrap();
                 }
             }
-            send.flush().unwrap();
+            send.send(&Packet::OnConnected(format!("{}:{}", THIS_NODE_ID, port))).expect("Can send");
+            send.flush().expect("Can flush");
 
+            logger.log(LoggerLevel::Info,
+                &format!("[{}] Connected to {}", port, &address_owned));
             Self::server(send, address_owned, recv_broadcast, open_connections)
         });
 
@@ -165,14 +179,11 @@ impl NetworkConnection
         {
             match recv.recv()
             {
-                Ok(Packet::Hello(address)) => 
-                    send_packet.send(Packet::Hello(precess_address(address))).unwrap(),
-
-                Ok(Packet::KnownNode(connection_data)) => 
-                    send_packet.send(Packet::KnownNode(precess_address(connection_data))).unwrap(),
-
-                Ok(Packet::BlockRequest(address, block_id)) => 
-                    send_packet.send(Packet::BlockRequest(precess_address(address), block_id)).unwrap(),
+                Ok(Packet::KnownNode(address)) => 
+                    send_packet.send(Packet::KnownNode(precess_address(address))).unwrap(),
+                
+                Ok(Packet::OnConnected(address)) => 
+                    send_packet.send(Packet::OnConnected(precess_address(address))).unwrap(),
 
                 Ok(packet) => 
                     send_packet.send(packet).unwrap(),
@@ -218,42 +229,32 @@ impl NetworkConnection
         }
     }
 
-    fn handle_packet(&mut self, packet: Packet)
+    fn handle_packet(&mut self, packet: Packet, send_to_packet_handler: &Sender<Packet>)
     {
+        self.logger.log(LoggerLevel::Info, 
+            &format!("[{}] Got packet {:?}", self.port, packet));
+
         match packet
         {
             Packet::KnownNode(address) => self.update_known_nodes(&address),
-            Packet::Ping => println!("Ping!!"),
-            packet => self.packet_queue.push(packet),
+            packet => send_to_packet_handler.send(packet).expect("Handled packet"),
         }
     }
 
     pub fn broadcast(this: &mut Arc<Mutex<Self>>, address: Option<String>, packet: Packet)
     {
         let mut this_lock = this.lock().unwrap();
+        let port = this_lock.port;
+        this_lock.logger.log(LoggerLevel::Info, 
+            &format!("[{}] Broadcasting {:?} to {:?}", port, packet, address));
+
         this_lock.broadcaster.broadcast((address, packet));
     }
 
-    pub fn request_block(this: &mut Arc<Mutex<Self>>, block_id: u64)
-    {
-        let mut this_lock = this.lock().unwrap();
-        let address = format!("{}:{}", THIS_NODE_ID, this_lock.port);
-        let packet = Packet::BlockRequest(address, block_id);
-        this_lock.broadcaster.broadcast((None, packet));
-    }
-
-    pub fn process_packets(this: &mut Arc<Mutex<Self>>) -> Vec<Packet>
-    {
-        let mut this_lock = this.lock().unwrap();
-        let packets = this_lock.packet_queue.clone();
-        this_lock.packet_queue.clear();
-
-        packets
-    }
-
-    pub fn run(this: Arc<Mutex<Self>>)
+    pub fn run(this: Arc<Mutex<Self>>) -> Receiver<Packet>
     {
         let (send_packet, recv_packet) = channel::<Packet>();
+        let (send_to_packet_handler, packet_handler) = channel::<Packet>();
 
         {
             let mut this_lock = this.lock().unwrap();
@@ -271,7 +272,7 @@ impl NetworkConnection
             {
                 match recv_packet.recv_timeout(Duration::from_secs(1))
                 {
-                    Ok(packet) => this.lock().unwrap().handle_packet(packet),
+                    Ok(packet) => this.lock().unwrap().handle_packet(packet, &send_to_packet_handler),
                     Err(mpsc::RecvTimeoutError::Timeout) => {},
                     Err(_) => break,
                 }
@@ -279,6 +280,61 @@ impl NetworkConnection
                 this.lock().unwrap().connect_to_known_nodes();
             }
         });
+
+        packet_handler
+    }
+
+}
+
+#[cfg(test)]
+mod tests
+{
+
+    use super::*;
+    use crate::logger::StdLoggerOutput;
+
+    #[test]
+    fn test_network()
+    {
+        let logger = Logger::new(StdLoggerOutput::new(), LoggerLevel::Error);
+
+        let create_connection = |port: i32|
+        {
+            let connection = NetworkConnection::new(port, 
+                std::env::temp_dir().join(format!("{}.json", rand::random::<u32>())), logger.clone())
+                .expect("Create connection");
+            connection.lock().unwrap().update_known_nodes("localhost:8000");
+            let recv = NetworkConnection::run(connection.clone());
+
+            (connection, recv)
+        };
+
+        let (mut connection_a, recv_a) = create_connection(8000);
+        let (mut connection_b, recv_b) = create_connection(8001);
+        let (_, recv_c) = create_connection(8002);
+
+        let recv_on_connect_packets = |recv: &Receiver<Packet>, port_a: i32, port_b: i32|
+        {
+            let packets = 
+            [
+                recv.recv().expect("Got packet"),
+                recv.recv().expect("Got packet"),
+            ];
+
+            assert_eq!(packets.contains(&Packet::OnConnected(format!("127.0.0.1:{}", port_a))), true);
+            assert_eq!(packets.contains(&Packet::OnConnected(format!("127.0.0.1:{}", port_b))), true);
+        };
+
+        recv_on_connect_packets(&recv_a, 8001, 8002);
+        recv_on_connect_packets(&recv_b, 8000, 8002);
+        recv_on_connect_packets(&recv_c, 8000, 8001);
+
+        NetworkConnection::broadcast(&mut connection_a, None, Packet::Ping);
+        NetworkConnection::broadcast(&mut connection_b, None, Packet::Ping);
+        assert_eq!(recv_a.recv().expect("Got packet"), Packet::Ping);
+        assert_eq!(recv_b.recv().expect("Got packet"), Packet::Ping);
+        assert_eq!(recv_c.recv().expect("Got packet"), Packet::Ping);
+        assert_eq!(recv_c.recv().expect("Got packet"), Packet::Ping);
     }
 
 }

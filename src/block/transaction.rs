@@ -1,5 +1,6 @@
 use super::{Signature, Hash, BlockChain, PUB_KEY_LEN};
-use crate::wallet::{PrivateWallet, Wallet};
+use crate::wallet::{PrivateWallet, PublicWallet, Wallet};
+use crate::error::Error;
 use sha2::{Sha256, Digest};
 use serde::{Serialize, Deserialize};
 use bincode;
@@ -17,8 +18,8 @@ pub struct TransactionHeader
     pub from: Signature,
     
     pub to: Hash,
-    pub amount: f64,
-    pub transaction_fee: f64,
+    pub amount: f32,
+    pub transaction_fee: f32,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
@@ -62,18 +63,16 @@ impl Transaction
         }
     }
 
-    pub fn for_block<W: Wallet>(chain: &BlockChain, from: &PrivateWallet, to: &W, amount: f64, fee: f64) -> Option<Self>
+    pub fn for_block<W: Wallet>(chain: &BlockChain, from: &PrivateWallet, to: &W, amount: f32, fee: f32) -> Option<Self>
     {
-        return None;
-
-        /*
-        let status = chain.lockup_wallet_status(from);
+        let status = from.get_status(&chain);
         if amount + fee > status.balance {
             return None; // FIXME: Report invalid transaction error
         }
 
         let header = TransactionHeader 
         { 
+            // TODO: This id should be calculated correctly
             id: status.max_id + 1,
             from: from.get_public_key(),
             to: to.get_address(),
@@ -84,7 +83,17 @@ impl Transaction
         let signature_vec = from.sign(&header.hash().unwrap()).unwrap();
         let signature = *slice_as_array!(&signature_vec, [u8; PUB_KEY_LEN]).unwrap();
         Some( Self::new(header, signature, from.get_e()) )
-        */
+    }
+
+    pub fn varify(&self) -> Result<(), Error>
+    {
+        let wallet = PublicWallet::from_public_key_e(self.header.from, self.e);
+        let header = self.header.hash().expect("Hash header");
+        if wallet.varify(&header, &self.signature) {
+            Ok( () )
+        } else {
+            Err( Error::InvalidTransactionSignature )
+        }
     }
 
 }
@@ -94,11 +103,40 @@ impl ToString for Transaction
 
     fn to_string(&self) -> String
     {
-        format!("{}... -- {} + {}tx --> {}...", 
+        format!("{}... --[ {} + {}tx ]--> {}...", 
             &base_62::encode(&self.header.from)[0..10],
             self.header.amount,
             self.header.transaction_fee,
             &base_62::encode(&self.header.to)[0..10])
+    }
+
+}
+
+#[cfg(test)]
+mod tests
+{
+
+    use super::*;
+    use crate::block::{Block, BlockChain};
+    use crate::logger::{Logger, LoggerLevel};
+    use crate::miner;
+    use std::path::PathBuf;
+
+    #[test]
+    fn test_transaction()
+    {
+        let mut logger = Logger::new(std::io::stdout(), LoggerLevel::Error);
+        let mut chain = BlockChain::new(&mut logger);
+        let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet"), &mut logger).unwrap();
+        let other = PrivateWallet::read_from_file(&PathBuf::from("other.wallet"), &mut logger).unwrap();
+
+        let block = miner::mine_block(Block::new(&chain, &wallet).expect("Create block"));
+        chain.add(&block, &mut logger);
+
+        let transaction = Transaction::for_block(&chain, &wallet, &other, 2.4, 0.2).expect("Create transaction");
+        transaction.header.hash().expect("Hash header");
+        transaction.varify().expect("Valid");
+        assert_eq!(transaction.to_string(), "aLOExVDb0w... --[ 2.4 + 0.2tx ]--> zCPOqvKFuo...");
     }
 
 }
