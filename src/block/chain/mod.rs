@@ -22,12 +22,13 @@ impl BlockChain
         }
     }
 
-    pub fn add(&mut self, block: &Block, logger: &mut Logger<impl Write>)
+    pub fn add(&mut self, block: &Block, logger: &mut Logger<impl Write>) -> bool
     {
         let block_id = block.block_id;
 
         // Try to add the block to an existing branch
         let mut did_add_to_branch = false;
+        let mut is_duplicate = false;
         for index in 0..self.branches.len()
         {
             let branch = &mut self.branches[index];
@@ -39,7 +40,17 @@ impl BlockChain
                     did_add_to_branch = true;
                 },
 
+                TryAddResult::Duplicate =>
+                {
+                    logger.log(LoggerLevel::Info, &format!("Duplicate block {} in branch {}", block_id, index));
+                    is_duplicate = true;
+                },
+
                 TryAddResult::Invalid => {},
+            }
+
+            if is_duplicate {
+                return false;
             }
 
             if did_add_to_branch {
@@ -55,6 +66,8 @@ impl BlockChain
             assert_eq!(branch.try_add(&block), TryAddResult::Success);
             self.branches.push(branch);
         }
+
+        true
     }
 
     fn find_longest_complete_branch(&self) -> Option<&Branch>

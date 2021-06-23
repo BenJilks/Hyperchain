@@ -1,5 +1,6 @@
 use crate::node::broadcast::Broadcaster;
 use crate::logger::{Logger, LoggerLevel};
+use crate::block::Block;
 use std::net::{TcpListener, TcpStream};
 use std::io::{BufReader, BufWriter, Write};
 use std::path::PathBuf;
@@ -23,6 +24,7 @@ pub enum Packet
 {
     OnConnected(String),
     KnownNode(String),
+    Block(Block),
     Ping,
 }
 
@@ -108,22 +110,26 @@ impl<W: Write + Clone + Sync + Send + 'static> NetworkConnection<W>
     fn connect(&mut self, address: &str) -> std::io::Result<()>
     {
         self.update_known_nodes(address);
-
+        
         // If this connection is already open, ignore it
-        if self.open_connections.lock().unwrap().contains(address) {
-            return Ok(());
+        {
+            let mut open_connections_lock = self.open_connections.lock().unwrap();
+            if open_connections_lock.contains(address) {
+                return Ok(());
+            }
+            open_connections_lock.insert(address.to_owned());
         }
-        self.open_connections.lock().unwrap().insert(address.to_owned());
-
+        
         self.logger.log(LoggerLevel::Info, 
             &format!("[{}] Connecting to {}", self.port, address));
-
+            
         let port = self.port;
-        let address_owned = address.to_owned();
         let open_connections = self.open_connections.clone();
         let recv_broadcast = self.broadcaster.make_receiver();
         let known_nodes = self.known_nodes.clone();
         let mut logger = self.logger.clone();
+        
+        let address_owned = address.to_owned();
         std::thread::spawn(move || 
         {
             let stream_or_error = TcpStream::connect(&address_owned);
@@ -223,7 +229,7 @@ impl<W: Write + Clone + Sync + Send + 'static> NetworkConnection<W>
         if self.open_connections.lock().unwrap().len() >= self.known_nodes.len() {
             return;
         }
-        
+            
         for address in &self.known_nodes.clone() {
             self.connect(&address).unwrap();
         }
@@ -236,8 +242,15 @@ impl<W: Write + Clone + Sync + Send + 'static> NetworkConnection<W>
 
         match packet
         {
-            Packet::KnownNode(address) => self.update_known_nodes(&address),
-            packet => send_to_packet_handler.send(packet).expect("Handled packet"),
+            Packet::KnownNode(address) => 
+                self.update_known_nodes(&address),
+
+            packet => 
+            {
+                send_to_packet_handler
+                    .send(packet)
+                    .expect("Handled packet");
+            },
         }
     }
 
@@ -255,7 +268,7 @@ impl<W: Write + Clone + Sync + Send + 'static> NetworkConnection<W>
     {
         let (send_packet, recv_packet) = channel::<Packet>();
         let (send_to_packet_handler, packet_handler) = channel::<Packet>();
-
+        
         {
             let mut this_lock = this.lock().unwrap();
             this_lock.connect_to_known_nodes();
@@ -265,7 +278,7 @@ impl<W: Write + Clone + Sync + Send + 'static> NetworkConnection<W>
                 Self::node_listener(port, send_packet);
             });
         }
-
+        
         std::thread::spawn(move ||
         {
             loop
@@ -274,7 +287,16 @@ impl<W: Write + Clone + Sync + Send + 'static> NetworkConnection<W>
                 {
                     Ok(packet) => this.lock().unwrap().handle_packet(packet, &send_to_packet_handler),
                     Err(mpsc::RecvTimeoutError::Timeout) => {},
-                    Err(_) => break,
+                    Err(err) => 
+                    {
+                        this
+                            .lock()
+                            .unwrap()
+                            .logger
+                            .log(LoggerLevel::Error, 
+                                &format!("{:?}", err));
+                        break
+                    },
                 }
 
                 this.lock().unwrap().connect_to_known_nodes();
@@ -313,27 +335,38 @@ mod tests
         let (mut connection_b, recv_b) = create_connection(8001);
         let (_, recv_c) = create_connection(8002);
 
-        let recv_on_connect_packets = |recv: &Receiver<Packet>, port_a: i32, port_b: i32|
+        let recv_on_connect_packets = |recv: &Receiver<Packet>, ports: &[i32]|
         {
-            let packets = 
-            [
-                recv.recv().expect("Got packet"),
-                recv.recv().expect("Got packet"),
-            ];
+            let mut packets = Vec::<Packet>::new();
+            for _ in 0..ports.len() {
+                packets.push(recv.recv().expect("Got packet"));
+            }
 
-            assert_eq!(packets.contains(&Packet::OnConnected(format!("127.0.0.1:{}", port_a))), true);
-            assert_eq!(packets.contains(&Packet::OnConnected(format!("127.0.0.1:{}", port_b))), true);
+            for port in ports {
+                assert_eq!(packets.contains(&Packet::OnConnected(format!("127.0.0.1:{}", port))), true);
+            }
         };
 
-        recv_on_connect_packets(&recv_a, 8001, 8002);
-        recv_on_connect_packets(&recv_b, 8000, 8002);
-        recv_on_connect_packets(&recv_c, 8000, 8001);
+        recv_on_connect_packets(&recv_a, &[8001, 8002]);
+        recv_on_connect_packets(&recv_b, &[8000, 8002]);
+        recv_on_connect_packets(&recv_c, &[8000, 8001]);
 
         NetworkConnection::broadcast(&mut connection_a, None, Packet::Ping);
         NetworkConnection::broadcast(&mut connection_b, None, Packet::Ping);
         assert_eq!(recv_a.recv().expect("Got packet"), Packet::Ping);
         assert_eq!(recv_b.recv().expect("Got packet"), Packet::Ping);
         assert_eq!(recv_c.recv().expect("Got packet"), Packet::Ping);
+        assert_eq!(recv_c.recv().expect("Got packet"), Packet::Ping);
+
+        let (mut connection_d, recv_d) = create_connection(8003);
+        recv_on_connect_packets(&recv_a, &[8003]);
+        recv_on_connect_packets(&recv_b, &[8003]);
+        recv_on_connect_packets(&recv_c, &[8003]);
+        recv_on_connect_packets(&recv_d, &[8000, 8001, 8002]);
+
+        NetworkConnection::broadcast(&mut connection_d, None, Packet::Ping);
+        assert_eq!(recv_a.recv().expect("Got packet"), Packet::Ping);
+        assert_eq!(recv_b.recv().expect("Got packet"), Packet::Ping);
         assert_eq!(recv_c.recv().expect("Got packet"), Packet::Ping);
     }
 

@@ -12,6 +12,7 @@ pub enum TryAddResult
 {
     Success,
     Invalid,
+    Duplicate,
 }
 
 impl Branch
@@ -28,8 +29,15 @@ impl Branch
     pub fn try_add(&mut self, block: &Block) -> TryAddResult
     {
         // Check duplicate
-        if self.blocks.contains_key(&block.block_id) {
-            return TryAddResult::Invalid;
+        let existing_block_or_none = self.blocks.get(&block.block_id);
+        if existing_block_or_none.is_some()
+        {
+            let existing_block = existing_block_or_none.unwrap();
+            if existing_block == block {
+                return TryAddResult::Duplicate;
+            } else {
+                return TryAddResult::Invalid;
+            }
         }
 
         // Check this is the next block in the chain
@@ -160,7 +168,7 @@ mod tests
         assert_eq!(branch.try_add(&test_blocks_branch_a[1]), TryAddResult::Success);
         assert_eq!(branch.try_add(&test_blocks_branch_b[2]), TryAddResult::Invalid);
         assert_eq!(branch.try_add(&test_blocks_branch_b[1]), TryAddResult::Invalid);
-        assert_eq!(branch.try_add(&test_blocks_branch_a[0]), TryAddResult::Invalid);
+        assert_eq!(branch.try_add(&test_blocks_branch_a[0]), TryAddResult::Duplicate);
     }
 
     #[test]

@@ -24,19 +24,12 @@ mod wallet;
 mod error;
 mod logger;
 mod node;
-use wallet::PrivateWallet;
-use block::BlockChain;
-use logger::{Logger, LoggerLevel};
-use std::path::PathBuf;
+// use wallet::PrivateWallet;
+// use block::BlockChain;
+// use logger::{Logger, LoggerLevel};
+// use std::path::PathBuf;
 
 fn main()
 {
     println!("Hello, Blockchains!!");
-
-    let mut logger = Logger::new(std::io::stdout(), LoggerLevel::Verbose);
-    let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet"), &mut logger).unwrap();
-    
-    let mut chain = BlockChain::new(&mut logger);
-    miner::mine(&mut chain, &wallet, 3, &mut logger);
-    chain.debug_log_chain(&mut logger);
 }

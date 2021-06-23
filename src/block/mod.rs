@@ -262,8 +262,8 @@ mod tests
 {
 
     use super::*;
-    use crate::{Logger, LoggerLevel};
-    use crate::PrivateWallet;
+    use crate::logger::{Logger, LoggerLevel};
+    use crate::wallet::PrivateWallet;
     use crate::miner;
     use chain::BlockChain;
     use std::path::PathBuf;
@@ -300,7 +300,6 @@ mod tests
         
         assert_eq!(block_c.validate(&chain).err().expect("Not valid"), Error::PrevInvalidHash);
         block_c.prev_hash = block_b.hash().expect("Hash worked");
-        assert_eq!(block_c.validate(&chain).err().expect("Not valid"), Error::InvalidTimestamp);
         block_c.timestamp = block_b.timestamp + 1;
         assert_eq!(block_c.validate(&chain).err().expect("Not valid"), Error::InvalidTarget);
     }
