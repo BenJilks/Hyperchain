@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use std::fs::File;
 use std::sync::mpsc::{self, channel, Sender, Receiver};
 use std::sync::{Mutex, Arc};
+use std::thread::JoinHandle;
 use std::time::Duration;
 use std::collections::HashSet;
 use tcp_channel::{ReceiverBuilder, ChannelRecv};
@@ -37,6 +38,8 @@ pub struct NetworkConnection<W: Write + Clone + Sync + Send + 'static>
     broadcaster: Broadcaster<(Option<String>, Packet)>,
 
     logger: Logger<W>,
+    thread: Option<JoinHandle<()>>,
+    should_shut_down: bool,
 }
 
 impl<W: Write + Clone + Sync + Send + 'static> NetworkConnection<W>
@@ -60,6 +63,8 @@ impl<W: Write + Clone + Sync + Send + 'static> NetworkConnection<W>
             broadcaster: Broadcaster::new(),
 
             logger,
+            thread: None,
+            should_shut_down: false,
         })))
     }
 
@@ -279,31 +284,56 @@ impl<W: Write + Clone + Sync + Send + 'static> NetworkConnection<W>
             });
         }
         
-        std::thread::spawn(move ||
+        let thread_this = this.clone();
+        let thread = std::thread::spawn(move ||
         {
             loop
             {
                 match recv_packet.recv_timeout(Duration::from_secs(1))
                 {
-                    Ok(packet) => this.lock().unwrap().handle_packet(packet, &send_to_packet_handler),
-                    Err(mpsc::RecvTimeoutError::Timeout) => {},
+                    Ok(packet) => 
+                        thread_this.lock().unwrap().handle_packet(packet, &send_to_packet_handler),
+
+                    Err(mpsc::RecvTimeoutError::Timeout) => 
+                    {
+                        if thread_this.lock().unwrap().should_shut_down {
+                            break;
+                        }
+                    },
+                    
                     Err(err) => 
                     {
-                        this
-                            .lock()
-                            .unwrap()
-                            .logger
-                            .log(LoggerLevel::Error, 
-                                &format!("{:?}", err));
-                        break
+                        thread_this.lock().unwrap().logger.log(
+                            LoggerLevel::Error, &format!("{:?}", err));
+                        break;
                     },
                 }
 
-                this.lock().unwrap().connect_to_known_nodes();
+                thread_this.lock().unwrap().connect_to_known_nodes();
             }
         });
 
+        this.lock().unwrap().thread = Some ( thread );
         packet_handler
+    }
+
+    pub fn shutdown(this: &Arc<Mutex<Self>>)
+    {
+        let thread;
+        {
+            let mut this_lock = this.lock().unwrap();
+            if this_lock.thread.is_none() {
+                return;
+            }
+
+            this_lock.logger.log(LoggerLevel::Info, 
+                "Shutting down network connection...");
+
+            this_lock.should_shut_down = true;
+            thread = this_lock.thread.take().unwrap();
+        }
+
+        thread.join().expect("Join network thread");
     }
 
 }

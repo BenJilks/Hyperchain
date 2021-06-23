@@ -6,6 +6,8 @@ use crate::block::{Block, BlockChain};
 
 use std::sync::{Mutex, Arc};
 use std::sync::mpsc::RecvTimeoutError;
+use std::boxed::Box;
+use std::thread::JoinHandle;
 use std::io::Write;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -15,6 +17,8 @@ pub struct Node<W: Write + Clone + Sync + Send + 'static>
     connection: Arc<Mutex<NetworkConnection<W>>>,
     chain: BlockChain,
     logger: Logger<W>,
+    thread: Option<JoinHandle<()>>,
+    should_shut_down: bool,
 }
 
 impl<W: Write + Clone + Sync + Send + 'static> Node<W>
@@ -30,6 +34,8 @@ impl<W: Write + Clone + Sync + Send + 'static> Node<W>
             connection,
             chain: BlockChain::new(&mut logger),
             logger,
+            thread: None,
+            should_shut_down: false,
         }))
     }
 
@@ -73,8 +79,8 @@ impl<W: Write + Clone + Sync + Send + 'static> Node<W>
             return;
         }
 
-        // NetworkConnection::broadcast(&mut this_lock.connection, 
-        //     None, Packet::Block(block.clone()));
+        NetworkConnection::broadcast(&mut this_lock.connection, 
+            None, Packet::Block(block.clone()));
     }
 
     pub fn add_known_node(this: &mut Arc<Mutex<Self>>, address: &str)
@@ -86,14 +92,50 @@ impl<W: Write + Clone + Sync + Send + 'static> Node<W>
 
     pub fn run(this: Arc<Mutex<Self>>)
     {
-        std::thread::spawn(move ||
+        let thread_this = this.clone();
+        let thread = std::thread::spawn(move ||
         {
-            let recv = NetworkConnection::run(this.lock().unwrap().connection.clone());
+            let recv = NetworkConnection::run(thread_this.lock().unwrap().connection.clone());
+            loop
+            {
+                match recv.recv_timeout(Duration::from_millis(100))
+                {
+                    Ok(packet) => 
+                        thread_this.lock().unwrap().handle_packet(packet),
+                    
+                    Err(RecvTimeoutError::Timeout) => 
+                    {
+                        if thread_this.lock().unwrap().should_shut_down {
+                            break;
+                        }
+                    },
 
-            for packet in recv {
-                this.lock().unwrap().handle_packet(packet);
+                    Err(_) => 
+                        break,
+                }
             }
+
+            NetworkConnection::shutdown(&thread_this.lock().unwrap().connection);
         });
+
+        this.lock().unwrap().thread = Some ( thread );
+    }
+
+    pub fn shutdown(this: Arc<Mutex<Self>>)
+    {
+        let thread;
+        {
+            let mut this_lock = this.lock().unwrap();
+            if this_lock.thread.is_none() {
+                return;
+            }
+
+            this_lock.logger.log(LoggerLevel::Info, "Shutting down node...");
+            this_lock.should_shut_down = true;
+            thread = this_lock.thread.take().unwrap();
+        }
+
+        thread.join().expect("Joined nodes thread");
     }
 
 }
@@ -156,11 +198,20 @@ pub mod tests
         let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet"), &mut logger).unwrap();
 
         let mut node_a = create_node(8010, logger.clone());
-        let node_b = create_node(8011, logger.clone());
+        let mut node_b = create_node(8011, logger.clone());
 
+        // mine block a on a
         let block_a_on_a = mine_block(&mut node_a, &wallet);
         let block_a_on_b = wait_for_block(&node_b, 1);
         assert_eq!(block_a_on_a, block_a_on_b);
+
+        // mine block b on b
+        let block_b_on_b = mine_block(&mut node_b, &wallet);
+        let block_b_on_a = wait_for_block(&node_a, 2);
+        assert_eq!(block_b_on_a, block_b_on_b);
+
+        Node::shutdown(node_a);
+        Node::shutdown(node_b);
     }
 
 }
