@@ -25,9 +25,12 @@ mod error;
 mod logger;
 mod node;
 // use wallet::PrivateWallet;
-// use block::BlockChain;
-// use logger::{Logger, LoggerLevel};
 // use std::path::PathBuf;
+// use logger::{Logger, LoggerLevel, StdLoggerOutput};
+// use block::BlockChain;
+// use node::Node;
+// use node::network::{NetworkConnection, Packet};
+// use std::sync::{Arc, Mutex};
 
 fn main()
 {

@@ -1,141 +1,66 @@
 pub mod network;
-mod broadcast;
-use network::{NetworkConnection, Packet};
+use network::{PacketHandler, ConnectionManager, Packet};
 use crate::logger::{Logger, LoggerLevel};
-use crate::block::{Block, BlockChain};
-
-use std::sync::{Mutex, Arc};
-use std::sync::mpsc::RecvTimeoutError;
-use std::boxed::Box;
-use std::thread::JoinHandle;
+use crate::block::BlockChain;
 use std::io::Write;
-use std::path::PathBuf;
-use std::time::Duration;
+use std::sync::{Arc, Mutex};
 
-pub struct Node<W: Write + Clone + Sync + Send + 'static>
+pub struct Node<W>
+    where W: Write + Clone + Sync + Send + 'static
 {
-    connection: Arc<Mutex<NetworkConnection<W>>>,
-    chain: BlockChain,
+    chain: Arc<Mutex<BlockChain>>,
     logger: Logger<W>,
-    thread: Option<JoinHandle<()>>,
-    should_shut_down: bool,
 }
 
-impl<W: Write + Clone + Sync + Send + 'static> Node<W>
+impl<W> Node<W>
+    where W: Write + Clone + Sync + Send + 'static
 {
 
-    pub fn new(port: i32, know_nodes_path: PathBuf, mut logger: Logger<W>) -> Arc<Mutex<Self>>
+    pub fn new(chain: Arc<Mutex<BlockChain>>, logger: Logger<W>) -> Self
     {
-        let connection = NetworkConnection::new(port, know_nodes_path, logger.clone())
-            .expect("Create connection");
-
-        Arc::from(Mutex::from(Self
+        Self
         {
-            connection,
-            chain: BlockChain::new(&mut logger),
+            chain,
             logger,
-            thread: None,
-            should_shut_down: false,
-        }))
+        }
     }
 
-    fn handle_packet(&mut self, packet: Packet)
+}
+
+impl<W> PacketHandler<W> for Node<W>
+    where W: Write + Clone + Sync + Send + 'static
+{
+
+    fn on_packet(&mut self, from: &str, packet: Packet, connection_manager: &mut ConnectionManager<W>)
     {
         match packet
         {
             Packet::KnownNode(_) => {},
 
-            Packet::OnConnected(address) => 
+            Packet::OnConnected(_) => 
             {
-                let top = self.chain.top();
+                let chain_lock = self.chain.lock().unwrap();
+                let top = chain_lock.top();
                 if !top.is_none() 
                 {
-                    NetworkConnection::broadcast(&mut self.connection, 
-                        Some( address ), Packet::Block(top.unwrap().clone()));
+                    connection_manager.send_to(Packet::Block(top.unwrap().clone()), 
+                        |addr| addr == from);
                 }
             },
 
             Packet::Block(block) =>
             {
                 // Try and add the block to the chain, if it's a duplicate, ignore it
-                if self.chain.add(&block, &mut self.logger) 
+                if self.chain.lock().unwrap().add(&block, &mut self.logger) 
                 {
                     // Relay this block to the rest of the network
-                    NetworkConnection::broadcast(&mut self.connection, 
-                        None, Packet::Block(block.clone()));
+                    connection_manager.send(Packet::Block(block.clone()));
                 }
             }
             
             Packet::Ping => 
                 self.logger.log(LoggerLevel::Info, "Ping!"),
         }
-    }
-
-    pub fn add_block(this: &mut Arc<Mutex<Self>>, block: &Block)
-    {
-        let mut this_lock = this.lock().unwrap();
-        let mut logger = this_lock.logger.clone();
-        if !this_lock.chain.add(block, &mut logger) {
-            return;
-        }
-
-        NetworkConnection::broadcast(&mut this_lock.connection, 
-            None, Packet::Block(block.clone()));
-    }
-
-    pub fn add_known_node(this: &mut Arc<Mutex<Self>>, address: &str)
-    {
-        let this_lock = this.lock().unwrap();
-        let mut connection_lock = this_lock.connection.lock().unwrap();
-        connection_lock.update_known_nodes(address);
-    }
-
-    pub fn run(this: Arc<Mutex<Self>>)
-    {
-        let thread_this = this.clone();
-        let thread = std::thread::spawn(move ||
-        {
-            let recv = NetworkConnection::run(thread_this.lock().unwrap().connection.clone());
-            loop
-            {
-                match recv.recv_timeout(Duration::from_millis(100))
-                {
-                    Ok(packet) => 
-                        thread_this.lock().unwrap().handle_packet(packet),
-                    
-                    Err(RecvTimeoutError::Timeout) => 
-                    {
-                        if thread_this.lock().unwrap().should_shut_down {
-                            break;
-                        }
-                    },
-
-                    Err(_) => 
-                        break,
-                }
-            }
-
-            NetworkConnection::shutdown(&thread_this.lock().unwrap().connection);
-        });
-
-        this.lock().unwrap().thread = Some ( thread );
-    }
-
-    pub fn shutdown(this: Arc<Mutex<Self>>)
-    {
-        let thread;
-        {
-            let mut this_lock = this.lock().unwrap();
-            if this_lock.thread.is_none() {
-                return;
-            }
-
-            this_lock.logger.log(LoggerLevel::Info, "Shutting down node...");
-            this_lock.should_shut_down = true;
-            thread = this_lock.thread.take().unwrap();
-        }
-
-        thread.join().expect("Joined nodes thread");
     }
 
 }
@@ -145,19 +70,21 @@ pub mod tests
 {
 
     use super::*;
+    use network::NetworkConnection;
     use crate::logger::{Logger, LoggerLevel, StdLoggerOutput};
     use crate::wallet::PrivateWallet;
+    use crate::block::Block;
     use crate::miner;
     use std::time::Duration;
+    use std::path::PathBuf;
 
-    fn wait_for_block<W>(node: &Arc<Mutex<Node<W>>>, block_id: u64) -> Block
-        where W: Write + Clone + Sync + Send + 'static
+    fn wait_for_block(chain: &Arc<Mutex<BlockChain>>, block_id: u64) -> Block
     {
         loop
         {
             {
-                let chain = &node.lock().unwrap().chain;
-                let block_or_none = chain.block(block_id);
+                let chain_lock = chain.lock().unwrap();
+                let block_or_none = chain_lock.block(block_id);
                 if block_or_none.is_some() {
                     return block_or_none.unwrap().clone();
                 }
@@ -167,26 +94,29 @@ pub mod tests
         }
     }
 
-    fn create_node<W>(port: i32, logger: Logger<W>) -> Arc<Mutex<Node<W>>>
+    fn create_node<W>(port: u16, mut logger: Logger<W>) -> (Arc<Mutex<BlockChain>>, NetworkConnection<W>)
         where W: Write + Clone + Sync + Send + 'static
     {
-        let temp_file = std::env::temp_dir().join(format!("{}.json", rand::random::<u32>()));
-        let mut node = Node::new(port, temp_file, logger);
-        Node::add_known_node(&mut node, "127.0.0.1:8010");
-        Node::run(node.clone());
+        // let temp_file = std::env::temp_dir().join(format!("{}.json", rand::random::<u32>()));
+        let chain = Arc::from(Mutex::from(BlockChain::new(&mut logger)));
+        let node = Node::new(chain.clone(), logger.clone());
+        let mut network_connection = NetworkConnection::new(port, node, logger);
+        network_connection.sender().register_node("127.0.0.1:8010", None);
 
-        node
+        (chain, network_connection)
     }
 
-    fn mine_block<W>(node: &mut Arc<Mutex<Node<W>>>, wallet: &PrivateWallet) -> Block
+    fn mine_block<W>(chain: &Arc<Mutex<BlockChain>>, node: &mut NetworkConnection<W>, 
+                     wallet: &PrivateWallet, logger: &mut Logger<W>) -> Block
         where W: Write + Clone + Sync + Send + 'static
     {
         let block;
         {
-            let chain = &mut node.lock().unwrap().chain;
-            block = miner::mine_block(Block::new(&chain, wallet).expect("Create block"));
+            let mut chain_lock = chain.lock().unwrap();
+            block = miner::mine_block(Block::new(&chain_lock, wallet).expect("Create block"));
+            chain_lock.add(&block, logger);
         }
-        Node::add_block(node, &block);
+        node.sender().send(Packet::Block(block.clone()));
 
         block
     }
@@ -197,21 +127,18 @@ pub mod tests
         let mut logger = Logger::new(StdLoggerOutput::new(), LoggerLevel::Error);
         let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet"), &mut logger).unwrap();
 
-        let mut node_a = create_node(8010, logger.clone());
-        let mut node_b = create_node(8011, logger.clone());
+        let (chain_a, mut node_a) = create_node(8010, logger.clone());
+        let (chain_b, mut node_b) = create_node(8011, logger.clone());
 
         // mine block a on a
-        let block_a_on_a = mine_block(&mut node_a, &wallet);
-        let block_a_on_b = wait_for_block(&node_b, 1);
+        let block_a_on_a = mine_block(&chain_a, &mut node_a, &wallet, &mut logger);
+        let block_a_on_b = wait_for_block(&chain_b, 1);
         assert_eq!(block_a_on_a, block_a_on_b);
 
         // mine block b on b
-        let block_b_on_b = mine_block(&mut node_b, &wallet);
-        let block_b_on_a = wait_for_block(&node_a, 2);
+        let block_b_on_b = mine_block(&chain_b, &mut node_b, &wallet, &mut logger);
+        let block_b_on_a = wait_for_block(&chain_a, 2);
         assert_eq!(block_b_on_a, block_b_on_b);
-
-        Node::shutdown(node_a);
-        Node::shutdown(node_b);
     }
 
 }
