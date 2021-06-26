@@ -10,6 +10,13 @@ pub struct BlockChain
     branches: Vec<Branch>,
 }
 
+pub enum BlockChainAddResult
+{
+    Ok,
+    MoreNeeded(u64),
+    Duplicate,
+}
+
 impl BlockChain
 {
 
@@ -22,13 +29,11 @@ impl BlockChain
         }
     }
 
-    pub fn add(&mut self, block: &Block, logger: &mut Logger<impl Write>) -> bool
+    pub fn add(&mut self, block: &Block, logger: &mut Logger<impl Write>) -> BlockChainAddResult
     {
         let block_id = block.block_id;
 
         // Try to add the block to an existing branch
-        let mut did_add_to_branch = false;
-        let mut is_duplicate = false;
         for index in 0..self.branches.len()
         {
             let branch = &mut self.branches[index];
@@ -37,37 +42,35 @@ impl BlockChain
                 TryAddResult::Success => 
                 {
                     logger.log(LoggerLevel::Info, &format!("Added block {} to branch {}", block_id, index));
-                    did_add_to_branch = true;
+                    return match branch.next_missing_block()
+                    {
+                        Some(id) => BlockChainAddResult::MoreNeeded(id),
+                        None => BlockChainAddResult::Ok,
+                    };
                 },
 
                 TryAddResult::Duplicate =>
                 {
                     logger.log(LoggerLevel::Info, &format!("Duplicate block {} in branch {}", block_id, index));
-                    is_duplicate = true;
+                    return BlockChainAddResult::Duplicate;
                 },
 
                 TryAddResult::Invalid => {},
             }
-
-            if is_duplicate {
-                return false;
-            }
-
-            if did_add_to_branch {
-                break;
-            }
         }
 
         // If we couldn't create a new one
-        if !did_add_to_branch
+        logger.log(LoggerLevel::Info, &format!("Added block {} to new branch", block_id));
+        let mut branch = Branch::new();
+        assert_eq!(branch.try_add(&block), TryAddResult::Success);
+        
+        let result = match branch.next_missing_block()
         {
-            logger.log(LoggerLevel::Info, &format!("Added block {} to new branch", block_id));
-            let mut branch = Branch::new();
-            assert_eq!(branch.try_add(&block), TryAddResult::Success);
-            self.branches.push(branch);
-        }
-
-        true
+            Some(id) => BlockChainAddResult::MoreNeeded(id),
+            None => BlockChainAddResult::Ok,
+        };
+        self.branches.push(branch);
+        result
     }
 
     fn find_longest_complete_branch(&self) -> Option<&Branch>

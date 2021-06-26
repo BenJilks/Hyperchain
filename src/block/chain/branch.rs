@@ -11,8 +11,8 @@ pub struct Branch
 pub enum TryAddResult
 {
     Success,
-    Invalid,
     Duplicate,
+    Invalid,
 }
 
 impl Branch
@@ -56,6 +56,19 @@ impl Branch
 
         self.blocks.insert(block.block_id, block.clone());
         TryAddResult::Success
+    }
+
+    pub fn next_missing_block(&self) -> Option<u64>
+    {
+        let max_id = self.top()?.block_id - 1;
+        for i in 1..=max_id
+        {
+            if self.blocks.get(&i).is_none() {
+                return Some( i );
+            }
+        }
+
+        None
     }
 
     pub fn length_if_complete(&self) -> Option<u64>

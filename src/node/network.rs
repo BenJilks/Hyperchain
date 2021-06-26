@@ -21,6 +21,7 @@ pub enum Packet
     KnownNode(String),
     OnConnected(u16),
     Block(Block),
+    BlockRequest(u64),
     Ping,
 }
 
@@ -40,8 +41,9 @@ fn start_packet_reciver(server_ip: String, mut recv: TcpReceiver<Packet>,
         {
             Ok(packet) =>
             {
-                message_sender.send(Message::Packet(server_ip.clone(), packet))
-                    .expect("Send packet");
+                if message_sender.send(Message::Packet(server_ip.clone(), packet)).is_err() {
+                    break;
+                }
             },
             
             Err(_) => 
@@ -174,29 +176,30 @@ struct Connection
 impl Connection
 {
 
-    pub fn new(port: u16, address: &str, stream: TcpStream, message_sender: Sender<Message>) -> Self
+    pub fn new(port: u16, address: &str, stream: TcpStream, message_sender: Sender<Message>) -> std::io::Result<Self>
     {
         let reciver = ReceiverBuilder::new()
             .with_type::<Packet>()
             .with_endianness::<LittleEndian>()
-            .build(BufReader::new(stream.try_clone().expect("Cloned")));
+            .build(BufReader::new(stream.try_clone()?));
         let reciver_thread = start_packet_reciver(address.to_owned(), reciver, message_sender);
 
         let mut sender = SenderBuilder::new()
             .with_type::<Packet>()
             .with_endianness::<LittleEndian>()
-            .build(BufWriter::new(stream.try_clone().expect("Cloned")));
-        sender.send(&Packet::OnConnected(port))
-            .expect("Can send");
-        sender.flush().expect("Can flush");
+            .build(BufWriter::new(stream.try_clone()?));
+        if sender.send(&Packet::OnConnected(port)).is_err() {
+            return Err(std::io::Error::from(std::io::ErrorKind::NotConnected));
+        }
+        sender.flush()?;
 
-        Self
+        Ok(Self
         {
             stream,
             reciver_thread,
             sender,
             is_confirmed: false,
-        }
+        })
     }
 
 }
@@ -234,8 +237,14 @@ impl<W> ConnectionManager<W>
         self.logger.log(LoggerLevel::Info, 
             &format!("[{}] Connected to {}", self.port, address));
 
-        let connection = Connection::new(self.port, &address, stream, self.message_sender.clone());
-        self.connections.insert(address, connection);
+        match Connection::new(self.port, &address, stream, self.message_sender.clone())
+        {
+            Ok(connection) => {
+                self.connections.insert(address, connection);
+            },
+
+            _ => {},
+        };
     }
 
     fn confirm_connection(&mut self, address: &str)
@@ -289,7 +298,7 @@ impl<W> ConnectionManager<W>
 
         for address in self.known_nodes.clone() 
         {
-            if !self.connections.contains_key(&address) {
+            if !self.open_connections.contains(&address) {
                 self.connect(&address);
             }
         }
@@ -303,7 +312,7 @@ impl<W> ConnectionManager<W>
                 continue;
             }
 
-            self.logger.log(LoggerLevel::Info, 
+            self.logger.log(LoggerLevel::Verbose, 
                 &format!("[{}] Sending {:?} to {}", self.port, packet, address));
 
             connection.sender.send(&packet).expect("Sent packet");
@@ -322,7 +331,7 @@ impl<W> ConnectionManager<W>
 
             if predicate(address)
             {
-                self.logger.log(LoggerLevel::Info, 
+                self.logger.log(LoggerLevel::Verbose, 
                     &format!("[{}] Sending {:?} to {}", self.port, packet, address));
         
                 connection.sender.send(&packet).expect("Sent packet");
