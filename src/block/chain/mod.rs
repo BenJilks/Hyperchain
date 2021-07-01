@@ -3,11 +3,13 @@ use crate::block::Block;
 use crate::logger::{Logger, LoggerLevel};
 use branch::{Branch, TryAddResult};
 
+use std::collections::HashMap;
 use std::io::Write;
+use rand;
 
 pub struct BlockChain
 {
-    branches: Vec<Branch>,
+    branches: HashMap<i32, Branch>,
 }
 
 pub enum BlockChainAddResult
@@ -25,34 +27,30 @@ impl BlockChain
         logger.log(LoggerLevel::Info, "Create new chain");
         BlockChain
         {
-            branches: Vec::new(),
+            branches: HashMap::new(),
         }
     }
 
-    pub fn add(&mut self, block: &Block, logger: &mut Logger<impl Write>) -> BlockChainAddResult
+    fn find_branch_index_and_add(&mut self, block: &Block, logger: &mut Logger<impl Write>) 
+        -> Result<i32, BlockChainAddResult>
     {
         let block_id = block.block_id;
 
         // Try to add the block to an existing branch
-        for index in 0..self.branches.len()
+        for (id, branch) in &mut self.branches
         {
-            let branch = &mut self.branches[index];
             match branch.try_add(&block)
             {
                 TryAddResult::Success => 
                 {
-                    logger.log(LoggerLevel::Info, &format!("Added block {} to branch {}", block_id, index));
-                    return match branch.next_missing_block()
-                    {
-                        Some(id) => BlockChainAddResult::MoreNeeded(id),
-                        None => BlockChainAddResult::Ok,
-                    };
+                    logger.log(LoggerLevel::Info, &format!("Added block {} to branch {}", block_id, id));
+                    return Ok ( *id );
                 },
 
                 TryAddResult::Duplicate =>
                 {
-                    logger.log(LoggerLevel::Info, &format!("Duplicate block {} in branch {}", block_id, index));
-                    return BlockChainAddResult::Duplicate;
+                    logger.log(LoggerLevel::Info, &format!("Duplicate block {} in branch {}", block_id, id));
+                    return Err( BlockChainAddResult::Duplicate );
                 },
 
                 TryAddResult::Invalid => {},
@@ -60,17 +58,68 @@ impl BlockChain
         }
 
         // If we couldn't create a new one
-        logger.log(LoggerLevel::Info, &format!("Added block {} to new branch", block_id));
-        let mut branch = Branch::new();
-        assert_eq!(branch.try_add(&block), TryAddResult::Success);
-        
-        let result = match branch.next_missing_block()
+        let branch = Branch::new(block.clone());
+
+        // Generate unique, branch id
+        let mut branch_id = rand::random::<i32>();
+        while self.branches.contains_key(&branch_id) {
+            branch_id = rand::random::<i32>();
+        }
+
+        self.branches.insert(branch_id, branch);
+        logger.log(LoggerLevel::Info, 
+            &format!("Added block {} to new branch {}", block_id, branch_id));
+
+        return Ok ( branch_id );
+    }
+
+    fn check_merges_for_branch_id(&mut self, branch_id: i32, logger: &mut Logger<impl Write>)
+    {
+        loop
         {
-            Some(id) => BlockChainAddResult::MoreNeeded(id),
-            None => BlockChainAddResult::Ok,
-        };
-        self.branches.push(branch);
-        result
+            let mut did_merge = false;
+            let keys = self.branches.keys().map(|x| *x).collect::<Vec<i32>>();
+            for id in keys
+            {
+                if id == branch_id {
+                    continue;
+                }
+
+                if self.branches[&branch_id].can_merge(&self.branches[&id])
+                {
+                    let other = self.branches.remove(&id).unwrap();
+                    let branch = self.branches.get_mut(&branch_id).unwrap();
+                    branch.merge(other);
+                    logger.log(LoggerLevel::Info, 
+                        &format!("Merged {} -> {}", branch_id, id));
+
+                    did_merge = true;
+                    break;
+                }
+            }
+
+            if !did_merge {
+                break;
+            }
+        }
+    }
+
+    pub fn add(&mut self, block: &Block, logger: &mut Logger<impl Write>) -> BlockChainAddResult
+    {
+        match self.find_branch_index_and_add(block, logger)
+        {
+            Ok(branch_id) =>
+            {
+                self.check_merges_for_branch_id(branch_id, logger);
+                match self.branches[&branch_id].next_missing_block()
+                {
+                    Some(id) => BlockChainAddResult::MoreNeeded(id),
+                    None => BlockChainAddResult::Ok,
+                }
+            },
+
+            Err(err) => err,
+        }
     }
 
     fn find_longest_complete_branch(&self) -> Option<&Branch>
@@ -78,7 +127,7 @@ impl BlockChain
         let mut max_branch = None;
         let mut max_length = 0;
 
-        for branch in &self.branches
+        for (_, branch) in &self.branches
         {
             let length_or_none = branch.length_if_complete();
             if length_or_none.is_none() {
@@ -100,7 +149,7 @@ impl BlockChain
     {
         let lengest_branch = self.find_longest_complete_branch();
         if lengest_branch.is_some() {
-            lengest_branch.unwrap().top()
+            Some( lengest_branch.unwrap().top() )
         } else {
             None
         }
@@ -146,10 +195,10 @@ impl BlockChain
 
     pub fn debug_log_chain<W: Write>(&self, logger: &mut Logger<W>)
     {
-        for index in 0..self.branches.len()
+        for id in self.branches.keys()
         {
-            let branch = &self.branches[index];
-            logger.log(LoggerLevel::Info, &format!("{}: {}", index, branch));
+            let branch = &self.branches[id];
+            logger.log(LoggerLevel::Info, &format!("{}: {}", id, branch));
         }
     }
 
@@ -178,6 +227,25 @@ mod tests
         blocks
     }
 
+    fn chain_has_branches_of_lengths(chain: &BlockChain, lengths: &[Option<u64>])
+    {
+        let mut lengths_left = lengths.to_vec();
+        for branch in chain.branches.values()
+        {
+            let length = branch.length_if_complete();
+            let index_or_none = lengths_left.iter().position(|x| x == &length);
+            
+            match index_or_none
+            {
+                Some(index) =>
+                    { lengths_left.remove(index); },
+
+                None => 
+                    panic!("Branch or length {:?} should not be in chain", length),
+            }
+        }
+    }
+
     #[test]
     fn test_block_chain()
     {
@@ -193,34 +261,27 @@ mod tests
         chain.add(&test_blocks_a[2], &mut logger);
         chain.add(&test_blocks_a[0], &mut logger);
         chain.add(&test_blocks_a[1], &mut logger);
-        assert_eq!(chain.branches.len(), 1);
-        assert_eq!(chain.branches[0].length_if_complete(), Some( 4 ));
+        chain_has_branches_of_lengths(&chain, &[Some(4)]);
         assert_eq!(chain.top().is_some(), true);
         assert_eq!(chain.top().unwrap().block_id, 4);
 
         // Add two random blocks from a different chain
         chain.add(&test_blocks_b[2], &mut logger);
         chain.add(&test_blocks_b[0], &mut logger);
-        assert_eq!(chain.branches.len(), 2);
-        assert_eq!(chain.branches[0].length_if_complete(), Some( 4 ));
-        assert_eq!(chain.branches[1].length_if_complete(), None);
+        chain_has_branches_of_lengths(&chain, &[Some(4), Some(1), None]);
 
         // Add the last block to complete the second chain
         chain.add(&test_blocks_b[1], &mut logger);
-        assert_eq!(chain.branches.len(), 2);
-        assert_eq!(chain.branches[0].length_if_complete(), Some( 4 ));
-        assert_eq!(chain.branches[1].length_if_complete(), Some( 3 ));
+        chain_has_branches_of_lengths(&chain, &[Some(4), Some(3)]);
         assert_eq!(chain.top().expect("Has top").block_id, 4);
 
         // Add the rest of the second chain and a duplicate node from a third
         chain.add(&test_blocks_b[3], &mut logger);
         chain.add(&test_blocks_c[4], &mut logger);
         chain.add(&test_blocks_b[4], &mut logger);
-        assert_eq!(chain.branches.len(), 3);
-        assert_eq!(chain.branches[0].length_if_complete(), Some( 4 ));
-        assert_eq!(chain.branches[1].length_if_complete(), Some( 5 ));
-        assert_eq!(chain.branches[2].length_if_complete(), None);
+        chain_has_branches_of_lengths(&chain, &[Some(4), Some(5), None]);
         assert_eq!(chain.top().expect("Has top").block_id, 5);
     }
 
 }
+

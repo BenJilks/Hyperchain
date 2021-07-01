@@ -143,10 +143,10 @@ pub mod tests
         block
     }
 
-    // #[test]
-    fn _test_node_join_with_longer_chain()
+    #[test]
+    fn test_node_join_with_longer_chain()
     {
-        let mut logger = Logger::new(StdLoggerOutput::new(), LoggerLevel::Info);
+        let mut logger = Logger::new(StdLoggerOutput::new(), LoggerLevel::Error);
         let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet"), &mut logger).unwrap();
 
         let (chain_a, mut node_a) = create_node(8020, logger.clone());
@@ -200,7 +200,6 @@ pub mod tests
         assert_eq!(block_d_on_c, block_d_on_a);
 
         // New node joins with a different, longer chain
-        /*
         let (chain_d, mut node_d) = create_node(8013, logger.clone());
         mine_block(&chain_d, &mut node_d, &wallet, &mut logger);
         mine_block(&chain_d, &mut node_d, &wallet, &mut logger);
@@ -211,7 +210,6 @@ pub mod tests
         node_d.sender().register_node("127.0.0.1:8010", None);
         let block_e_on_a = wait_for_block(&chain_a, 5);
         assert_eq!(block_e_on_a, block_e_on_d);
-        */
     }
 
 }
