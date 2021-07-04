@@ -1,4 +1,4 @@
-pub mod network;
+mod network;
 use network::{PacketHandler, ConnectionManager, Packet};
 use crate::logger::{Logger, LoggerLevel};
 use crate::block::{BlockChain, BlockChainAddResult};
@@ -75,6 +75,9 @@ impl<W> PacketHandler<W> for Node<W>
 
             Packet::BlockRequest(id) =>
             {
+                self.logger.log(LoggerLevel::Info, 
+                    &format!("Got request for block {}", id));
+
                 let chain_lock = self.chain.lock().unwrap();
                 let block = chain_lock.block(id);
                 if !block.is_none() {
@@ -141,6 +144,32 @@ pub mod tests
         node.sender().send(Packet::Block(block.clone()));
 
         block
+    }
+
+    #[test]
+    fn test_node_branched_chain()
+    {
+        let mut logger = Logger::new(StdLoggerOutput::new(), LoggerLevel::Error);
+        let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet"), &mut logger).unwrap();
+
+        let (chain_a, mut node_a) = create_node(8030, logger.clone());
+        let block_a = mine_block(&chain_a, &mut node_a, &wallet, &mut logger);
+        let block_b = mine_block(&chain_a, &mut node_a, &wallet, &mut logger);
+        let block_c = mine_block(&chain_a, &mut node_a, &wallet, &mut logger);
+        mine_block(&chain_a, &mut node_a, &wallet, &mut logger);
+        mine_block(&chain_a, &mut node_a, &wallet, &mut logger);
+
+        let (chain_b, mut node_b) = create_node(8031, logger.clone());
+        chain_b.lock().unwrap().add(&block_a, &mut logger);
+        chain_b.lock().unwrap().add(&block_b, &mut logger);
+        chain_b.lock().unwrap().add(&block_c, &mut logger);
+        mine_block(&chain_b, &mut node_b, &wallet, &mut logger);
+        mine_block(&chain_b, &mut node_b, &wallet, &mut logger);
+        let block_f_b =  mine_block(&chain_b, &mut node_b, &wallet, &mut logger);
+
+        node_b.sender().register_node("127.0.0.1:8030", None);
+        let block_f_a = wait_for_block(&chain_a, 6);
+        assert_eq!(block_f_a, block_f_b);
     }
 
     #[test]

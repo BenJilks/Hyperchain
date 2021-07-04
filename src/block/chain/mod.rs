@@ -1,7 +1,7 @@
 mod branch;
 use crate::block::Block;
 use crate::logger::{Logger, LoggerLevel};
-use branch::{Branch, TryAddResult};
+use branch::{Branch, CanAddResult};
 
 use std::collections::HashMap;
 use std::io::Write;
@@ -31,30 +31,35 @@ impl BlockChain
         }
     }
 
-    fn find_branch_index_and_add(&mut self, block: &Block, logger: &mut Logger<impl Write>) 
+    fn find_branch_id_and_add(&mut self, block: &Block, logger: &mut Logger<impl Write>)
         -> Result<i32, BlockChainAddResult>
     {
-        let block_id = block.block_id;
-
         // Try to add the block to an existing branch
+        let mut valid_branch_id = None;
         for (id, branch) in &mut self.branches
         {
-            match branch.try_add(&block)
+            match branch.can_add(&block)
             {
-                TryAddResult::Success => 
-                {
-                    logger.log(LoggerLevel::Info, &format!("Added block {} to branch {}", block_id, id));
-                    return Ok ( *id );
-                },
+                CanAddResult::Yes | CanAddResult::InSubBranch(_) => 
+                    valid_branch_id = Some( id ),
 
-                TryAddResult::Duplicate =>
-                {
-                    logger.log(LoggerLevel::Info, &format!("Duplicate block {} in branch {}", block_id, id));
-                    return Err( BlockChainAddResult::Duplicate );
-                },
+                CanAddResult::Duplicate =>
+                    return Err( BlockChainAddResult::Duplicate ),
 
-                TryAddResult::Invalid => {},
+                CanAddResult::Invalid => 
+                    {},
             }
+        }
+
+        if valid_branch_id.is_some() 
+        {
+            let branch_id = *valid_branch_id.unwrap();
+            let branch = &mut self.branches.get_mut(&branch_id).unwrap();
+            assert_eq!(branch.try_add(block), CanAddResult::Yes);
+
+            logger.log(LoggerLevel::Info, 
+               &format!("Added block {} to branch {}", block.block_id, branch_id));
+            return Ok( branch_id );
         }
 
         // If we couldn't create a new one
@@ -68,7 +73,7 @@ impl BlockChain
 
         self.branches.insert(branch_id, branch);
         logger.log(LoggerLevel::Info, 
-            &format!("Added block {} to new branch {}", block_id, branch_id));
+            &format!("Added block {} to new branch {}", block.block_id, branch_id));
 
         return Ok ( branch_id );
     }
@@ -106,7 +111,7 @@ impl BlockChain
 
     pub fn add(&mut self, block: &Block, logger: &mut Logger<impl Write>) -> BlockChainAddResult
     {
-        match self.find_branch_index_and_add(block, logger)
+        match self.find_branch_id_and_add(block, logger)
         {
             Ok(branch_id) =>
             {
@@ -129,12 +134,11 @@ impl BlockChain
 
         for (_, branch) in &self.branches
         {
-            let length_or_none = branch.length_if_complete();
-            if length_or_none.is_none() {
+            if !branch.is_complete() {
                 continue;
             }
 
-            let length = length_or_none.unwrap();
+            let length = branch.top().block_id;
             if length > max_length
             {
                 max_length = length;
@@ -167,9 +171,9 @@ impl BlockChain
 
     pub fn block(&self, block_id: u64) -> Option<&Block>
     {
-        let lengest_branch = self.find_longest_complete_branch();
-        if lengest_branch.is_some() {
-            lengest_branch.unwrap().block(block_id)
+        let longest_branch = self.find_longest_complete_branch();
+        if longest_branch.is_some() {
+            longest_branch.unwrap().block(block_id)
         } else {
             None
         }
@@ -183,7 +187,8 @@ impl BlockChain
         }
 
         let longest_branch = longest_branch_or_none.unwrap();
-        for i in 1..(longest_branch.len() + 1) 
+        let lenght = longest_branch.top().block_id;
+        for i in 1..=lenght 
         {
             let block = longest_branch
                 .block(i)
@@ -232,9 +237,14 @@ mod tests
         let mut lengths_left = lengths.to_vec();
         for branch in chain.branches.values()
         {
-            let length = branch.length_if_complete();
+            let length = 
+                if branch.is_complete() { 
+                    Some( branch.top().block_id ) 
+                } else { 
+                    None 
+                };
+
             let index_or_none = lengths_left.iter().position(|x| x == &length);
-            
             match index_or_none
             {
                 Some(index) =>
