@@ -23,8 +23,9 @@ pub enum CanAddResult
 enum MergeType
 {
     Extends,
-    OtherIsSubChain,
+    OtherIsSubBranch,
     WeAreSubChain,
+    MergeSubBranch(i32),
     NoMerge,
 }
 
@@ -161,7 +162,7 @@ impl Branch
             let root = &self.blocks[&(other.bottom - 1)];
             let next = &other.blocks[&other.bottom];
             if next.is_next_block(root).is_ok() {
-                return MergeType::OtherIsSubChain;
+                return MergeType::OtherIsSubBranch;
             }
         }
 
@@ -172,6 +173,19 @@ impl Branch
             let next = &self.blocks[&self.bottom];
             if next.is_next_block(root).is_ok() {
                 return MergeType::WeAreSubChain;
+            }
+        }
+
+        // Check sub branches
+        for (id, sub_branch) in &self.sub_branches
+        {
+            match sub_branch.get_merge_type(other)
+            {
+                MergeType::NoMerge => 
+                    {},
+
+                _ => 
+                    return MergeType::MergeSubBranch(*id),
             }
         }
 
@@ -206,7 +220,7 @@ impl Branch
                 self.bottom = std::cmp::min(self.bottom, other.bottom);
             },
 
-            MergeType::OtherIsSubChain =>
+            MergeType::OtherIsSubBranch =>
             {
                 self.add_sub_branch(other);
             },
@@ -215,6 +229,12 @@ impl Branch
             {
                 std::mem::swap(self, &mut other);
                 self.add_sub_branch(other);
+            },
+
+            MergeType::MergeSubBranch(id) =>
+            {
+                let sub_branch = &mut self.sub_branches.get_mut(&id).unwrap();
+                sub_branch.merge(other);
             },
 
             MergeType::NoMerge =>
@@ -294,14 +314,14 @@ mod tests
     use crate::miner;
     use crate::block::HASH_LEN;
     
-    fn create_blocks(count: u64, start_hash: Option<[u8; HASH_LEN]>) -> Vec<Block>
+    fn create_blocks(count: u64, start_id: u64, start_hash: Option<[u8; HASH_LEN]>) -> Vec<Block>
     {
         let mut blocks = Vec::<Block>::new();
         let mut prev_hash = start_hash.unwrap_or([0u8; HASH_LEN]);
 
-        for i in 1..(count + 1)
+        for i in 0..count
         {
-            let block = miner::mine_block(Block::new_debug(i, prev_hash));
+            let block = miner::mine_block(Block::new_debug(start_id + i, prev_hash));
             prev_hash = block.hash().expect("Hash worked");
             blocks.push(block);
         }
@@ -310,9 +330,40 @@ mod tests
     }
 
     #[test]
+    fn test_sub_branches()
+    {
+        let chain = create_blocks(5, 1, None);
+        let chain_branch_a = create_blocks(3, 4, Some( chain[2].hash().unwrap() ));
+        let chain_branch_b = create_blocks(4, 4, Some( chain[2].hash().unwrap() ));
+        let chain_branch_a_branch = create_blocks(3, 5, Some( chain_branch_a[0].hash().unwrap() ));
+        
+        let make_branch_from_chain = |chain: &Vec<Block>|
+        {
+            let mut branch = Branch::new(chain[0].clone());
+            for i in 1..chain.len() {
+                branch.try_add(&chain[i]);
+            }
+
+            return branch;
+        };
+
+        let mut branch_a = make_branch_from_chain(&chain);
+        let branch_b = make_branch_from_chain(&chain_branch_a);
+        let branch_c = make_branch_from_chain(&chain_branch_b);
+        let branch_d = make_branch_from_chain(&chain_branch_a_branch);
+
+        assert_eq!(branch_a.can_merge(&branch_b), true);
+        branch_a.merge(branch_b);
+        assert_eq!(branch_a.can_merge(&branch_c), true);
+        branch_a.merge(branch_c);
+        assert_eq!(branch_a.can_merge(&branch_d), true);
+        branch_a.merge(branch_d);
+    }
+
+    #[test]
     fn test_merge()
     {
-        let chain = create_blocks(5, None);
+        let chain = create_blocks(5, 1, None);
         
         let mut branch_a = Branch::new(chain[0].clone());
         branch_a.try_add(&chain[1]);
@@ -354,8 +405,8 @@ mod tests
     #[test]
     fn test_branches() 
     {
-        let test_blocks_branch_a = create_blocks(4, None);
-        let test_blocks_branch_b = create_blocks(4, None);
+        let test_blocks_branch_a = create_blocks(4, 1, None);
+        let test_blocks_branch_b = create_blocks(4, 1, None);
 
         test_sequencial_add(&test_blocks_branch_a);
         test_unordered_add(&test_blocks_branch_a);

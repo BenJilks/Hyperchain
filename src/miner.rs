@@ -6,6 +6,7 @@ use std::io::Write;
 
 pub fn mine_block(mut block: Block) -> Block
 {
+    std::thread::sleep(std::time::Duration::from_secs(1));
     while !block.validate_pow() {
         block.pow += 1;
     }

@@ -1,4 +1,4 @@
-mod network;
+pub mod network;
 use network::{PacketHandler, ConnectionManager, Packet};
 use crate::logger::{Logger, LoggerLevel};
 use crate::block::{BlockChain, BlockChainAddResult};
@@ -165,11 +165,13 @@ pub mod tests
         chain_b.lock().unwrap().add(&block_c, &mut logger);
         mine_block(&chain_b, &mut node_b, &wallet, &mut logger);
         mine_block(&chain_b, &mut node_b, &wallet, &mut logger);
-        let block_f_b =  mine_block(&chain_b, &mut node_b, &wallet, &mut logger);
+        mine_block(&chain_b, &mut node_b, &wallet, &mut logger);
+        mine_block(&chain_b, &mut node_b, &wallet, &mut logger);
+        let block_h_b =  mine_block(&chain_b, &mut node_b, &wallet, &mut logger);
 
         node_b.sender().register_node("127.0.0.1:8030", None);
-        let block_f_a = wait_for_block(&chain_a, 6);
-        assert_eq!(block_f_a, block_f_b);
+        let block_h_a = wait_for_block(&chain_a, 8);
+        assert_eq!(block_h_a, block_h_b);
     }
 
     #[test]

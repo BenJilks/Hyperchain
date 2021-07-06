@@ -115,7 +115,7 @@ fn handle_message_packet<P, W>(from: String, packet: Packet, connection_manager:
             }
             else
             {
-                connection_manager.confirm_connection(&from);
+                connection_manager.confirm_connection(&from, node_address.clone());
                 connection_manager.register_node(&node_address, Some( &from ));
                 packet_handler.on_packet(&from, packet, connection_manager);
             }
@@ -168,9 +168,9 @@ fn start_message_handler<P, W>(port: u16, mut packet_handler: P, message_reciver
 struct Connection
 {
     stream: TcpStream,
-    reciver_thread: JoinHandle<()>,
+    reciver_thread: Option<JoinHandle<()>>,
     sender: TcpSender<Packet>,
-    is_confirmed: bool,
+    public_address: Option<String>,
 }
 
 impl Connection
@@ -196,10 +196,23 @@ impl Connection
         Ok(Self
         {
             stream,
-            reciver_thread,
+            reciver_thread: Some( reciver_thread ),
             sender,
-            is_confirmed: false,
+            public_address: None,
         })
+    }
+
+}
+
+impl Drop for Connection
+{
+
+    fn drop(&mut self)
+    {
+        let _ = self.stream.shutdown(std::net::Shutdown::Both);
+        self.reciver_thread
+            .take().unwrap()
+            .join().expect("Join server connection");
     }
 
 }
@@ -247,9 +260,10 @@ impl<W> ConnectionManager<W>
         };
     }
 
-    fn confirm_connection(&mut self, address: &str)
+    fn confirm_connection(&mut self, address: &str, public_address: String)
     {
-        self.connections.get_mut(address).unwrap().is_confirmed = true;
+        let connection = &mut self.connections.get_mut(address).unwrap();
+        connection.public_address = Some( public_address );
     }
 
     pub fn register_node(&mut self, address: &str, from: Option<&str>)
@@ -283,7 +297,7 @@ impl<W> ConnectionManager<W>
         let stream_or_error = TcpStream::connect(address);
         if stream_or_error.is_err() 
         {
-            self.logger.log(LoggerLevel::Warning,
+            self.logger.log(LoggerLevel::Verbose,
                 &format!("[{}] Unable to connect to {}", self.port, address));
             return;
         }
@@ -306,17 +320,26 @@ impl<W> ConnectionManager<W>
 
     pub fn send(&mut self, packet: Packet)
     {
+        let mut disconnected = Vec::<String>::new();
         for (address, connection) in &mut self.connections
         {
-            if !connection.is_confirmed {
+            if connection.public_address.is_none() {
                 continue;
             }
 
             self.logger.log(LoggerLevel::Verbose, 
                 &format!("[{}] Sending {:?} to {}", self.port, packet, address));
 
-            connection.sender.send(&packet).expect("Sent packet");
-            connection.sender.flush().expect("Flushed");
+            if connection.sender.send(&packet).is_err() 
+                || connection.sender.flush().is_err()
+            {
+                disconnected.push(address.clone());
+            }
+        }
+
+        // Remove any 
+        for address in disconnected {
+            self.disconnect_from(&address);
         }
     }
 
@@ -325,7 +348,7 @@ impl<W> ConnectionManager<W>
     {
         for (address, connection) in &mut self.connections 
         {
-            if !connection.is_confirmed {
+            if connection.public_address.is_none() {
                 continue;
             }
 
@@ -344,12 +367,15 @@ impl<W> ConnectionManager<W>
     {
         match self.connections.remove(address)
         {
-            Some( connection ) =>
-                connection.stream.shutdown(std::net::Shutdown::Both).expect("Did shutdown"),
-            
-            // TODO: Handle this
-            None => panic!(),
-        }
+            Some(connection) => 
+                match &connection.public_address
+                {
+                    Some(address) => self.open_connections.remove(address),
+                    None => false,
+                },
+
+            None => false,
+        };
     }
 
 }
@@ -360,15 +386,9 @@ impl<W> Drop for ConnectionManager<W>
 
     fn drop(&mut self)
     {
-        // Wait for all connections to close
         self.logger.log(LoggerLevel::Info, 
             &format!("[{}] Shutting down {} connection(s)", self.port, self.connections.len()));
-
-        for (_, connection) in self.connections.drain()
-        {
-            connection.stream.shutdown(std::net::Shutdown::Both).expect("Did shutdown");
-            connection.reciver_thread.join().expect("Join server connection");
-        }
+        self.connections.clear();
     }
 
 }
@@ -436,15 +456,21 @@ impl<W> Drop for NetworkConnection<W>
             &format!("[{}] Shutting down network connection", self.port));
 
         // Shutdown node listner
-        let node_listner_thread = self.node_listner_thread.take().unwrap();
-        *self.should_shutdown.lock().unwrap() = true;
-        let _ = TcpStream::connect(&format!("127.0.0.1:{}", self.port));
-        node_listner_thread.join().expect("Joined server thread");
+        if self.node_listner_thread.is_some()
+        {
+            let node_listner_thread = self.node_listner_thread.take().unwrap();
+            *self.should_shutdown.lock().unwrap() = true;
+            let _ = TcpStream::connect(&format!("127.0.0.1:{}", self.port));
+            node_listner_thread.join().expect("Joined server thread");
+        }
 
         // Shutdown message handler
-        let message_handler_thread = self.message_handler_thread.take().unwrap();
-        self.message_sender.send(Message::Shutdown).expect("Sent shutdown message");
-        message_handler_thread.join().expect("Joined message handler thread");
+        if self.message_handler_thread.is_some()
+        {
+            let message_handler_thread = self.message_handler_thread.take().unwrap();
+            self.message_sender.send(Message::Shutdown).expect("Sent shutdown message");
+            message_handler_thread.join().expect("Joined message handler thread");
+        }
     }
 
 }
@@ -467,9 +493,33 @@ mod tests
 
         fn on_packet(&mut self, _: &str, packet: Packet, _: &mut ConnectionManager<W>)
         {
-            self.test_sender.lock().unwrap().send(packet).expect("Sent");
+            let _ = self.test_sender.lock().unwrap().send(packet);
         }
 
+    }
+
+    fn create_connection<W>(port: u16, logger: Logger<W>) -> (NetworkConnection<W>, Receiver<Packet>)
+        where W: Write + Clone + Sync + Send + 'static
+    {
+        let (send, recv) = channel();
+        let packet_handler = TestPacketHandler { test_sender: Mutex::from(send) };
+        let connection = NetworkConnection::new(port, packet_handler, logger);
+
+        (connection, recv)
+    }
+
+    #[test]
+    fn test_network_disconnect()
+    {
+        let logger = Logger::new(StdLoggerOutput::new(), LoggerLevel::Error);
+        let (mut connection_a, recv_a) = create_connection(8080, logger.clone());
+        {
+            let (mut connection_b, _recv_b) = create_connection(8081, logger.clone());
+            connection_b.sender().register_node("127.0.0.1:8080", None);
+            println!("{:?}", recv_a.recv());
+        }
+
+        connection_a.sender().send(Packet::Ping);
     }
 
     #[test]
@@ -477,19 +527,11 @@ mod tests
     {
         let logger = Logger::new(StdLoggerOutput::new(), LoggerLevel::Error);
 
-        let create_connection = |port: u16|
-        {
-            let (send, recv) = channel();
-            let packet_handler = TestPacketHandler { test_sender: Mutex::from(send) };
-            let mut connection = NetworkConnection::new(port, packet_handler, logger.clone());
-            connection.sender().connect("127.0.0.1:8000");
-
-            (connection, recv)
-        };
-
-        let (mut connection_a, recv_a) = create_connection(8000);
-        let (mut connection_b, recv_b) = create_connection(8001);
-        let (mut _connection_c, recv_c) = create_connection(8002);
+        let (mut connection_a, recv_a) = create_connection(8000, logger.clone());
+        let (mut connection_b, recv_b) = create_connection(8001, logger.clone());
+        let (mut connection_c, recv_c) = create_connection(8002, logger.clone());
+        connection_b.sender().register_node("127.0.0.1:8000", None);
+        connection_c.sender().register_node("127.0.0.1:8000", None);
 
         let recv_on_connect_packets = |recv: &Receiver<Packet>, ports: &[u16]|
         {
@@ -516,7 +558,8 @@ mod tests
         assert_eq!(recv_c.recv().expect("Got packet"), Packet::Ping);
         assert_eq!(recv_c.recv().expect("Got packet"), Packet::Ping);
 
-        let (mut connection_d, recv_d) = create_connection(8003);
+        let (mut connection_d, recv_d) = create_connection(8003, logger.clone());
+        connection_d.sender().register_node("127.0.0.1:8000", None);
         recv_on_connect_packets(&recv_a, &[8003]);
         recv_on_connect_packets(&recv_b, &[8003]);
         recv_on_connect_packets(&recv_c, &[8003]);
