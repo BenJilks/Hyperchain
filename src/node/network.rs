@@ -3,7 +3,7 @@ use crate::block::Block;
 use std::io::{Write, BufReader, BufWriter};
 use std::net::{TcpStream, TcpListener};
 use std::thread::JoinHandle;
-use std::sync::mpsc::{channel, Sender, Receiver, RecvTimeoutError};
+use std::sync::mpsc::{channel, Sender, Receiver, RecvTimeoutError, RecvError};
 use std::sync::{Mutex, Arc};
 use std::collections::{HashSet, HashMap};
 use std::time::Duration;
@@ -32,8 +32,9 @@ pub enum Message
     Shutdown,
 }
 
-fn start_packet_reciver(server_ip: String, mut recv: TcpReceiver<Packet>, 
-                        message_sender: Sender<Message>) -> JoinHandle<()>
+fn start_packet_reciver<W>(server_ip: String, mut recv: TcpReceiver<Packet>, 
+                           message_sender: Sender<Message>, mut logger: Logger<W>) -> JoinHandle<()>
+    where W: Write + Sync + Send + 'static
 {
     std::thread::spawn(move || loop
     {
@@ -41,20 +42,36 @@ fn start_packet_reciver(server_ip: String, mut recv: TcpReceiver<Packet>,
         {
             Ok(packet) =>
             {
-                if message_sender.send(Message::Packet(server_ip.clone(), packet)).is_err() {
-                    break;
+                match message_sender.send(Message::Packet(server_ip.clone(), packet)) 
+                {
+                    Ok(_) => {},
+                    Err(err) => 
+                    {
+                        logger.log(LoggerLevel::Error, 
+                            &format!("message_sender.send(packet): {}", err));
+                        break;
+                    },
                 }
             },
+
+            Err(tcp_channel::RecvError::IoError(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof =>
+            {
+                // The stream has closed
+                break;
+            },
             
-            Err(_) => 
-                break,
+            Err(err) =>
+            {
+                logger.log(LoggerLevel::Error, &format!("recv.recv(): {}", err));
+                break;
+            },
         }
     })
 }
 
 fn start_node_listner<W>(port: u16, packet_sender: Arc<Mutex<ConnectionManager<W>>>,
                          should_shutdown: Arc<Mutex<bool>>, mut logger: Logger<W>) -> JoinHandle<()>
-    where W: Write + Sync + Send + 'static
+    where W: Write + Clone + Sync + Send + 'static
 {
     let listener = TcpListener::bind(format!("0.0.0.0:{}", port)).unwrap();
     std::thread::spawn(move || loop
@@ -86,7 +103,7 @@ fn start_node_listner<W>(port: u16, packet_sender: Arc<Mutex<ConnectionManager<W
 }
 
 pub trait PacketHandler<W>
-    where W: Write + Sync + Send + 'static
+    where W: Write + Clone + Sync + Send + 'static
 {
     fn on_packet(&mut self, from: &str, packet: Packet, connection_manager: &mut ConnectionManager<W>);
 }
@@ -94,7 +111,7 @@ pub trait PacketHandler<W>
 fn handle_message_packet<P, W>(from: String, packet: Packet, connection_manager: &mut ConnectionManager<W>, 
                                port: u16, packet_handler: &mut P, logger: &mut Logger<W>)
     where P: PacketHandler<W> + Sync + Send + 'static,
-          W: Write + Sync + Send + 'static
+          W: Write + Clone + Sync + Send + 'static
 {
     match &packet
     {
@@ -129,7 +146,7 @@ fn handle_message_packet<P, W>(from: String, packet: Packet, connection_manager:
 fn start_message_handler<P, W>(port: u16, mut packet_handler: P, message_reciver: Receiver<Message>, 
                                connection_manager: Arc<Mutex<ConnectionManager<W>>>, mut logger: Logger<W>) -> JoinHandle<()>
     where P: PacketHandler<W> + Sync + Send + 'static,
-          W: Write + Sync + Send + 'static
+          W: Write + Clone + Sync + Send + 'static
 {
     std::thread::spawn(move || loop
     {
@@ -139,16 +156,18 @@ fn start_message_handler<P, W>(port: u16, mut packet_handler: P, message_reciver
             {
                 logger.log(LoggerLevel::Verbose, 
                     &format!("[{}] Got packet {:?}", port, packet));
-                
+                logger.log(LoggerLevel::Info, &format!("[{}] Got packet", port));
+
                 let mut connection_manager_lock = connection_manager.lock().unwrap();
                 handle_message_packet(from, packet, &mut connection_manager_lock, 
                     port, &mut packet_handler, &mut logger);
+                logger.log(LoggerLevel::Info, &format!("[{}] Handled packet", port));
             },
-            
+
             Ok(Message::Shutdown) =>
             {
                 logger.log(LoggerLevel::Info, 
-                    &format!("[{}] Shutting down message handler", port));
+                    &format!("[{}] Shut down message handler", port));
                 break;
             },
 
@@ -159,8 +178,12 @@ fn start_message_handler<P, W>(port: u16, mut packet_handler: P, message_reciver
             },
 
             // TODO: Handle this
-            Err(_) =>
-                panic!(),
+            Err(err) =>
+            {
+                logger.log(LoggerLevel::Error, 
+                    &format!("message_reciver.recv(): {}", err));
+                panic!()
+            },
         }
     })
 }
@@ -176,13 +199,14 @@ struct Connection
 impl Connection
 {
 
-    pub fn new(port: u16, address: &str, stream: TcpStream, message_sender: Sender<Message>) -> std::io::Result<Self>
+    pub fn new<W>(port: u16, address: &str, stream: TcpStream, message_sender: Sender<Message>, logger: Logger<W>) -> std::io::Result<Self>
+        where W: Write + Sync + Send + 'static
     {
         let reciver = ReceiverBuilder::new()
             .with_type::<Packet>()
             .with_endianness::<LittleEndian>()
             .build(BufReader::new(stream.try_clone()?));
-        let reciver_thread = start_packet_reciver(address.to_owned(), reciver, message_sender);
+        let reciver_thread = start_packet_reciver(address.to_owned(), reciver, message_sender, logger);
 
         let mut sender = SenderBuilder::new()
             .with_type::<Packet>()
@@ -218,7 +242,7 @@ impl Drop for Connection
 }
 
 pub struct ConnectionManager<W>
-    where W: Write + Sync + Send + 'static
+    where W: Write + Clone + Sync + Send + 'static
 {
     port: u16,
     message_sender: Sender<Message>,
@@ -229,7 +253,7 @@ pub struct ConnectionManager<W>
 }
 
 impl<W> ConnectionManager<W>
-    where W: Write + Sync + Send + 'static
+    where W: Write + Clone + Sync + Send + 'static
 {
 
     pub fn new(port: u16, message_sender: Sender<Message>, logger: Logger<W>) -> Arc<Mutex<Self>>
@@ -250,7 +274,7 @@ impl<W> ConnectionManager<W>
         self.logger.log(LoggerLevel::Info, 
             &format!("[{}] Connected to {}", self.port, address));
 
-        match Connection::new(self.port, &address, stream, self.message_sender.clone())
+        match Connection::new(self.port, &address, stream, self.message_sender.clone(), self.logger.clone())
         {
             Ok(connection) => {
                 self.connections.insert(address, connection);
@@ -381,7 +405,7 @@ impl<W> ConnectionManager<W>
 }
 
 impl<W> Drop for ConnectionManager<W>
-    where W: Write + Sync + Send + 'static
+    where W: Write + Clone + Sync + Send + 'static
 {
 
     fn drop(&mut self)
@@ -488,7 +512,7 @@ mod tests
     }
 
     impl<W> PacketHandler<W> for TestPacketHandler
-        where W: Write + Sync + Send + 'static
+        where W: Write + Clone + Sync + Send + 'static
     {
 
         fn on_packet(&mut self, _: &str, packet: Packet, _: &mut ConnectionManager<W>)

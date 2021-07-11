@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
 
 cargo test --no-run && \
-	kcov --include-path src/ target/cov `find target/debug/deps -name "decentralized_web-????????????????" -printf '%T+ %p\n' | sort -r | head | head -n 1 | awk '{print $2}'` 
+	kcov --include-path src/ target/cov `ls -lt target/debug/deps/decentralized_web-???????????????? | head -n 1 | awk '{print $9}'`
 

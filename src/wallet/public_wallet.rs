@@ -40,7 +40,7 @@ impl PublicWallet
         }
     }
 
-    pub fn varify(&self, hash: &[u8], signature: &[u8]) -> bool
+    pub fn verify(&self, hash: &[u8], signature: &[u8]) -> bool
     {
         assert_eq!(self.e.is_none(), false);
 

@@ -42,10 +42,11 @@ impl<W> PacketHandler<W> for Node<W>
             Packet::OnConnected(_) => 
             {
                 let chain_lock = self.chain.lock().unwrap();
-                let top = chain_lock.top();
-                if !top.is_none() 
+                let branch = chain_lock.current_branch();
+                if !branch.is_none() 
                 {
-                    connection_manager.send_to(Packet::Block(top.unwrap().clone()), 
+                    let top = branch.unwrap().top();
+                    connection_manager.send_to(Packet::Block(top.clone()), 
                         |addr| addr == from);
                 }
             },
@@ -64,7 +65,7 @@ impl<W> PacketHandler<W> for Node<W>
                     
                     BlockChainAddResult::MoreNeeded(id) =>
                     {
-                        self.logger.log(LoggerLevel::Info, &format!("[{}] Need block {}", self.port, id));
+                        self.logger.log(LoggerLevel::Info, &format!("[{}] Need block {} from {}", self.port, id, from));
                         connection_manager.send_to(Packet::BlockRequest(id), |x| x == from);
                     },
                     
@@ -80,7 +81,7 @@ impl<W> PacketHandler<W> for Node<W>
 
                 let chain_lock = self.chain.lock().unwrap();
                 let block = chain_lock.block(id);
-                if !block.is_none() {
+                if block.is_some() {
                     connection_manager.send_to(Packet::Block(block.unwrap().clone()), |x| x == from);
                 }
             },
@@ -93,7 +94,7 @@ impl<W> PacketHandler<W> for Node<W>
 }
 
 #[cfg(test)]
-pub mod tests
+mod tests
 {
 
     use super::*;
@@ -138,7 +139,9 @@ pub mod tests
         let block;
         {
             let mut chain_lock = chain.lock().unwrap();
-            block = miner::mine_block(Block::new(&chain_lock, wallet).expect("Create block"));
+            block = miner::mine_block(Block::new(chain_lock.current_branch(), wallet)
+                .expect("Create block"));
+
             chain_lock.add(&block, logger);
         }
         node.sender().send(Packet::Block(block.clone()));

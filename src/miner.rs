@@ -6,7 +6,7 @@ use std::io::Write;
 
 pub fn mine_block(mut block: Block) -> Block
 {
-    std::thread::sleep(std::time::Duration::from_secs(1));
+    // std::thread::sleep(std::time::Duration::from_secs(1));
     while !block.validate_pow() {
         block.pow += 1;
     }
@@ -18,7 +18,8 @@ pub fn mine<W: Wallet>(chain: &mut BlockChain, wallet: &W, count: i32, logger: &
 {
     for _ in 0..count
     {
-        let block = Block::new(chain, wallet).expect("Can create new block");
+        let block = Block::new(chain.current_branch(), wallet).expect("Can create new block");
         chain.add(&mine_block(block), logger);
     }
 }
+

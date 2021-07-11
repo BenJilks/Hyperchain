@@ -56,14 +56,15 @@ fn main()
     loop
     {
         // Mine the next block
-        let mut block = Block::new(&chain.lock().unwrap(), &wallet).unwrap();
+        let mut block = Block::new(chain.lock().unwrap().current_branch(), &wallet).unwrap();
         block = miner::mine_block(block);
 
         {
             // Add it to the chain if it's still the top
             // TODO: Cancel the mining if we know this already
             let mut chain_lock = chain.lock().unwrap();
-            if chain_lock.top_id() < block.block_id 
+            let branch = chain_lock.current_branch().unwrap();
+            if branch.top().block_id < block.block_id 
             {
                 chain_lock.add(&block, &mut logger);
                 network_connection.sender().send(Packet::Block(block));

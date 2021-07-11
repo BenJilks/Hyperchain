@@ -1,7 +1,7 @@
 mod branch;
 use crate::block::Block;
 use crate::logger::{Logger, LoggerLevel};
-use branch::{Branch, CanAddResult};
+pub use branch::{Branch, CanAddResult};
 
 use std::collections::HashMap;
 use std::io::Write;
@@ -29,6 +29,17 @@ impl BlockChain
         {
             branches: HashMap::new(),
         }
+    }
+
+    fn generate_branch_id(&self) -> i32
+    {
+        // Generate unique, branch id
+        let mut branch_id = rand::random::<i32>();
+        while self.branches.contains_key(&branch_id) {
+            branch_id = rand::random::<i32>();
+        }
+
+        branch_id
     }
 
     fn find_branch_id_and_add(&mut self, block: &Block, logger: &mut Logger<impl Write>)
@@ -64,12 +75,7 @@ impl BlockChain
 
         // If we couldn't create a new one
         let branch = Branch::new(block.clone());
-
-        // Generate unique, branch id
-        let mut branch_id = rand::random::<i32>();
-        while self.branches.contains_key(&branch_id) {
-            branch_id = rand::random::<i32>();
-        }
+        let branch_id = self.generate_branch_id();
 
         self.branches.insert(branch_id, branch);
         logger.log(LoggerLevel::Info, 
@@ -78,7 +84,7 @@ impl BlockChain
         return Ok ( branch_id );
     }
 
-    fn check_merges_for_branch_id(&mut self, branch_id: i32, logger: &mut Logger<impl Write>)
+    fn check_merges_for_branch(&mut self, branch_id: i32, logger: &mut Logger<impl Write>)
     {
         loop
         {
@@ -109,13 +115,42 @@ impl BlockChain
         }
     }
 
+    fn remove_invalid_blocks_for_branch(&mut self, branch_id: i32, logger: &mut Logger<impl Write>) -> bool
+    {
+        let new_branches;
+        let is_branch_empty;
+        {
+            let branch = &mut self.branches.get_mut(&branch_id).unwrap();
+            new_branches = branch.remove_invalid_blocks(logger);
+            is_branch_empty = branch.is_empty();
+        }
+
+        for new_branch in new_branches 
+        {
+            let branch_id = self.generate_branch_id();
+            self.branches.insert(branch_id, new_branch);
+        }
+
+        if is_branch_empty {
+            self.branches.remove(&branch_id);
+        }
+
+        is_branch_empty
+    }
+
     pub fn add(&mut self, block: &Block, logger: &mut Logger<impl Write>) -> BlockChainAddResult
     {
         match self.find_branch_id_and_add(block, logger)
         {
             Ok(branch_id) =>
             {
-                self.check_merges_for_branch_id(branch_id, logger);
+                self.check_merges_for_branch(branch_id, logger);
+
+                let did_remove = self.remove_invalid_blocks_for_branch(branch_id, logger);
+                if did_remove {
+                    return BlockChainAddResult::Ok;
+                }
+
                 match self.branches[&branch_id].next_missing_block()
                 {
                     Some(id) => BlockChainAddResult::MoreNeeded(id),
@@ -127,7 +162,7 @@ impl BlockChain
         }
     }
 
-    fn find_longest_complete_branch(&self) -> Option<&Branch>
+    pub fn current_branch(&self) -> Option<&Branch>
     {
         let mut max_branch = None;
         let mut max_length = 0;
@@ -149,53 +184,9 @@ impl BlockChain
         return max_branch;
     }
 
-    pub fn top(&self) -> Option<&Block>
-    {
-        let lengest_branch = self.find_longest_complete_branch();
-        if lengest_branch.is_some() {
-            Some( lengest_branch.unwrap().top() )
-        } else {
-            None
-        }
-    }
-
-    pub fn top_id(&self) -> u64
-    {
-        let top = self.top();
-        if top.is_some() {
-            top.unwrap().block_id
-        } else {
-            0
-        }
-    }
-
     pub fn block(&self, block_id: u64) -> Option<&Block>
     {
-        let longest_branch = self.find_longest_complete_branch();
-        if longest_branch.is_some() {
-            longest_branch.unwrap().block(block_id)
-        } else {
-            None
-        }
-    }
-
-    pub fn walk_chain(&self, on_block: &mut impl FnMut(&Block))
-    {
-        let longest_branch_or_none = self.find_longest_complete_branch();
-        if longest_branch_or_none.is_none() {
-            return;
-        }
-
-        let longest_branch = longest_branch_or_none.unwrap();
-        let lenght = longest_branch.top().block_id;
-        for i in 1..=lenght 
-        {
-            let block = longest_branch
-                .block(i)
-                .expect(&format!("Has block {}", i));
-
-            on_block(block);
-        }
+        self.current_branch()?.block(block_id)
     }
 
     pub fn debug_log_chain<W: Write>(&self, logger: &mut Logger<W>)
@@ -257,6 +248,29 @@ mod tests
     }
 
     #[test]
+    fn test_block_chain_validation()
+    {
+        let mut test_blocks = create_blocks(4);
+        let mut logger = Logger::new(std::io::stdout(), LoggerLevel::Error);
+        let mut chain = BlockChain::new(&mut logger);
+
+        // Invalidate block(_id) 3
+        test_blocks[2].target = [0xFFu8; HASH_LEN];
+        test_blocks[2] = miner::mine_block(test_blocks[2].clone());
+        test_blocks[3].prev_hash = test_blocks[2].hash().unwrap();
+        test_blocks[3] = miner::mine_block(test_blocks[3].clone());
+
+        // Add blocks in reverse, so only the last add will 
+        // actually validate the chain
+        for i in (0..test_blocks.len()).rev() {
+            chain.add(&test_blocks[i], &mut logger);
+        }
+
+        // The invalid blocks should not be there
+        assert_eq!(chain.branches.len(), 2);
+    }
+
+    #[test]
     fn test_block_chain()
     {
         let test_blocks_a = create_blocks(4);
@@ -272,8 +286,8 @@ mod tests
         chain.add(&test_blocks_a[0], &mut logger);
         chain.add(&test_blocks_a[1], &mut logger);
         chain_has_branches_of_lengths(&chain, &[Some(4)]);
-        assert_eq!(chain.top().is_some(), true);
-        assert_eq!(chain.top().unwrap().block_id, 4);
+        assert_eq!(chain.current_branch().is_some(), true);
+        assert_eq!(chain.current_branch().unwrap().top().block_id, 4);
 
         // Add two random blocks from a different chain
         chain.add(&test_blocks_b[2], &mut logger);
@@ -283,14 +297,14 @@ mod tests
         // Add the last block to complete the second chain
         chain.add(&test_blocks_b[1], &mut logger);
         chain_has_branches_of_lengths(&chain, &[Some(4), Some(3)]);
-        assert_eq!(chain.top().expect("Has top").block_id, 4);
+        assert_eq!(chain.current_branch().unwrap().top().block_id, 4);
 
         // Add the rest of the second chain and a duplicate node from a third
         chain.add(&test_blocks_b[3], &mut logger);
         chain.add(&test_blocks_c[4], &mut logger);
         chain.add(&test_blocks_b[4], &mut logger);
         chain_has_branches_of_lengths(&chain, &[Some(4), Some(5), None]);
-        assert_eq!(chain.top().expect("Has top").block_id, 5);
+        assert_eq!(chain.current_branch().unwrap().top().block_id, 5);
     }
 
 }

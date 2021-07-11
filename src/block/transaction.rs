@@ -1,4 +1,4 @@
-use super::{Signature, Hash, BlockChain, PUB_KEY_LEN};
+use super::{Signature, Hash, Branch, HASH_LEN, PUB_KEY_LEN};
 use crate::wallet::{PrivateWallet, PublicWallet, Wallet};
 use crate::error::Error;
 use sha2::{Sha256, Digest};
@@ -63,9 +63,13 @@ impl Transaction
         }
     }
 
-    pub fn for_block<W: Wallet>(chain: &BlockChain, from: &PrivateWallet, to: &W, amount: f32, fee: f32) -> Option<Self>
+    pub fn for_chain<W: Wallet>(chain: Option<&Branch>, from: &PrivateWallet, to: &W, amount: f32, fee: f32) -> Option<Self>
     {
-        let status = from.get_status(&chain);
+        if chain.is_none() {
+            return None;
+        }
+
+        let status = from.get_status(chain.unwrap());
         if amount + fee > status.balance {
             return None; // FIXME: Report invalid transaction error
         }
@@ -85,15 +89,24 @@ impl Transaction
         Some( Self::new(header, signature, from.get_e()) )
     }
 
-    pub fn varify(&self) -> Result<(), Error>
+    pub fn verify(&self) -> Result<(), Error>
     {
         let wallet = PublicWallet::from_public_key_e(self.header.from, self.e);
         let header = self.header.hash().expect("Hash header");
-        if wallet.varify(&header, &self.signature) {
+        if wallet.verify(&header, &self.signature) {
             Ok( () )
         } else {
             Err( Error::InvalidTransactionSignature )
         }
+    }
+
+    pub fn get_from_address(&self) -> [u8; HASH_LEN]
+    {
+        let mut hasher = Sha256::new();
+        hasher.update(&self.header.from);
+
+        let hash = hasher.finalize().to_vec();
+        *slice_as_array!(&hash, [u8; HASH_LEN]).unwrap()
     }
 
 }
@@ -130,12 +143,12 @@ mod tests
         let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet"), &mut logger).unwrap();
         let other = PrivateWallet::read_from_file(&PathBuf::from("other.wallet"), &mut logger).unwrap();
 
-        let block = miner::mine_block(Block::new(&chain, &wallet).expect("Create block"));
+        let block = miner::mine_block(Block::new(chain.current_branch(), &wallet).expect("Create block"));
         chain.add(&block, &mut logger);
 
-        let transaction = Transaction::for_block(&chain, &wallet, &other, 2.4, 0.2).expect("Create transaction");
+        let transaction = Transaction::for_chain(chain.current_branch(), &wallet, &other, 2.4, 0.2).expect("Create transaction");
         transaction.header.hash().expect("Hash header");
-        transaction.varify().expect("Valid");
+        transaction.verify().expect("Valid");
         assert_eq!(transaction.to_string(), "aLOExVDb0w... --[ 2.4 + 0.2tx ]--> zCPOqvKFuo...");
     }
 
