@@ -242,54 +242,51 @@ impl Block
 mod tests
 {
 
-    /*
     use super::*;
     use crate::logger::{Logger, LoggerLevel};
     use crate::wallet::PrivateWallet;
     use crate::miner;
-    use chain::BlockChain;
     use std::path::PathBuf;
-    */
 
     #[test]
-    fn test_block()
+    fn test_block_verify()
     {
-        /*
         let mut logger = Logger::new(std::io::stdout(), LoggerLevel::Error);
-        let mut chain = BlockChain::new(&mut logger);
         let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet"), &mut logger).unwrap();
         let other = PrivateWallet::read_from_file(&PathBuf::from("other.wallet"), &mut logger).unwrap();
 
-        let block_a = miner::mine_block(Block::new(chain.current_branch(), &wallet).expect("Can create block"));
-        chain.add(&block_a, &mut logger);
-        assert_eq!(block_a.block_id, 1);
-        assert_eq!(block_a.raward_to, wallet.get_address());
-        assert_eq!(block_a.prev_hash, [0u8; HASH_LEN]);
-        assert_eq!(block_a.validate_pow(), true);
-        block_a.validate(chain.current_branch()).expect("Is valid");
-        
-        let mut block_c = Block::new_debug(3, [0u8; HASH_LEN]);
-        block_c.target = [0xFFu8; HASH_LEN];
-        block_c = miner::mine_block(block_c);
-        assert_eq!(block_c.is_next_block(&block_a).is_ok(), false);
-        assert_eq!(block_c.validate(chain.current_branch()).err().expect("Not valid"), Error::PrevNone);
-        
-        let mut block_b = Block::new(chain.current_branch(), &wallet).expect("Can create block");
-        block_b.add_transaction(Transaction::for_chain(chain.current_branch(), &wallet, &other, 2.5, 0.3)
-            .expect("Can create transaction"));
+        let mut block = Block::new(None, &wallet).expect("Can create block");
+        let transaction = Transaction::for_chain(None, &wallet, &other, 4.0, 1.0)
+            .expect("Create transaction");
+        block.add_transaction(transaction);
 
-        block_b = miner::mine_block(block_b);
-        chain.add(&block_b, &mut logger);
-        assert_eq!(block_b.block_id, 2);
-        assert_eq!(block_b.raward_to, wallet.get_address());
-        assert_eq!(block_b.prev_hash, block_a.hash().expect("Hash worked"));
-        assert_eq!(block_b.validate(chain.current_branch()).is_ok(), true);
-        
-        assert_eq!(block_c.validate(chain.current_branch()).err().expect("Not valid"), Error::PrevInvalidHash);
-        block_c.prev_hash = block_b.hash().expect("Hash worked");
-        block_c.timestamp = block_b.timestamp + 1;
-        assert_eq!(block_c.validate(chain.current_branch()).err().expect("Not valid"), Error::InvalidTarget);
-        */
+        assert_eq!(block.validate_pow(), false);
+        assert_eq!(block.validate_target(), true);
+        assert_eq!(block.validate(), false);
+
+        block = miner::mine_block(block);
+        assert_eq!(block.validate_pow(), true);
+        assert_eq!(block.validate(), true);
+
+        {
+            let mut wallet_status = WalletStatus::default();
+            block.update_wallet_status(&wallet.get_address(), &mut wallet_status);
+            assert_eq!(wallet_status.balance, block.calculate_reward() - 4.0);
+            assert_eq!(wallet_status.max_id, 1);
+        }
+
+        {
+            let mut wallet_status = WalletStatus::default();
+            block.update_wallet_status(&other.get_address(), &mut wallet_status);
+            assert_eq!(wallet_status.balance, 4.0);
+            assert_eq!(wallet_status.max_id, 0);
+        }
+
+        let addresses_used = block.get_addresses_used();
+        assert_eq!(addresses_used.len(), 2);
+        assert_eq!(addresses_used.contains(&wallet.get_address()), true);
+        assert_eq!(addresses_used.contains(&other.get_address()), true);
     }
 
 }
+

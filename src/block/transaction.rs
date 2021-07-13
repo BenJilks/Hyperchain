@@ -1,5 +1,5 @@
 use super::{Signature, Hash, Branch, HASH_LEN, PUB_KEY_LEN};
-use crate::wallet::{PrivateWallet, PublicWallet, Wallet};
+use crate::wallet::{PrivateWallet, PublicWallet, Wallet, WalletStatus};
 use crate::error::Error;
 use sha2::{Sha256, Digest};
 use serde::{Serialize, Deserialize};
@@ -65,14 +65,12 @@ impl Transaction
 
     pub fn for_chain<W: Wallet>(chain: Option<&Branch>, from: &PrivateWallet, to: &W, amount: f32, fee: f32) -> Option<Self>
     {
-        if chain.is_none() {
-            return None;
-        }
-
-        let status = from.get_status(chain.unwrap());
-        if amount + fee > status.balance {
-            return None; // FIXME: Report invalid transaction error
-        }
+        let status = 
+            if chain.is_some() { 
+                from.get_status(chain.unwrap())
+            } else {
+                WalletStatus::default()
+            };
 
         let header = TransactionHeader 
         { 
