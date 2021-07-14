@@ -87,15 +87,19 @@ impl Transaction
         Some( Self::new(header, signature, from.get_e()) )
     }
 
-    pub fn verify(&self) -> Result<(), Error>
+    pub fn is_valid(&self) -> bool
     {
+        if self.header.amount < 0.0 {
+            return false;
+        }
+
+        if self.header.transaction_fee < 0.0 {
+            return false;
+        }
+
         let wallet = PublicWallet::from_public_key_e(self.header.from, self.e);
         let header = self.header.hash().expect("Hash header");
-        if wallet.verify(&header, &self.signature) {
-            Ok( () )
-        } else {
-            Err( Error::InvalidTransactionSignature )
-        }
+        wallet.verify(&header, &self.signature)
     }
 
     pub fn get_from_address(&self) -> [u8; HASH_LEN]
@@ -144,10 +148,25 @@ mod tests
         let block = miner::mine_block(Block::new(chain.current_branch(), &wallet).expect("Create block"));
         chain.add(&block, &mut logger);
 
-        let transaction = Transaction::for_chain(chain.current_branch(), &wallet, &other, 2.4, 0.2).expect("Create transaction");
-        transaction.header.hash().expect("Hash header");
-        transaction.verify().expect("Valid");
-        assert_eq!(transaction.to_string(), "aLOExVDb0w... --[ 2.4 + 0.2tx ]--> zCPOqvKFuo...");
+        {
+            let transaction = Transaction::for_chain(chain.current_branch(), &wallet, &other, 2.4, 0.2)
+                .expect("Create transaction");
+            transaction.header.hash().expect("Hash header");
+            assert_eq!(transaction.is_valid(), true);
+            assert_eq!(transaction.to_string(), "aLOExVDb0w... --[ 2.4 + 0.2tx ]--> zCPOqvKFuo...");
+        }
+
+        {
+            let transaction = Transaction::for_chain(chain.current_branch(), &wallet, &other, -1.6, 0.0)
+                .expect("Create transaction");
+            assert_eq!(transaction.is_valid(), false);
+        }
+
+        {
+            let transaction = Transaction::for_chain(chain.current_branch(), &wallet, &other, 0.0, -0.0001)
+                .expect("Create transaction");
+            assert_eq!(transaction.is_valid(), false);
+        }
     }
 
 }

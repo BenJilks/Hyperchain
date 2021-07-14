@@ -316,7 +316,7 @@ impl Branch
         }
 
         // Check internal block data
-        if !block.validate() {
+        if !block.is_valid() {
             return false;
         }
 

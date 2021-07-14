@@ -4,7 +4,7 @@ mod chain;
 pub use page::{Page, PageHeader, DataFormat};
 pub use transaction::{Transaction, TransactionHeader};
 pub use chain::{BlockChain, Branch, BlockChainAddResult};
-use crate::wallet::{Wallet, PublicWallet, WalletStatus};
+use crate::wallet::{Wallet, WalletStatus};
 use crate::error::Error;
 
 use sha2::{Sha256, Digest};
@@ -164,7 +164,7 @@ impl Block
         Ok(())
     }
 
-    pub fn validate_pow(&self) -> bool
+    pub fn is_pow_valid(&self) -> bool
     {
         let hash_or_none = self.hash();
         if hash_or_none.is_err()
@@ -184,15 +184,28 @@ impl Block
         true
     }
 
-    pub fn validate_target(&self) -> bool
+    fn is_target_valid(&self) -> bool
     {
         self.target == Self::calculate_target()
     }
 
-    pub fn validate(&self) -> bool
+    fn is_transaction_content_valid(&self) -> bool
     {
-        self.validate_pow() 
-            && self.validate_target()
+        for transaction in &self.transactions
+        {
+            if !transaction.is_valid() {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    pub fn is_valid(&self) -> bool
+    {
+        self.is_pow_valid() 
+            && self.is_target_valid()
+            && self.is_transaction_content_valid()
     }
 
     pub fn get_addresses_used(&self) -> Vec<[u8; HASH_LEN]>
@@ -260,13 +273,13 @@ mod tests
             .expect("Create transaction");
         block.add_transaction(transaction);
 
-        assert_eq!(block.validate_pow(), false);
-        assert_eq!(block.validate_target(), true);
-        assert_eq!(block.validate(), false);
+        assert_eq!(block.is_pow_valid(), false);
+        assert_eq!(block.is_target_valid(), true);
+        assert_eq!(block.is_valid(), false);
 
         block = miner::mine_block(block);
-        assert_eq!(block.validate_pow(), true);
-        assert_eq!(block.validate(), true);
+        assert_eq!(block.is_pow_valid(), true);
+        assert_eq!(block.is_valid(), true);
 
         {
             let mut wallet_status = WalletStatus::default();
