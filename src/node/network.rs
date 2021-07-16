@@ -54,7 +54,9 @@ fn start_packet_reciver<W>(server_ip: String, mut recv: TcpReceiver<Packet>,
                 }
             },
 
-            Err(tcp_channel::RecvError::IoError(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof =>
+            Err(tcp_channel::RecvError::IoError(e)) 
+                if e.kind() == std::io::ErrorKind::UnexpectedEof ||
+                   e.kind() == std::io::ErrorKind::ConnectionReset =>
             {
                 // The stream has closed
                 break;
