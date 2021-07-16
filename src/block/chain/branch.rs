@@ -91,11 +91,11 @@ impl Branch
                 CanAddResult::Invalid => 
                     {},
 
-                CanAddResult::Yes =>
-                    return CanAddResult::InSubBranch(*id),
+                CanAddResult::Duplicate => 
+                    return CanAddResult::Duplicate,
 
-                result => 
-                    return result,
+                CanAddResult::Yes | CanAddResult::InSubBranch(_) => 
+                    return CanAddResult::InSubBranch(*id),
             }
         }
 
@@ -116,8 +116,9 @@ impl Branch
 
             CanAddResult::InSubBranch(id) =>
             {
-                let branch = &mut self.sub_branches.get_mut(&id).unwrap();
-                branch.try_add(block)
+                let branch = &mut self.sub_branches.get_mut(&id);
+                assert_eq!(branch.is_some(), true);
+                branch.as_mut().unwrap().try_add(block)
             },
 
             err => err,

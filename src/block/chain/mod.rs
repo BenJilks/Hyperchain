@@ -189,6 +189,11 @@ impl BlockChain
         self.current_branch()?.block(block_id)
     }
 
+    pub fn top(&self) -> Option<&Block>
+    {
+        Some( self.current_branch()?.top() )
+    }
+
     pub fn debug_log_chain<W: Write>(&self, logger: &mut Logger<W>)
     {
         for id in self.branches.keys()
