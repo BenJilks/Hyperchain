@@ -1,5 +1,5 @@
 use crate::block::Block;
-use crate::block::chain::BlockChain;
+use crate::chain::BlockChain;
 use crate::wallet::Wallet;
 use crate::logger::Logger;
 

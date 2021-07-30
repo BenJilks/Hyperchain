@@ -1,9 +1,6 @@
-pub mod page;
-pub mod transaction;
-pub mod chain;
-use page::Page;
-use transaction::Transaction;
-use chain::branch::Branch;
+use crate::transaction::Transaction;
+use crate::page::Page;
+use crate::chain::branch::Branch;
 use crate::wallet::{Wallet, WalletStatus};
 use crate::error::Error;
 
@@ -17,8 +14,8 @@ use slice_as_array;
 
 pub const PUB_KEY_LEN: usize = 256;
 pub const HASH_LEN: usize = 32;
-type Signature = [u8; PUB_KEY_LEN];
-type Hash = [u8; HASH_LEN];
+pub type Signature = [u8; PUB_KEY_LEN];
+pub type Hash = [u8; HASH_LEN];
 
 const BLOCK_SIZE: usize = 16 * 1024 * 1024; // 16 MB
 const MIN_TARGET: [u8; HASH_LEN] = 

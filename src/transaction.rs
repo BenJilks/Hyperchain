@@ -1,4 +1,5 @@
-use super::{Signature, Hash, Branch, HASH_LEN, PUB_KEY_LEN};
+use crate::block::{Signature, Hash, HASH_LEN, PUB_KEY_LEN};
+use crate::chain::branch::Branch;
 use crate::wallet::{PrivateWallet, PublicWallet, Wallet, WalletStatus};
 use sha2::{Sha256, Digest};
 use serde::{Serialize, Deserialize};
@@ -131,9 +132,11 @@ mod tests
 {
 
     use super::*;
-    use crate::block::{Block, BlockChain};
+    use crate::block::Block;
+    use crate::chain::BlockChain;
     use crate::logger::{Logger, LoggerLevel};
     use crate::miner;
+
     use std::path::PathBuf;
 
     #[test]

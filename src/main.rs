@@ -19,6 +19,9 @@ extern crate base_62;
 extern crate serde_json;
 
 mod block;
+mod chain;
+mod transaction;
+mod page;
 mod miner;
 mod wallet;
 mod error;
@@ -26,7 +29,7 @@ mod logger;
 mod node;
 use logger::{Logger, LoggerLevel, StdLoggerOutput};
 use block::Block;
-use block::chain::BlockChain;
+use chain::BlockChain;
 use node::Node;
 use node::network::{NetworkConnection, Packet};
 use wallet::PrivateWallet;

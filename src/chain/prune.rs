@@ -58,7 +58,7 @@ mod tests
     #[test]
     fn test_prune()
     {
-        let mut logger = Logger::new(std::io::stdout(), LoggerLevel::Verbose);
+        let mut logger = Logger::new(std::io::stdout(), LoggerLevel::Error);
         let mut chain = BlockChain::new(&mut logger);
         let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet"), &mut logger).unwrap();
 

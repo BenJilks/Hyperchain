@@ -3,7 +3,7 @@ mod public_wallet;
 pub use private_wallet::PrivateWallet;
 pub use public_wallet::PublicWallet;
 use crate::block::{PUB_KEY_LEN, HASH_LEN};
-use crate::block::chain::branch::Branch;
+use crate::chain::branch::Branch;
 
 use sha2::{Sha256, Digest};
 use serde::{Serialize, Deserialize};
@@ -79,8 +79,8 @@ mod tests
     use super::*;
     use crate::logger::{Logger, LoggerLevel};
     use crate::block::Block;
-    use crate::block::transaction::Transaction;
-    use crate::block::chain::BlockChain;
+    use crate::transaction::Transaction;
+    use crate::chain::BlockChain;
     use crate::miner;
     use std::path::PathBuf;
 

@@ -1,4 +1,4 @@
-use super::{Signature, PUB_KEY_LEN};
+use crate::block::{Signature, PUB_KEY_LEN};
 use crate::wallet::{Wallet, PrivateWallet};
 
 use serde::{Serialize, Deserialize};
