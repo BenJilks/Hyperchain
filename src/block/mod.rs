@@ -1,10 +1,12 @@
 pub mod validate;
 pub mod transactions;
+mod target;
 use crate::transaction::Transaction;
 use crate::page::Page;
 use crate::chain::branch::Branch;
 use crate::wallet::Wallet;
 use crate::error::Error;
+use target::{calculate_target, MIN_TARGET};
 
 use sha2::{Sha256, Digest};
 use serde::{Serialize, Deserialize};
@@ -18,13 +20,6 @@ pub type Signature = [u8; PUB_KEY_LEN];
 pub type Hash = [u8; HASH_LEN];
 
 const BLOCK_SIZE: usize = 16 * 1024 * 1024; // 16 MB
-const MIN_TARGET: [u8; HASH_LEN] = 
-[
-    0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8,
-    0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8,
-    0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8,
-    0xFFu8, 0x00u8,
-];
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct Block
@@ -48,12 +43,6 @@ fn current_timestamp() -> u128
 impl Block
 {
 
-    fn calculate_target() -> [u8; HASH_LEN]
-    {
-        // FIXME: Do actually hash target calc
-        MIN_TARGET
-    }
-
     pub fn calculate_reward(&self) -> f32
     {
         // FIXME: do real reward calc
@@ -69,7 +58,7 @@ impl Block
         {
             let chain = chain_or_none.unwrap();
             let top = chain.top();
-            target = Self::calculate_target();
+            target = calculate_target();
             prev_block_id = top.block_id;
             prev_block_hash = top.hash()?;
         }

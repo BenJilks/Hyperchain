@@ -1,4 +1,4 @@
-use super::{Block, current_timestamp};
+use super::{Block, current_timestamp, calculate_target};
 use crate::error::Error;
 
 use rsa::BigUint;
@@ -74,7 +74,7 @@ impl BlockValidate for Block
 
     fn is_target_valid(&self) -> bool
     {
-        self.target == Self::calculate_target()
+        self.target == calculate_target()
     }
 
     fn is_valid(&self) -> bool
