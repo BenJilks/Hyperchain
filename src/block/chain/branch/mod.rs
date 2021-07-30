@@ -1,3 +1,4 @@
+pub mod prune;
 use crate::logger::{Logger, LoggerLevel};
 use crate::block::{Block, HASH_LEN};
 use crate::wallet::WalletStatus;

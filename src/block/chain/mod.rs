@@ -1,4 +1,5 @@
 mod branch;
+pub mod prune;
 use crate::block::Block;
 use crate::logger::{Logger, LoggerLevel};
 pub use branch::{Branch, CanAddResult};
