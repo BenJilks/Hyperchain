@@ -1,4 +1,5 @@
 use super::Branch;
+use crate::block::validate::BlockValidate;
 
 #[derive(PartialEq)]
 enum MergeType

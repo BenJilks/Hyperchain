@@ -2,6 +2,8 @@ use super::Branch;
 use super::add::{CanAddResult, BranchAdd};
 use crate::logger::{Logger, LoggerLevel};
 use crate::block::{Block, HASH_LEN};
+use crate::block::validate::BlockValidate;
+use crate::block::transactions::BlockTransactions;
 use crate::wallet::WalletStatus;
 
 use std::collections::HashMap;

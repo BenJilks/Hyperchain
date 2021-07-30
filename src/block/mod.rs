@@ -1,14 +1,14 @@
+pub mod validate;
+pub mod transactions;
 use crate::transaction::Transaction;
 use crate::page::Page;
 use crate::chain::branch::Branch;
-use crate::wallet::{Wallet, WalletStatus};
+use crate::wallet::Wallet;
 use crate::error::Error;
 
 use sha2::{Sha256, Digest};
 use serde::{Serialize, Deserialize};
-use rsa::BigUint;
 use std::time::SystemTime;
-use std::collections::HashSet;
 use bincode;
 use slice_as_array;
 
@@ -140,112 +140,6 @@ impl Block
         Ok( *slice_as_array!(&hash[0..HASH_LEN], [u8; HASH_LEN]).unwrap() )
     }
 
-    pub fn is_next_block(&self, prev: &Block) -> Result<(), Error>
-    {
-        if self.block_id > 1
-        {
-            if self.block_id != prev.block_id + 1 {
-                return Err(Error::NotNextBlock);
-            }
-
-            if self.prev_hash != prev.hash()? {
-                return Err(Error::PrevInvalidHash);
-            }
-
-            let now = current_timestamp();
-            if self.timestamp < prev.timestamp || self.timestamp > now {
-                return Err(Error::InvalidTimestamp);
-            }
-        }
-
-        Ok(())
-    }
-
-    pub fn is_pow_valid(&self) -> bool
-    {
-        let hash_or_none = self.hash();
-        if hash_or_none.is_err()
-        {
-            println!("Faild to hash: {}", hash_or_none.err().unwrap().to_string());
-            return false;
-        }
-
-        // Validate POW
-        let hash = hash_or_none.ok().unwrap();
-        let hash_num = BigUint::from_bytes_le(&hash);
-        let target_num = BigUint::from_bytes_le(&self.target);
-        if hash_num > target_num {
-            return false;
-        }
-
-        true
-    }
-
-    fn is_target_valid(&self) -> bool
-    {
-        self.target == Self::calculate_target()
-    }
-
-    fn is_transaction_content_valid(&self) -> bool
-    {
-        for transaction in &self.transactions
-        {
-            if !transaction.is_valid() {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    pub fn is_valid(&self) -> bool
-    {
-        self.is_pow_valid() 
-            && self.is_target_valid()
-            && self.is_transaction_content_valid()
-    }
-
-    pub fn get_addresses_used(&self) -> Vec<[u8; HASH_LEN]>
-    {
-        let mut addresses_in_use = HashSet::<[u8; HASH_LEN]>::new();
-        addresses_in_use.insert(self.raward_to);
-        
-        for transaction in &self.transactions
-        {
-            addresses_in_use.insert(transaction.get_from_address());
-            addresses_in_use.insert(transaction.header.to);
-        }
-
-        addresses_in_use.into_iter().collect::<Vec<_>>()
-    }
-
-    pub fn update_wallet_status(&self, address: &[u8; HASH_LEN], status: &mut WalletStatus)
-    {
-        if &self.raward_to == address {
-            status.balance += self.calculate_reward()
-        }
-
-        for transaction in &self.transactions
-        {
-            let header = &transaction.header;
-            if &transaction.get_from_address() == address
-            {
-                status.balance -= header.amount + header.transaction_fee;
-                status.max_id = std::cmp::max(status.max_id, header.id);
-            }
-
-            if &header.to == address {
-                status.balance += header.amount;
-            }
-
-            if &self.raward_to == address {
-                status.balance += header.transaction_fee;
-            }
-        }
-
-        // TODO: Pages
-    }
-
 }
 
 #[cfg(test)]
@@ -253,8 +147,10 @@ mod tests
 {
 
     use super::*;
+    use super::validate::BlockValidate;
+    use super::transactions::BlockTransactions;
     use crate::logger::{Logger, LoggerLevel};
-    use crate::wallet::PrivateWallet;
+    use crate::wallet::{PrivateWallet, WalletStatus};
     use crate::miner;
     use std::path::PathBuf;
 

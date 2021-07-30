@@ -1,5 +1,6 @@
 use super::Branch;
 use crate::block::Block;
+use crate::block::validate::BlockValidate;
 
 #[derive(PartialEq, Debug)]
 pub enum CanAddResult
