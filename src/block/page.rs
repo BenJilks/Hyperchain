@@ -1,9 +1,8 @@
-use super::{Signature, BlockChain, PUB_KEY_LEN};
+use super::{Signature, PUB_KEY_LEN};
 use crate::wallet::{Wallet, PrivateWallet};
 
 use serde::{Serialize, Deserialize};
 use sha2::{Sha256, Digest};
-use std::io::Read;
 use std::string::ToString;
 
 big_array! { BigArray; }
@@ -123,3 +122,4 @@ impl Page
     */
 
 }
+

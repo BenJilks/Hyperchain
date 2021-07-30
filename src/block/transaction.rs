@@ -1,6 +1,5 @@
 use super::{Signature, Hash, Branch, HASH_LEN, PUB_KEY_LEN};
 use crate::wallet::{PrivateWallet, PublicWallet, Wallet, WalletStatus};
-use crate::error::Error;
 use sha2::{Sha256, Digest};
 use serde::{Serialize, Deserialize};
 use bincode;

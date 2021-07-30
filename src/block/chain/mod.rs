@@ -1,8 +1,11 @@
-mod branch;
+pub mod branch;
 pub mod prune;
 use crate::block::Block;
 use crate::logger::{Logger, LoggerLevel};
-pub use branch::{Branch, CanAddResult};
+use branch::add::{CanAddResult, BranchAdd};
+use branch::merge::BranchMerge;
+use branch::validate::BranchValidate;
+use branch::Branch;
 
 use std::collections::HashMap;
 use std::io::Write;

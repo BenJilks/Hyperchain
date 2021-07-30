@@ -1,7 +1,7 @@
 pub mod network;
 use network::{PacketHandler, ConnectionManager, Packet};
 use crate::logger::{Logger, LoggerLevel};
-use crate::block::{BlockChain, BlockChainAddResult};
+use crate::block::chain::{BlockChain, BlockChainAddResult};
 use std::io::Write;
 
 pub struct Node<W>

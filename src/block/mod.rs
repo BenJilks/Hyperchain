@@ -1,9 +1,9 @@
-mod page;
-mod transaction;
-mod chain;
-pub use page::{Page, PageHeader, DataFormat};
-pub use transaction::{Transaction, TransactionHeader};
-pub use chain::{BlockChain, Branch, BlockChainAddResult};
+pub mod page;
+pub mod transaction;
+pub mod chain;
+use page::Page;
+use transaction::Transaction;
+use chain::branch::Branch;
 use crate::wallet::{Wallet, WalletStatus};
 use crate::error::Error;
 
