@@ -77,7 +77,10 @@ fn main()
             let top = chain.top();
             if top.is_none() || top.unwrap().block_id + 1 == block.block_id 
             {
-                println!("Won block {}!", block.block_id);
+                println!("Won block {}! With difficulty {}", 
+                    block.block_id, 
+                    block::target::difficulty(&block.target));
+
                 chain.add(&block, &mut logger);
                 network_connection_lock.manager().send(Packet::Block(block));
             }

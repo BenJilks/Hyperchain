@@ -1,12 +1,12 @@
 pub mod validate;
 pub mod transactions;
-mod target;
+pub mod target;
 use crate::transaction::Transaction;
 use crate::page::Page;
 use crate::chain::branch::Branch;
 use crate::wallet::Wallet;
 use crate::error::Error;
-use target::{calculate_target, MIN_TARGET};
+use target::{calculate_target, Target, BLOCK_SAMPLE_SIZE};
 
 use sha2::{Sha256, Digest};
 use serde::{Serialize, Deserialize};
@@ -31,7 +31,7 @@ pub struct Block
     pub pages: Vec<Page>,
     pub transactions: Vec<Transaction>,
     pub timestamp: u128,
-    pub target: Hash,
+    pub target: Target,
     pub pow: u64, // TODO: This should be a correct size
 }
 
@@ -53,12 +53,19 @@ impl Block
     {
         let mut prev_block_id = 0;
         let mut prev_block_hash = [0u8; HASH_LEN];
-        let mut target = MIN_TARGET;
+        let mut target = calculate_target(None, None);
         if chain_or_none.is_some()
         {
             let chain = chain_or_none.unwrap();
             let top = chain.top();
-            target = calculate_target();
+            let sample_start = 
+                if top.block_id < BLOCK_SAMPLE_SIZE {
+                    None
+                } else {
+                    chain.block(top.block_id - BLOCK_SAMPLE_SIZE)
+                };
+
+            target = calculate_target(sample_start, Some(top));
             prev_block_id = top.block_id;
             prev_block_hash = top.hash()?;
         }
@@ -89,7 +96,7 @@ impl Block
             pages: Vec::new(),
             transactions: Vec::new(),
             timestamp: current_timestamp(),
-            target: MIN_TARGET,
+            target: calculate_target(None, None),
             pow: 0,
         }
     }
@@ -156,12 +163,12 @@ mod tests
         block.add_transaction(transaction);
 
         assert_eq!(block.is_pow_valid(), false);
-        assert_eq!(block.is_target_valid(), true);
-        assert_eq!(block.is_valid(), false);
+        assert_eq!(block.is_target_valid(None, None), true);
+        assert_eq!(block.is_valid(None, None), false);
 
         block = miner::mine_block(block);
         assert_eq!(block.is_pow_valid(), true);
-        assert_eq!(block.is_valid(), true);
+        assert_eq!(block.is_valid(None, None), true);
 
         {
             let mut wallet_status = WalletStatus::default();

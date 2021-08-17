@@ -264,7 +264,7 @@ mod tests
         let mut chain = BlockChain::new(&mut logger);
 
         // Invalidate block(_id) 3
-        test_blocks[2].target = [0xFFu8; HASH_LEN];
+        test_blocks[2].target = [0xFFu8; 4];
         test_blocks[2] = miner::mine_block(test_blocks[2].clone());
         test_blocks[3].prev_hash = test_blocks[2].hash().unwrap();
         test_blocks[3] = miner::mine_block(test_blocks[3].clone());

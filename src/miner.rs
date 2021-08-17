@@ -5,11 +5,12 @@ use crate::wallet::Wallet;
 use crate::logger::Logger;
 
 use std::io::Write;
+use std::time::SystemTime;
 
 pub fn mine_block(mut block: Block) -> Block
 {
-    let delay = rand::random::<u64>() % 1000;
-    std::thread::sleep(std::time::Duration::from_millis(delay));
+    // let delay = rand::random::<u64>() % 1000;
+    // std::thread::sleep(std::time::Duration::from_millis(delay));
 
     while !block.is_pow_valid() {
         block.pow += 1;

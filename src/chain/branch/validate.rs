@@ -4,6 +4,7 @@ use crate::logger::{Logger, LoggerLevel};
 use crate::block::{Block, HASH_LEN};
 use crate::block::validate::BlockValidate;
 use crate::block::transactions::BlockTransactions;
+use crate::block::target::BLOCK_SAMPLE_SIZE;
 use crate::wallet::WalletStatus;
 
 use std::collections::HashMap;
@@ -80,8 +81,19 @@ impl Branch
         }
 
         // Check internal block data
-        if !block.is_valid() {
-            return false;
+        if block.block_id <= BLOCK_SAMPLE_SIZE
+        {
+            if !block.is_valid(None, None) {
+                return false;
+            }
+        }
+        else
+        {
+            let sample_end = self.block(block.block_id - 1);
+            let sample_start = self.block(block.block_id - 1 - BLOCK_SAMPLE_SIZE);
+            if !block.is_valid(sample_start, sample_end) {
+                return false;
+            }
         }
 
         // Check the next block is correct, if there is one
