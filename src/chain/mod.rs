@@ -1,26 +1,22 @@
-pub mod branch;
-pub mod prune;
 use crate::block::Block;
+use crate::block::validate::BlockValidate;
+use crate::block::target::BLOCK_SAMPLE_SIZE;
 use crate::logger::{Logger, LoggerLevel};
-use branch::add::{CanAddResult, BranchAdd};
-use branch::merge::BranchMerge;
-use branch::validate::BranchValidate;
-use branch::Branch;
 
-use std::collections::HashMap;
 use std::io::Write;
-use rand;
 
 pub struct BlockChain
 {
-    branches: HashMap<i32, Branch>,
+    blocks: Vec<Block>,
 }
 
+#[derive(Debug, PartialEq)]
 pub enum BlockChainAddResult
 {
     Ok,
-    MoreNeeded(u64),
+    MoreNeeded,
     Duplicate,
+    Invalid,
 }
 
 impl BlockChain
@@ -31,180 +27,159 @@ impl BlockChain
         logger.log(LoggerLevel::Info, "Create new chain");
         BlockChain
         {
-            branches: HashMap::new(),
+            blocks: Vec::new(),
         }
     }
 
-    fn generate_branch_id(&self) -> i32
+    fn take_sample_at(&self, block_id: u64) -> (Option<&Block>, Option<&Block>)
     {
-        // Generate unique, branch id
-        let mut branch_id = rand::random::<i32>();
-        while self.branches.contains_key(&branch_id) {
-            branch_id = rand::random::<i32>();
+        let end = self.block(block_id);
+        if end.is_none() || end.unwrap().block_id < BLOCK_SAMPLE_SIZE {
+            return (None, None);
         }
 
-        branch_id
+        let start = self.block(end.unwrap().block_id - BLOCK_SAMPLE_SIZE);
+        (start, end)
     }
 
-    fn find_branch_id_and_add(&mut self, block: &Block, logger: &mut Logger<impl Write>)
-        -> Result<i32, BlockChainAddResult>
+    pub fn take_sample(&self) -> (Option<&Block>, Option<&Block>)
     {
-        // Try to add the block to an existing branch
-        let mut valid_branch_id = None;
-        for (id, branch) in &mut self.branches
+        match self.top()
         {
-            match branch.can_add(&block)
-            {
-                CanAddResult::Yes | CanAddResult::InSubBranch(_) => 
-                    valid_branch_id = Some( id ),
+            Some(top) => self.take_sample_at(top.block_id),
+            None => (None, None),
+        }
+    }
 
-                CanAddResult::Duplicate =>
-                    return Err( BlockChainAddResult::Duplicate ),
-
-                CanAddResult::Invalid => 
-                    {},
+    pub fn add(&mut self, block: &Block) -> BlockChainAddResult
+    {
+        if block.block_id < self.blocks.len() as u64 
+        {
+            let original = self.block(block.block_id).unwrap();
+            if block == original {
+                return BlockChainAddResult::Duplicate;
+            } else {
+                return BlockChainAddResult::Invalid;
             }
         }
 
-        if valid_branch_id.is_some() 
-        {
-            let branch_id = *valid_branch_id.unwrap();
-            let branch = &mut self.branches.get_mut(&branch_id).unwrap();
-            assert_eq!(branch.try_add(block), CanAddResult::Yes);
-
-            logger.log(LoggerLevel::Info, 
-               &format!("Added block {} to branch {}", block.block_id, branch_id));
-            return Ok( branch_id );
+        if block.block_id > self.blocks.len() as u64 {
+            return BlockChainAddResult::MoreNeeded;
         }
 
-        // If we couldn't create a new one
-        let branch = Branch::new(block.clone());
-        let branch_id = self.generate_branch_id();
+        if self.top().is_some() && block.is_next_block(self.top().unwrap()).is_err() {
+            return BlockChainAddResult::Invalid;
+        }
 
-        self.branches.insert(branch_id, branch);
-        logger.log(LoggerLevel::Info, 
-            &format!("Added block {} to new branch {}", block.block_id, branch_id));
+        let (sample_start, sample_end) = self.take_sample();
+        if !block.is_valid(sample_start, sample_end) {
+            return BlockChainAddResult::Invalid;
+        }
 
-        return Ok ( branch_id );
+        self.blocks.push(block.clone());
+        BlockChainAddResult::Ok
     }
 
-    fn check_merges_for_branch(&mut self, branch_id: i32, logger: &mut Logger<impl Write>)
+    fn take_sample_of_branch_at<'a>(&'a self, branch: &'a [Block], block_id: u64) -> (Option<&'a Block>, Option<&'a Block>)
     {
-        loop
-        {
-            let mut did_merge = false;
-            let keys = self.branches.keys().map(|x| *x).collect::<Vec<i32>>();
-            for id in keys
-            {
-                if id == branch_id {
-                    continue;
-                }
+        assert_eq!(branch.is_empty(), false);
 
-                if self.branches[&branch_id].can_merge(&self.branches[&id])
+        if block_id < BLOCK_SAMPLE_SIZE {
+            return (None, None);
+        }
+
+        let branch_start = branch.first().unwrap();
+        let block_at = |block_id: u64|
+        {
+            if block_id >= branch_start.block_id {
+                branch.get((block_id - branch_start.block_id) as usize)
+            } else {
+                self.block(block_id)
+            }
+        };
+
+        let sample_start = block_at(block_id - BLOCK_SAMPLE_SIZE);
+        let sample_end = block_at(block_id);
+        (sample_start, sample_end)
+    }
+
+    pub fn can_merge_branch(&self, branch: &[Block]) -> bool
+    {
+        if branch.is_empty() {
+            return false;
+        }
+
+        // Can't attach to chain
+        let bottom = branch.first().unwrap();
+        if bottom.block_id > self.blocks.len() as u64 {
+            return false;
+        }
+
+        // Not longer then the current branch
+        let top = branch.last().unwrap();
+        if top.block_id < self.blocks.len() as u64 {
+            return false;
+        }
+
+        // Validate branch
+        let mut last_block_or_none = 
+            if bottom.block_id == 0 {
+                None
+            } else {
+                self.block(bottom.block_id - 1)
+            };
+
+        for block in branch
+        {
+            if last_block_or_none.is_some()
+            {
+                let last_block = last_block_or_none.unwrap();
+
+                let (sample_start, sample_end) = self.take_sample_of_branch_at(branch, last_block.block_id);
+                if block.is_next_block(last_block).is_err() || 
+                    !block.is_valid(sample_start, sample_end)
                 {
-                    let other = self.branches.remove(&id).unwrap();
-                    let branch = self.branches.get_mut(&branch_id).unwrap();
-                    branch.merge(other);
-                    logger.log(LoggerLevel::Info, 
-                        &format!("Merged {} -> {}", branch_id, id));
-
-                    did_merge = true;
-                    break;
+                    println!("Can't merge {}", block.block_id);
+                    return false;
                 }
             }
 
-            if !did_merge {
-                break;
+            last_block_or_none = Some( block );
+        }
+ 
+        true
+    }
+
+    pub fn merge_branch(&mut self, branch: Vec<Block>)
+    {
+        assert_eq!(self.can_merge_branch(&branch), true);
+        for block in branch
+        {
+            let block_id = block.block_id as usize;
+            if block_id < self.blocks.len() {
+                self.blocks[block_id] = block;
+            } else {
+                self.blocks.push(block);
             }
         }
     }
 
-    fn remove_invalid_blocks_for_branch(&mut self, branch_id: i32, logger: &mut Logger<impl Write>) -> bool
+    pub fn walk<F>(&self, on_block: &mut F)
+        where F: FnMut(&Block)
     {
-        let new_branches;
-        let is_branch_empty;
-        {
-            let branch = &mut self.branches.get_mut(&branch_id).unwrap();
-            new_branches = branch.remove_invalid_blocks(logger);
-            is_branch_empty = branch.is_empty();
+        for block in &self.blocks {
+            on_block(block);
         }
-
-        for new_branch in new_branches 
-        {
-            let branch_id = self.generate_branch_id();
-            self.branches.insert(branch_id, new_branch);
-        }
-
-        if is_branch_empty {
-            self.branches.remove(&branch_id);
-        }
-
-        is_branch_empty
-    }
-
-    pub fn add(&mut self, block: &Block, logger: &mut Logger<impl Write>) -> BlockChainAddResult
-    {
-        match self.find_branch_id_and_add(block, logger)
-        {
-            Ok(branch_id) =>
-            {
-                self.check_merges_for_branch(branch_id, logger);
-
-                let did_remove = self.remove_invalid_blocks_for_branch(branch_id, logger);
-                if did_remove {
-                    return BlockChainAddResult::Ok;
-                }
-
-                match self.branches[&branch_id].next_missing_block()
-                {
-                    Some(id) => BlockChainAddResult::MoreNeeded(id),
-                    None => BlockChainAddResult::Ok,
-                }
-            },
-
-            Err(err) => err,
-        }
-    }
-
-    pub fn current_branch(&self) -> Option<&Branch>
-    {
-        let mut max_branch = None;
-        let mut max_length = 0;
-
-        for (_, branch) in &self.branches
-        {
-            if !branch.is_complete() {
-                continue;
-            }
-
-            let length = branch.top().block_id;
-            if length > max_length
-            {
-                max_length = length;
-                max_branch = Some( branch );
-            }
-        }
-
-        return max_branch;
     }
 
     pub fn block(&self, block_id: u64) -> Option<&Block>
     {
-        self.current_branch()?.block(block_id)
+        self.blocks.get(block_id as usize)
     }
 
     pub fn top(&self) -> Option<&Block>
     {
-        Some( self.current_branch()?.top() )
-    }
-
-    pub fn debug_log_chain<W: Write>(&self, logger: &mut Logger<W>)
-    {
-        for id in self.branches.keys()
-        {
-            let branch = &self.branches[id];
-            logger.log(LoggerLevel::Info, &format!("{}: {}", id, branch));
-        }
+        self.blocks.last()
     }
 
 }
@@ -214,107 +189,53 @@ mod tests
 {
 
     use super::*;
-    use crate::block::HASH_LEN;
+    use crate::wallet::PrivateWallet;
     use crate::miner;
 
-    fn create_blocks(count: u64) -> Vec<Block>
-    {
-        let mut blocks = Vec::<Block>::new();
-        let mut prev_hash = [0u8; HASH_LEN];
-
-        for i in 1..(count + 1)
-        {
-            let block = miner::mine_block(Block::new_debug(i, prev_hash));
-            prev_hash = block.hash().expect("Hash worked");
-            blocks.push(block);
-        }
-
-        blocks
-    }
-
-    fn chain_has_branches_of_lengths(chain: &BlockChain, lengths: &[Option<u64>])
-    {
-        let mut lengths_left = lengths.to_vec();
-        for branch in chain.branches.values()
-        {
-            let length = 
-                if branch.is_complete() { 
-                    Some( branch.top().block_id ) 
-                } else { 
-                    None 
-                };
-
-            let index_or_none = lengths_left.iter().position(|x| x == &length);
-            match index_or_none
-            {
-                Some(index) =>
-                    { lengths_left.remove(index); },
-
-                None => 
-                    panic!("Branch or length {:?} should not be in chain", length),
-            }
-        }
-    }
-
-    #[test]
-    fn test_block_chain_validation()
-    {
-        let mut test_blocks = create_blocks(4);
-        let mut logger = Logger::new(std::io::stdout(), LoggerLevel::Error);
-        let mut chain = BlockChain::new(&mut logger);
-
-        // Invalidate block(_id) 3
-        test_blocks[2].target = [0xFFu8; 4];
-        test_blocks[2] = miner::mine_block(test_blocks[2].clone());
-        test_blocks[3].prev_hash = test_blocks[2].hash().unwrap();
-        test_blocks[3] = miner::mine_block(test_blocks[3].clone());
-
-        // Add blocks in reverse, so only the last add will 
-        // actually validate the chain
-        for i in (0..test_blocks.len()).rev() {
-            chain.add(&test_blocks[i], &mut logger);
-        }
-
-        // The invalid blocks should not be there
-        assert_eq!(chain.branches.len(), 2);
-    }
+    use std::path::PathBuf;
 
     #[test]
     fn test_block_chain()
     {
-        let test_blocks_a = create_blocks(4);
-        let test_blocks_b = create_blocks(5);
-        let test_blocks_c = create_blocks(5);
-
         let mut logger = Logger::new(std::io::stdout(), LoggerLevel::Error);
-        let mut chain = BlockChain::new(&mut logger);
+        let mut chain_a = BlockChain::new(&mut logger);
+        let mut chain_b = BlockChain::new(&mut logger);
+        let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet"), &mut logger).unwrap();
         
-        // Add one chain in a random order
-        chain.add(&test_blocks_a[3], &mut logger);
-        chain.add(&test_blocks_a[2], &mut logger);
-        chain.add(&test_blocks_a[0], &mut logger);
-        chain.add(&test_blocks_a[1], &mut logger);
-        chain_has_branches_of_lengths(&chain, &[Some(4)]);
-        assert_eq!(chain.current_branch().is_some(), true);
-        assert_eq!(chain.current_branch().unwrap().top().block_id, 4);
+        let block_a = miner::mine_block(Block::new(&chain_a, &wallet).unwrap());
+        assert_eq!(chain_a.add(&block_a), BlockChainAddResult::Ok);
+        assert_eq!(chain_b.add(&block_a), BlockChainAddResult::Ok);
 
-        // Add two random blocks from a different chain
-        chain.add(&test_blocks_b[2], &mut logger);
-        chain.add(&test_blocks_b[0], &mut logger);
-        chain_has_branches_of_lengths(&chain, &[Some(4), Some(1), None]);
+        let block_b = miner::mine_block(Block::new(&chain_a, &wallet).unwrap());
+        assert_eq!(chain_a.add(&block_b), BlockChainAddResult::Ok);
+        assert_eq!(chain_b.add(&block_b), BlockChainAddResult::Ok);
 
-        // Add the last block to complete the second chain
-        chain.add(&test_blocks_b[1], &mut logger);
-        chain_has_branches_of_lengths(&chain, &[Some(4), Some(3)]);
-        assert_eq!(chain.current_branch().unwrap().top().block_id, 4);
+        let block_c_a = miner::mine_block(Block::new(&chain_a, &wallet).unwrap());
+        let block_c_b = miner::mine_block(Block::new(&chain_b, &wallet).unwrap());
+        assert_eq!(chain_a.add(&block_c_a), BlockChainAddResult::Ok);
+        assert_eq!(chain_b.add(&block_c_b), BlockChainAddResult::Ok);
+        assert_eq!(chain_a.add(&block_b), BlockChainAddResult::Duplicate);
 
-        // Add the rest of the second chain and a duplicate node from a third
-        chain.add(&test_blocks_b[3], &mut logger);
-        chain.add(&test_blocks_c[4], &mut logger);
-        chain.add(&test_blocks_b[4], &mut logger);
-        chain_has_branches_of_lengths(&chain, &[Some(4), Some(5), None]);
-        assert_eq!(chain.current_branch().unwrap().top().block_id, 5);
-    }
+        let block_d_b = miner::mine_block(Block::new(&chain_b, &wallet).unwrap());
+        assert_eq!(chain_b.add(&block_d_b), BlockChainAddResult::Ok);
+
+        let block_e_b = miner::mine_block(Block::new(&chain_b, &wallet).unwrap());
+        assert_eq!(chain_b.add(&block_e_b), BlockChainAddResult::Ok);
+
+        assert_eq!(chain_a.add(&block_e_b), BlockChainAddResult::MoreNeeded);
+        assert_eq!(chain_a.add(&block_d_b), BlockChainAddResult::Invalid);
+
+        let mut branch = Vec::<Block>::new();
+        branch.push(block_c_b);
+        assert_eq!(chain_a.can_merge_branch(&branch), false);
+
+        branch.push(block_d_b);
+        branch.push(block_e_b);
+        assert_eq!(chain_a.can_merge_branch(&branch), true);
+
+        chain_a.merge_branch(branch);
+        assert_eq!(chain_a.top().unwrap().block_id, 4);
+   }
 
 }
 

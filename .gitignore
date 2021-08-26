@@ -1,6 +1,6 @@
-/target
+target/
+bugs/
 Cargo.lock
-blockchain/
 docs/dogecoin.mp4
 docs/doge.jpg
 

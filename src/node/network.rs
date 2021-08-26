@@ -171,10 +171,10 @@ fn start_message_handler<P, W>(network_connection: Arc<Mutex<NetworkConnection<P
                 let port = network_connection_lock.port;
                 network_connection_lock.logger.log(LoggerLevel::Verbose, 
                     &format!("[{}] Got packet {:?}", port, packet));
-                network_connection_lock.logger.log(LoggerLevel::Info, &format!("[{}] Got packet", port));
+                network_connection_lock.logger.log(LoggerLevel::Verbose, &format!("[{}] Got packet", port));
 
                 handle_message_packet(from, packet, &mut network_connection_lock);
-                network_connection_lock.logger.log(LoggerLevel::Info, &format!("[{}] Handled packet", port));
+                network_connection_lock.logger.log(LoggerLevel::Verbose, &format!("[{}] Handled packet", port));
             },
 
             Ok(Message::Shutdown) =>

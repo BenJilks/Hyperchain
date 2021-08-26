@@ -1,6 +1,6 @@
 use crate::block::{Signature, Hash, HASH_LEN, PUB_KEY_LEN};
-use crate::chain::branch::Branch;
-use crate::wallet::{PrivateWallet, PublicWallet, Wallet, WalletStatus};
+use crate::chain::BlockChain;
+use crate::wallet::{PrivateWallet, PublicWallet, Wallet};
 use sha2::{Sha256, Digest};
 use serde::{Serialize, Deserialize};
 use bincode;
@@ -63,15 +63,9 @@ impl Transaction
         }
     }
 
-    pub fn for_chain<W: Wallet>(chain: Option<&Branch>, from: &PrivateWallet, to: &W, amount: f32, fee: f32) -> Option<Self>
+    pub fn for_chain<W: Wallet>(chain: &BlockChain, from: &PrivateWallet, to: &W, amount: f32, fee: f32) -> Option<Self>
     {
-        let status = 
-            if chain.is_some() { 
-                from.get_status(chain.unwrap())
-            } else {
-                WalletStatus::default()
-            };
-
+        let status = from.get_status(chain);
         let header = TransactionHeader 
         { 
             // TODO: This id should be calculated correctly
@@ -147,11 +141,11 @@ mod tests
         let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet"), &mut logger).unwrap();
         let other = PrivateWallet::read_from_file(&PathBuf::from("other.wallet"), &mut logger).unwrap();
 
-        let block = miner::mine_block(Block::new(chain.current_branch(), &wallet).expect("Create block"));
-        chain.add(&block, &mut logger);
+        let block = miner::mine_block(Block::new(&chain, &wallet).expect("Create block"));
+        chain.add(&block);
 
         {
-            let transaction = Transaction::for_chain(chain.current_branch(), &wallet, &other, 2.4, 0.2)
+            let transaction = Transaction::for_chain(&chain, &wallet, &other, 2.4, 0.2)
                 .expect("Create transaction");
             transaction.header.hash().expect("Hash header");
             assert_eq!(transaction.is_valid(), true);
@@ -159,13 +153,13 @@ mod tests
         }
 
         {
-            let transaction = Transaction::for_chain(chain.current_branch(), &wallet, &other, -1.6, 0.0)
+            let transaction = Transaction::for_chain(&chain, &wallet, &other, -1.6, 0.0)
                 .expect("Create transaction");
             assert_eq!(transaction.is_valid(), false);
         }
 
         {
-            let transaction = Transaction::for_chain(chain.current_branch(), &wallet, &other, 0.0, -0.0001)
+            let transaction = Transaction::for_chain(&chain, &wallet, &other, 0.0, -0.0001)
                 .expect("Create transaction");
             assert_eq!(transaction.is_valid(), false);
         }

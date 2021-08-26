@@ -2,9 +2,9 @@ mod private_wallet;
 mod public_wallet;
 pub use private_wallet::PrivateWallet;
 pub use public_wallet::PublicWallet;
-use crate::block::{PUB_KEY_LEN, HASH_LEN};
+use crate::block::{Block, PUB_KEY_LEN, HASH_LEN};
 use crate::block::transactions::BlockTransactions;
-use crate::chain::branch::Branch;
+use crate::chain::BlockChain;
 
 use sha2::{Sha256, Digest};
 use serde::{Serialize, Deserialize};
@@ -54,7 +54,7 @@ pub trait Wallet
         *slice_as_array!(&hash, [u8; HASH_LEN]).unwrap()
     }
 
-    fn get_status(&self, chain: &Branch) -> WalletStatus
+    fn get_status(&self, chain: &BlockChain) -> WalletStatus
         where Self: Sized
     {
         let mut status = WalletStatus
@@ -64,7 +64,7 @@ pub trait Wallet
         };
 
         let address = self.get_address();
-        chain.walk(&mut |block| {
+        chain.walk(&mut |block: &Block| {
             block.update_wallet_status(&address, &mut status);
         });
 
@@ -93,25 +93,25 @@ mod tests
         let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet"), &mut logger).unwrap();
         let other = PrivateWallet::read_from_file(&PathBuf::from("other.wallet"), &mut logger).unwrap();
 
-        let block_a = miner::mine_block(Block::new(chain.current_branch(), &wallet).expect("Create block"));
-        chain.add(&block_a, &mut logger);
+        let block_a = miner::mine_block(Block::new(&chain, &wallet).expect("Create block"));
+        chain.add(&block_a);
 
-        let block_b = miner::mine_block(Block::new(chain.current_branch(), &other).expect("Create block"));
-        chain.add(&block_b, &mut logger);
+        let block_b = miner::mine_block(Block::new(&chain, &other).expect("Create block"));
+        chain.add(&block_b);
         
-        let mut block_c = Block::new(chain.current_branch(), &wallet).expect("Create block");
-        block_c.add_transaction(Transaction::for_chain(chain.current_branch(), &wallet, &other, 4.6, 0.2)
+        let mut block_c = Block::new(&chain, &wallet).expect("Create block");
+        block_c.add_transaction(Transaction::for_chain(&chain, &wallet, &other, 4.6, 0.2)
             .expect("Create transaction"));
-        block_c.add_transaction(Transaction::for_chain(chain.current_branch(), &other, &wallet, 1.4, 0.2)
+        block_c.add_transaction(Transaction::for_chain(&chain, &other, &wallet, 1.4, 0.2)
             .expect("Create transaction"));
         block_c = miner::mine_block(block_c);
-        chain.add(&block_c, &mut logger);
+        chain.add(&block_c);
 
-        let wallet_status = wallet.get_status(chain.current_branch().unwrap());
+        let wallet_status = wallet.get_status(&chain);
         assert_eq!(wallet_status.balance, block_a.calculate_reward() + block_c.calculate_reward() - 4.6 - 0.2 + 1.4 + 0.2 + 0.2);
         assert_eq!(wallet_status.max_id, 1);
 
-        let other_status = other.get_status(chain.current_branch().unwrap());
+        let other_status = other.get_status(&chain);
         assert_eq!(other_status.balance, block_b.calculate_reward() + (4.6 - 1.4 - 0.2));
         assert_eq!(other_status.max_id, 1);
     }

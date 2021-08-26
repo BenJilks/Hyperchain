@@ -40,7 +40,7 @@ impl BlockValidate for Block
 
     fn is_next_block(&self, prev: &Block) -> Result<(), Error>
     {
-        if self.block_id > 1
+        if self.block_id > 0
         {
             if self.block_id != prev.block_id + 1 {
                 return Err(Error::NotNextBlock);

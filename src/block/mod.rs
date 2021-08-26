@@ -3,10 +3,10 @@ pub mod transactions;
 pub mod target;
 use crate::transaction::Transaction;
 use crate::page::Page;
-use crate::chain::branch::Branch;
+use crate::chain::BlockChain;
 use crate::wallet::Wallet;
 use crate::error::Error;
-use target::{calculate_target, Target, BLOCK_SAMPLE_SIZE};
+use target::{calculate_target, Target};
 
 use sha2::{Sha256, Digest};
 use serde::{Serialize, Deserialize};
@@ -21,7 +21,7 @@ pub type Hash = [u8; HASH_LEN];
 
 const BLOCK_SIZE: usize = 16 * 1024 * 1024; // 16 MB
 
-#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Clone)]
 pub struct Block
 {
     pub prev_hash: Hash,
@@ -33,6 +33,21 @@ pub struct Block
     pub timestamp: u128,
     pub target: Target,
     pub pow: u64, // TODO: This should be a correct size
+}
+
+impl std::fmt::Debug for Block
+{
+
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
+    {
+        f.debug_struct("Block")
+            .field("block_id", &self.block_id)
+            .field("timestamp", &self.timestamp)
+            .field("target", &self.target)
+            .field("pow", &self.pow)
+            .finish()
+    }
+
 }
 
 fn current_timestamp() -> u128
@@ -49,32 +64,29 @@ impl Block
         10.0
     }
 
-    pub fn new<W: Wallet>(chain_or_none: Option<&Branch>, raward_to: &W) -> Result<Self, Error>
+    pub fn new<W: Wallet>(chain: &BlockChain, raward_to: &W) -> Result<Self, Error>
     {
-        let mut prev_block_id = 0;
-        let mut prev_block_hash = [0u8; HASH_LEN];
-        let mut target = calculate_target(None, None);
-        if chain_or_none.is_some()
-        {
-            let chain = chain_or_none.unwrap();
-            let top = chain.top();
-            let sample_start = 
-                if top.block_id < BLOCK_SAMPLE_SIZE {
-                    None
-                } else {
-                    chain.block(top.block_id - BLOCK_SAMPLE_SIZE)
-                };
+        let (sample_start, sample_end) = chain.take_sample();
+        let target = calculate_target(sample_start, sample_end);
+        let (prev_block_id, prev_block_hash) = 
+            match chain.top()
+            {
+                Some(top) => (Some(top.block_id), top.hash()?),
+                None => (None, [0u8; HASH_LEN]),
+            };
 
-            target = calculate_target(sample_start, Some(top));
-            prev_block_id = top.block_id;
-            prev_block_hash = top.hash()?;
-        }
+        let block_id =
+            match prev_block_id
+            {
+                Some(id) => id + 1,
+                None => 0,
+            };
 
         let timestamp = current_timestamp();
         Ok(Block
         {
             prev_hash: prev_block_hash,
-            block_id: prev_block_id + 1,
+            block_id: block_id,
             raward_to: raward_to.get_address(),
 
             pages: Vec::new(),
@@ -156,9 +168,10 @@ mod tests
         let mut logger = Logger::new(std::io::stdout(), LoggerLevel::Error);
         let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet"), &mut logger).unwrap();
         let other = PrivateWallet::read_from_file(&PathBuf::from("other.wallet"), &mut logger).unwrap();
+        let chain = BlockChain::new(&mut logger);
 
-        let mut block = Block::new(None, &wallet).expect("Can create block");
-        let transaction = Transaction::for_chain(None, &wallet, &other, 4.0, 1.0)
+        let mut block = Block::new(&chain, &wallet).expect("Can create block");
+        let transaction = Transaction::for_chain(&chain, &wallet, &other, 4.0, 1.0)
             .expect("Create transaction");
         block.add_transaction(transaction);
 

@@ -1,17 +1,13 @@
 use crate::block::Block;
 use crate::block::validate::BlockValidate;
-use crate::chain::BlockChain;
-use crate::wallet::Wallet;
-use crate::logger::Logger;
+use crate::node::network::NetworkConnection;
+use crate::node::Node;
 
+use std::sync::{Arc, Mutex};
 use std::io::Write;
-use std::time::SystemTime;
 
 pub fn mine_block(mut block: Block) -> Block
 {
-    // let delay = rand::random::<u64>() % 1000;
-    // std::thread::sleep(std::time::Duration::from_millis(delay));
-
     while !block.is_pow_valid() {
         block.pow += 1;
     }
@@ -19,12 +15,28 @@ pub fn mine_block(mut block: Block) -> Block
     block
 }
 
-pub fn mine<W: Wallet>(chain: &mut BlockChain, wallet: &W, count: i32, logger: &mut Logger<impl Write>)
+pub fn mine_block_unless_found<W>(network_connection: &Arc<Mutex<NetworkConnection<Node<W>, W>>>, 
+                                  mut block: Block) -> Block
+    where W: Write + Clone + Sync + Send + 'static
 {
-    for _ in 0..count
-    {
-        let block = Block::new(chain.current_branch(), wallet).expect("Can create new block");
-        chain.add(&mine_block(block), logger);
+    while !block.is_pow_valid() 
+    { 
+        block.pow += 1;
+
+        // Check this block wasn't already mined
+        if block.pow % 100 == 0
+        {
+            // Delay for testing
+            std::thread::sleep(std::time::Duration::from_millis(10));
+
+            let mut network_connection_lock = network_connection.lock().unwrap();
+            let chain = &network_connection_lock.handler().chain();
+            if chain.block(block.block_id).is_some() {
+                break;
+            }
+        }
     }
+
+    block
 }
 

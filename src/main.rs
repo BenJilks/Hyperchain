@@ -28,13 +28,56 @@ mod error;
 mod logger;
 mod node;
 use logger::{Logger, LoggerLevel, StdLoggerOutput};
+use chain::{BlockChain, BlockChainAddResult};
 use block::Block;
-use chain::BlockChain;
+use block::validate::BlockValidate;
 use node::Node;
 use node::network::{NetworkConnection, Packet};
 use wallet::PrivateWallet;
 
 use std::path::PathBuf;
+use std::io::Write;
+use std::sync::{Arc, Mutex};
+
+fn mine_next_block<W>(network_connection: &Arc<Mutex<NetworkConnection<Node<W>, W>>>,
+                      wallet: &PrivateWallet)
+    where W: Write + Clone + Sync + Send + 'static,
+{
+    let mut block;
+    {
+        // Create the next block
+        let mut network_connection_lock = network_connection.lock().unwrap();
+        let chain = &network_connection_lock.handler().chain();
+        block = Block::new(&chain, wallet).unwrap();
+    }
+
+    // Do the mining work
+    block = miner::mine_block_unless_found(network_connection, block);
+    if !block.is_pow_valid() {
+        return;
+    }
+
+    // Add it to the chain if it's still the top
+    let mut network_connection_lock = network_connection.lock().unwrap();
+    let chain = &mut network_connection_lock.handler().chain();
+    let top = chain.top();
+    if top.is_none() || top.unwrap().block_id + 1 == block.block_id 
+    {
+        match chain.add(&block)
+        {
+            BlockChainAddResult::Ok =>
+            {
+                println!("Won block {}! With difficulty {}", 
+                    block.block_id, 
+                    block::target::difficulty(&block.target));
+
+                network_connection_lock.manager().send(Packet::Block(block));
+            },
+
+            _ => {},
+        }
+    }
+}
 
 // TODO: This will all be replaced with a daemon/ipc system
 fn main()
@@ -56,35 +99,8 @@ fn main()
     // Register a common node to connect to
     network_connection.lock().unwrap().manager().register_node("127.0.0.1:8001", None);
     
-    loop
-    {
-        let mut block;
-        {
-            // Create the next block
-            let mut network_connection_lock = network_connection.lock().unwrap();
-            let chain = &network_connection_lock.handler().chain();
-            block = Block::new(chain.current_branch(), &wallet).unwrap();
-        }
-
-        // Do the mining work
-        // TODO: Cancel the mining if we know this already
-        block = miner::mine_block(block);
-
-        {
-            // Add it to the chain if it's still the top
-            let mut network_connection_lock = network_connection.lock().unwrap();
-            let chain = &mut network_connection_lock.handler().chain();
-            let top = chain.top();
-            if top.is_none() || top.unwrap().block_id + 1 == block.block_id 
-            {
-                println!("Won block {}! With difficulty {}", 
-                    block.block_id, 
-                    block::target::difficulty(&block.target));
-
-                chain.add(&block, &mut logger);
-                network_connection_lock.manager().send(Packet::Block(block));
-            }
-        }
+    loop {
+        mine_next_block(&network_connection, &wallet);
     }
 }
 
