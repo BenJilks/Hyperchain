@@ -1,5 +1,5 @@
 [package]
-name = "decentralized-web"
+name = "hyperchain-service"
 version = "0.1.0"
 authors = ["BenJilks <benjyjilks@gmail.com>"]
 edition = "2018"
@@ -7,6 +7,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+libhyperchain = { path = "../lib" }
 sha2 = "0.9.3"
 slice_as_array = { version = "1.1.0", default-features = false }
 rsa = "0.4.0"

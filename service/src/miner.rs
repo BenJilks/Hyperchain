@@ -30,6 +30,10 @@ pub fn mine_block_unless_found<W>(network_connection: &Arc<Mutex<NetworkConnecti
             std::thread::sleep(std::time::Duration::from_millis(10));
 
             let mut network_connection_lock = network_connection.lock().unwrap();
+            if network_connection_lock.should_shutdown() {
+                break;
+            }
+
             let chain = &network_connection_lock.handler().chain();
             if chain.block(block.block_id).is_some() {
                 break;
@@ -39,4 +43,3 @@ pub fn mine_block_unless_found<W>(network_connection: &Arc<Mutex<NetworkConnecti
 
     block
 }
-

@@ -1,5 +1,10 @@
 use crate::logger::{LoggerLevel, Logger};
 use crate::block::Block;
+
+use tcp_channel::{ReceiverBuilder, ChannelRecv};
+use tcp_channel::{SenderBuilder, ChannelSend};
+use tcp_channel::LittleEndian;
+use serde::{Serialize, Deserialize};
 use std::io::{Write, BufReader, BufWriter};
 use std::net::{TcpStream, TcpListener};
 use std::thread::JoinHandle;
@@ -7,10 +12,6 @@ use std::sync::mpsc::{channel, Sender, Receiver, RecvTimeoutError};
 use std::sync::{Mutex, MutexGuard, Arc};
 use std::collections::{HashSet, HashMap};
 use std::time::Duration;
-use tcp_channel::{ReceiverBuilder, ChannelRecv};
-use tcp_channel::{SenderBuilder, ChannelSend};
-use tcp_channel::LittleEndian;
-use serde::{Serialize, Deserialize};
 
 type TcpReceiver<T> = tcp_channel::Receiver<T, LittleEndian>;
 type TcpSender<T> = tcp_channel::Sender<T, LittleEndian>;
@@ -71,8 +72,7 @@ fn start_packet_reciver<W>(server_ip: String, mut recv: TcpReceiver<Packet>,
     })
 }
 
-fn start_node_listner<P, W>(port: u16, network_connection: Arc<Mutex<NetworkConnection<P, W>>>,
-                            should_shutdown: Arc<Mutex<bool>>) -> JoinHandle<()>
+fn start_node_listner<P, W>(port: u16, network_connection: Arc<Mutex<NetworkConnection<P, W>>>) -> JoinHandle<()>
     where P: PacketHandler<W> + Sync + Send + 'static,
           W: Write + Clone + Sync + Send + 'static
 {
@@ -88,7 +88,7 @@ fn start_node_listner<P, W>(port: u16, network_connection: Arc<Mutex<NetworkConn
                 network_connection_lock.logger.log(LoggerLevel::Info, 
                     &format!("[{}] Got connection request from {}", port, address));
 
-                if *should_shutdown.lock().unwrap() {
+                if network_connection_lock.should_shutdown() {
                     break;
                 }
 
@@ -218,7 +218,7 @@ fn start_network_connection<P, W>(network_connection: Arc<Mutex<NetworkConnectio
 
     // Start server for other nodes to connect to
     network_connection_lock.node_listner_thread = Some(start_node_listner(network_connection_lock.port,
-        network_connection.clone(), network_connection_lock.should_shutdown.clone()));
+        network_connection.clone()));
 
     // Start thread to handle incoming packets
     network_connection_lock.message_handler_thread = Some(start_message_handler( 
@@ -236,7 +236,8 @@ struct Connection
 impl Connection
 {
 
-    pub fn new<W>(port: u16, address: &str, stream: TcpStream, message_sender: Sender<Message>, logger: Logger<W>) -> std::io::Result<Self>
+    pub fn new<W>(port: u16, address: &str, stream: TcpStream, 
+                  message_sender: Sender<Message>, logger: Logger<W>) -> std::io::Result<Self>
         where W: Write + Sync + Send + 'static
     {
         let reciver = ReceiverBuilder::new()
@@ -448,7 +449,7 @@ pub struct NetworkConnection<P, W>
           P: PacketHandler<W> + Sync + Send + 'static
 {
     port: u16,
-    should_shutdown: Arc<Mutex<bool>>,
+    should_shutdown: bool,
     packet_handler: P,
     logger: Logger<W>,
 
@@ -465,11 +466,10 @@ impl<P, W> NetworkConnection<P, W>
 
     pub fn new(port: u16, packet_handler: P, logger: Logger<W>) -> Arc<Mutex<Self>>
     {
-        let should_shutdown = Arc::from(Mutex::from(false));
         let network_connecton = Arc::from(Mutex::from(Self
         {
             port,
-            should_shutdown,
+            should_shutdown: false,
             packet_handler,
             logger,
 
@@ -481,6 +481,49 @@ impl<P, W> NetworkConnection<P, W>
 
         start_network_connection(network_connecton.clone());
         network_connecton
+    }
+
+    fn signal_stop_threads(&mut self) -> Vec<JoinHandle<()>>
+    {
+        let mut threads_to_wait_for = Vec::<JoinHandle<()>>::new();
+
+        self.logger.log(LoggerLevel::Info, 
+            &format!("[{}] Shutting down network connection", self.port));
+
+        // Shutdown node listner
+        if self.node_listner_thread.is_some()
+        {
+            self.should_shutdown = true;
+            let node_listner_thread = self.node_listner_thread.take().unwrap();
+            let _ = TcpStream::connect(&format!("127.0.0.1:{}", self.port));
+            threads_to_wait_for.push(node_listner_thread);
+        }
+
+        // Shutdown message handler
+        if self.message_handler_thread.is_some() && self.message_sender.is_some()
+        {
+            let message_handler_thread = self.message_handler_thread.take().unwrap();
+            self.message_sender.as_mut().unwrap().send(Message::Shutdown).expect("Sent shutdown message");
+            threads_to_wait_for.push(message_handler_thread);
+        }
+
+        threads_to_wait_for
+    }
+
+    pub fn shutdown(this: &Arc<Mutex<Self>>)
+    {
+        let threads_to_wait_for = this
+            .lock().unwrap()
+            .signal_stop_threads();
+
+        for thread in threads_to_wait_for {
+            thread.join().unwrap();
+        }
+    }
+
+    pub fn should_shutdown(&self) -> bool
+    {
+        self.should_shutdown
     }
 
     fn open_manager(&mut self) -> Receiver<Message>
@@ -514,24 +557,8 @@ impl<P, W> Drop for NetworkConnection<P, W>
 
     fn drop(&mut self)
     {
-        self.logger.log(LoggerLevel::Info, 
-            &format!("[{}] Shutting down network connection", self.port));
-
-        // Shutdown node listner
-        if self.node_listner_thread.is_some()
-        {
-            let node_listner_thread = self.node_listner_thread.take().unwrap();
-            *self.should_shutdown.lock().unwrap() = true;
-            let _ = TcpStream::connect(&format!("127.0.0.1:{}", self.port));
-            node_listner_thread.join().expect("Joined server thread");
-        }
-
-        // Shutdown message handler
-        if self.message_handler_thread.is_some() && self.message_sender.is_some()
-        {
-            let message_handler_thread = self.message_handler_thread.take().unwrap();
-            self.message_sender.as_mut().unwrap().send(Message::Shutdown).expect("Sent shutdown message");
-            message_handler_thread.join().expect("Joined message handler thread");
+        for thread in self.signal_stop_threads() {
+            thread.join().unwrap();
         }
     }
 

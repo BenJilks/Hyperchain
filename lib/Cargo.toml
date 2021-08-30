@@ -1,0 +1,9 @@
+[package]
+name = "libhyperchain"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+serde = { version = "1.0.125", features = ["derive"] }
+serde_json = "1.0.59"
+tcp-channel = "0.3.2"
