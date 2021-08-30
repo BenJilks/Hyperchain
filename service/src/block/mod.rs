@@ -5,12 +5,13 @@ use crate::transaction::Transaction;
 use crate::page::Page;
 use crate::chain::BlockChain;
 use crate::wallet::Wallet;
-use crate::error::Error;
 use target::{calculate_target, Target};
 
 use sha2::{Sha256, Digest};
 use serde::{Serialize, Deserialize};
 use std::time::SystemTime;
+use std::error::Error;
+use std::fmt::Display;
 use bincode;
 use slice_as_array;
 
@@ -20,6 +21,11 @@ pub type Signature = [u8; PUB_KEY_LEN];
 pub type Hash = [u8; HASH_LEN];
 
 const BLOCK_SIZE: usize = 16 * 1024 * 1024; // 16 MB
+
+fn current_timestamp() -> u128
+{
+    SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis()
+}
 
 #[derive(Serialize, Deserialize, PartialEq, Clone)]
 pub struct Block
@@ -50,9 +56,27 @@ impl std::fmt::Debug for Block
 
 }
 
-fn current_timestamp() -> u128
+#[derive(Debug)]
+pub enum BlockError
 {
-    SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis()
+    BlockTooLarge,
+}
+
+impl Error for BlockError 
+{
+}
+
+impl Display for BlockError
+{
+
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result
+    {
+        match self
+        {
+            BlockError::BlockTooLarge => write!(f, "Block is too large"),
+        }
+    }
+
 }
 
 impl Block
@@ -64,7 +88,7 @@ impl Block
         10.0
     }
 
-    pub fn new<W: Wallet>(chain: &BlockChain, raward_to: &W) -> Result<Self, Error>
+    pub fn new<W: Wallet>(chain: &BlockChain, raward_to: &W) -> Result<Self, Box<dyn Error>>
     {
         let (sample_start, sample_end) = chain.take_sample();
         let target = calculate_target(sample_start, sample_end);
@@ -123,22 +147,17 @@ impl Block
         self.transactions.push(transaction);
     }
 
-    pub fn as_bytes(&self) -> Result<Vec<u8>, Error>
+    pub fn as_bytes(&self) -> Result<Vec<u8>, Box<dyn Error>>
     {
-        let bytes_or_error = bincode::serialize(self);
-        if bytes_or_error.is_err() {
-            return Err(Error::Other(bytes_or_error.err().unwrap().to_string()));
-        }
-
-        let bytes = bytes_or_error.unwrap();
+        let bytes = bincode::serialize(self)?;
         if bytes.len() > BLOCK_SIZE {
-            Err(Error::BlockTooLarge)
+            Err(Box::new(BlockError::BlockTooLarge))
         } else {
             Ok(bytes)
         }
     }
 
-    pub fn hash(&self) -> Result<Hash, Error>
+    pub fn hash(&self) -> Result<Hash, Box<dyn Error>>
     {
         let mut hasher = Sha256::default();
         let bytes = self.as_bytes()?;
@@ -155,10 +174,11 @@ mod tests
 {
 
     use super::*;
-    use super::validate::BlockValidate;
+    use super::validate::{BlockValidate, BlockValidationResult};
     use super::transactions::BlockTransactions;
     use crate::logger::{Logger, LoggerLevel};
-    use crate::wallet::{PrivateWallet, WalletStatus};
+    use crate::wallet::WalletStatus;
+    use crate::wallet::private_wallet::PrivateWallet;
     use crate::miner;
     use std::path::PathBuf;
 
@@ -175,13 +195,13 @@ mod tests
             .expect("Create transaction");
         block.add_transaction(transaction);
 
-        assert_eq!(block.is_pow_valid(), false);
-        assert_eq!(block.is_target_valid(None, None), true);
-        assert_eq!(block.is_valid(None, None), false);
+        assert_ne!(block.is_pow_valid().unwrap(), BlockValidationResult::Ok);
+        assert_eq!(block.is_target_valid(None, None), BlockValidationResult::Ok);
+        assert_ne!(block.is_valid(None, None).unwrap(), BlockValidationResult::Ok);
 
         block = miner::mine_block(block);
-        assert_eq!(block.is_pow_valid(), true);
-        assert_eq!(block.is_valid(None, None), true);
+        assert_eq!(block.is_pow_valid().unwrap(), BlockValidationResult::Ok);
+        assert_eq!(block.is_valid(None, None).unwrap(), BlockValidationResult::Ok);
 
         {
             let mut wallet_status = WalletStatus::default();

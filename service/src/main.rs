@@ -25,7 +25,6 @@ mod transaction;
 mod page;
 mod miner;
 mod wallet;
-mod error;
 mod logger;
 mod node;
 mod service;

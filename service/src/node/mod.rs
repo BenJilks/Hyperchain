@@ -1,13 +1,12 @@
 pub mod network;
 use network::{PacketHandler, ConnectionManager, Packet};
 use crate::logger::{Logger, LoggerLevel};
-use crate::chain::{BlockChain, BlockChainAddResult};
+use crate::chain::{BlockChain, BlockChainAddResult, BlockChainCanMergeResult};
 use crate::block::Block;
 use crate::block::validate::BlockValidate;
 
 use std::io::Write;
-use std::sync::mpsc::{Receiver, Sender, channel};
-use std::sync::{Arc, Mutex};
+use std::error::Error;
 use std::collections::HashMap;
 
 pub struct Node<W>
@@ -63,18 +62,19 @@ impl<W> Node<W>
         }
     }
 
-    fn complete_branch(&mut self, from: &str)
+    fn complete_branch(&mut self, from: &str) -> Result<(), Box<dyn Error>>
     {
         if !self.branches.contains_key(from) {
-            return;
+            return Ok(());
         }
 
         let branch = self.branches.remove(from).unwrap();
-        if self.chain.can_merge_branch(&branch) 
+        if self.chain.can_merge_branch(&branch)? == BlockChainCanMergeResult::Ok
         {
             self.logger.log(LoggerLevel::Info, &format!("[{}] Merge longer branch", self.port));
             self.chain.merge_branch(branch);
         }
+        Ok(())
     }
 
 }
@@ -84,6 +84,7 @@ impl<W> PacketHandler<W> for Node<W>
 {
 
     fn on_packet(&mut self, from: &str, packet: Packet, connection_manager: &mut ConnectionManager<W>)
+        -> Result<(), Box<dyn Error>>
     {
         match packet
         {
@@ -105,7 +106,7 @@ impl<W> PacketHandler<W> for Node<W>
             Packet::Block(block) =>
             {
                 // Try and add the block to the chain, if it's a duplicate or invalid, ignore it
-                match self.chain.add(&block)
+                match self.chain.add(&block)?
                 {
                     BlockChainAddResult::Ok =>
                     {
@@ -114,14 +115,14 @@ impl<W> PacketHandler<W> for Node<W>
                         connection_manager.send(Packet::Block(block.clone()));
                     },
 
-                    BlockChainAddResult::Invalid | BlockChainAddResult::MoreNeeded => 
+                    BlockChainAddResult::Invalid(_) | BlockChainAddResult::MoreNeeded => 
                     {
                         self.logger.log(LoggerLevel::Info, &format!("[{}] Invalid block {}", self.port, block.block_id));
 
                         let block_id = block.block_id;
                         self.add_to_branch(from, block);
                         if block_id == 0 {
-                            self.complete_branch(from);
+                            self.complete_branch(from)?;
                         } else {
                             connection_manager.send_to(Packet::BlockRequest(block_id - 1), |x| x == from);
                         }
@@ -130,7 +131,7 @@ impl<W> PacketHandler<W> for Node<W>
                     BlockChainAddResult::Duplicate => 
                     {
                         self.logger.log(LoggerLevel::Verbose, &format!("[{}] Duplicate block {}", self.port, block.block_id));
-                        self.complete_branch(from);
+                        self.complete_branch(from)?;
                     },
                 }
             },
@@ -149,6 +150,8 @@ impl<W> PacketHandler<W> for Node<W>
             Packet::Ping => 
                 self.logger.log(LoggerLevel::Info, "Ping!"),
         }
+
+        Ok(())
     }
 
 }
@@ -160,7 +163,7 @@ mod tests
     use super::*;
     use network::NetworkConnection;
     use crate::logger::{Logger, LoggerLevel, StdLoggerOutput};
-    use crate::wallet::PrivateWallet;
+    use crate::wallet::private_wallet::PrivateWallet;
     use crate::block::Block;
     use crate::miner;
 

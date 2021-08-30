@@ -1,7 +1,5 @@
-mod private_wallet;
-mod public_wallet;
-pub use private_wallet::PrivateWallet;
-pub use public_wallet::PublicWallet;
+pub mod private_wallet;
+pub mod public_wallet;
 use crate::block::{Block, PUB_KEY_LEN, HASH_LEN};
 use crate::block::transactions::BlockTransactions;
 use crate::chain::BlockChain;
@@ -78,6 +76,7 @@ mod tests
 {
 
     use super::*;
+    use super::private_wallet::PrivateWallet;
     use crate::logger::{Logger, LoggerLevel};
     use crate::block::Block;
     use crate::transaction::Transaction;

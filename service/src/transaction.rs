@@ -1,13 +1,39 @@
 use crate::block::{Signature, Hash, HASH_LEN, PUB_KEY_LEN};
 use crate::chain::BlockChain;
-use crate::wallet::{PrivateWallet, PublicWallet, Wallet};
+use crate::wallet::Wallet;
+use crate::wallet::private_wallet::PrivateWallet;
+use crate::wallet::public_wallet::{PublicWallet, WalletValidationResult};
 use sha2::{Sha256, Digest};
 use serde::{Serialize, Deserialize};
 use bincode;
 
 use std::string::ToString;
+use std::error::Error;
 
 big_array! { BigArray; }
+
+#[derive(Debug, PartialEq)]
+pub enum TransactionValidationResult
+{
+    Ok,
+    Negative,
+    Wallet(WalletValidationResult),
+}
+
+impl std::fmt::Display for TransactionValidationResult
+{
+
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result
+    {
+        match self
+        {
+            TransactionValidationResult::Ok => write!(f, "Ok"),
+            TransactionValidationResult::Negative => write!(f, "Can't have negitive transaction amounts"),
+            TransactionValidationResult::Wallet(wallet) => write!(f, "{}", wallet),
+        }
+    }
+
+}
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct TransactionHeader
@@ -36,16 +62,12 @@ pub struct Transaction
 impl TransactionHeader
 {
      
-    pub fn hash(&self) -> Option<Vec<u8>>
+    pub fn hash(&self) -> Result<Vec<u8>, Box<dyn Error>>
     {
-        let result = bincode::serialize(self);
-        if result.is_err() {
-            return None;
-        }
-
+        let result = bincode::serialize(self)?;
         let mut hasher = Sha256::new();
-        hasher.update(&result.unwrap());
-        Some( hasher.finalize().to_vec() )
+        hasher.update(&result);
+        Ok( hasher.finalize().to_vec() )
     }
 
 }
@@ -81,19 +103,23 @@ impl Transaction
         Some( Self::new(header, signature, from.get_e()) )
     }
 
-    pub fn is_valid(&self) -> bool
+    pub fn is_valid(&self) -> Result<TransactionValidationResult, Box<dyn Error>>
     {
         if self.header.amount < 0.0 {
-            return false;
+            return Ok(TransactionValidationResult::Negative);
         }
 
         if self.header.transaction_fee < 0.0 {
-            return false;
+            return Ok(TransactionValidationResult::Negative);
         }
 
         let wallet = PublicWallet::from_public_key_e(self.header.from, self.e);
-        let header = self.header.hash().expect("Hash header");
-        wallet.verify(&header, &self.signature)
+        let header = self.header.hash()?;
+        match wallet.verify(&header, &self.signature)?
+        {
+            WalletValidationResult::Ok => Ok(TransactionValidationResult::Ok),
+            result => Ok(TransactionValidationResult::Wallet(result)),
+        }
     }
 
     pub fn get_from_address(&self) -> [u8; HASH_LEN]
@@ -148,20 +174,20 @@ mod tests
             let transaction = Transaction::for_chain(&chain, &wallet, &other, 2.4, 0.2)
                 .expect("Create transaction");
             transaction.header.hash().expect("Hash header");
-            assert_eq!(transaction.is_valid(), true);
+            assert_eq!(transaction.is_valid().unwrap(), TransactionValidationResult::Ok);
             assert_eq!(transaction.to_string(), "aLOExVDb0w... --[ 2.4 + 0.2tx ]--> zCPOqvKFuo...");
         }
 
         {
             let transaction = Transaction::for_chain(&chain, &wallet, &other, -1.6, 0.0)
                 .expect("Create transaction");
-            assert_eq!(transaction.is_valid(), false);
+            assert_ne!(transaction.is_valid().unwrap(), TransactionValidationResult::Ok);
         }
 
         {
             let transaction = Transaction::for_chain(&chain, &wallet, &other, 0.0, -0.0001)
                 .expect("Create transaction");
-            assert_eq!(transaction.is_valid(), false);
+            assert_ne!(transaction.is_valid().unwrap(), TransactionValidationResult::Ok);
         }
     }
 

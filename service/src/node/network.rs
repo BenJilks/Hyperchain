@@ -12,6 +12,7 @@ use std::sync::mpsc::{channel, Sender, Receiver, RecvTimeoutError};
 use std::sync::{Mutex, MutexGuard, Arc};
 use std::collections::{HashSet, HashMap};
 use std::time::Duration;
+use std::error::Error;
 
 type TcpReceiver<T> = tcp_channel::Receiver<T, LittleEndian>;
 type TcpSender<T> = tcp_channel::Sender<T, LittleEndian>;
@@ -110,7 +111,8 @@ fn start_node_listner<P, W>(port: u16, network_connection: Arc<Mutex<NetworkConn
 pub trait PacketHandler<W>
     where W: Write + Clone + Sync + Send + 'static
 {
-    fn on_packet(&mut self, from: &str, packet: Packet, connection_manager: &mut ConnectionManager<W>);
+    fn on_packet(&mut self, from: &str, packet: Packet, connection_manager: &mut ConnectionManager<W>) 
+        -> Result<(), Box<dyn Error>>;
 }
 
 fn handle_message_packet<P, W>(from: String, packet: Packet, 
@@ -119,6 +121,19 @@ fn handle_message_packet<P, W>(from: String, packet: Packet,
           W: Write + Clone + Sync + Send + 'static
 {
     let port = network_connection.port;
+
+    let handle_packet = |network_connection: &mut NetworkConnection<P, W>, packet, manager_lock|
+    {
+        match network_connection.handler().on_packet(&from, packet, manager_lock)
+        {
+            Ok(_) => {},
+            Err(err) =>
+            {
+                network_connection.logger.log(
+                    LoggerLevel::Error, &format!("Error handling packet: {}", err))
+            },
+        }
+    };
 
     match &packet
     {
@@ -143,7 +158,7 @@ fn handle_message_packet<P, W>(from: String, packet: Packet,
 
                 let manager = network_connection.connection_manager.clone().unwrap();
                 let mut manager_lock = manager.lock().unwrap();
-                network_connection.handler().on_packet(&from, packet, &mut manager_lock)
+                handle_packet(network_connection, packet, &mut manager_lock);
             }
         },
 
@@ -151,7 +166,7 @@ fn handle_message_packet<P, W>(from: String, packet: Packet,
         {
             let manager = network_connection.connection_manager.clone().unwrap();
             let mut manager_lock = manager.lock().unwrap();
-            network_connection.handler().on_packet(&from, packet, &mut manager_lock)
+            handle_packet(network_connection, packet, &mut manager_lock);
         },
     }
 }
@@ -580,9 +595,11 @@ mod tests
         where W: Write + Clone + Sync + Send + 'static
     {
 
-        fn on_packet(&mut self, _: &str, packet: Packet, _: &mut ConnectionManager<W>)
+        fn on_packet(&mut self, _: &str, packet: Packet, _: &mut ConnectionManager<W>) 
+            -> Result<(), Box<dyn Error>>
         {
             let _ = self.test_sender.lock().unwrap().send(packet);
+            Ok(())
         }
 
     }

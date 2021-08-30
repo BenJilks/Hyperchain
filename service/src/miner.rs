@@ -1,14 +1,15 @@
 use crate::block::Block;
-use crate::block::validate::BlockValidate;
+use crate::block::validate::{BlockValidate, BlockValidationResult};
 use crate::node::network::NetworkConnection;
 use crate::node::Node;
 
 use std::sync::{Arc, Mutex};
 use std::io::Write;
+use std::error::Error;
 
 pub fn mine_block(mut block: Block) -> Block
 {
-    while !block.is_pow_valid() {
+    while block.is_pow_valid().unwrap() != BlockValidationResult::Ok {
         block.pow += 1;
     }
 
@@ -16,10 +17,10 @@ pub fn mine_block(mut block: Block) -> Block
 }
 
 pub fn mine_block_unless_found<W>(network_connection: &Arc<Mutex<NetworkConnection<Node<W>, W>>>, 
-                                  mut block: Block) -> Block
+                                  mut block: Block) -> Result<Block, Box<dyn Error>>
     where W: Write + Clone + Sync + Send + 'static
 {
-    while !block.is_pow_valid() 
+    while block.is_pow_valid()? != BlockValidationResult::Ok
     { 
         block.pow += 1;
 
@@ -41,5 +42,5 @@ pub fn mine_block_unless_found<W>(network_connection: &Arc<Mutex<NetworkConnecti
         }
     }
 
-    block
+    Ok(block)
 }

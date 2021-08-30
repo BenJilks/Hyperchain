@@ -1,10 +1,10 @@
 use crate::node::network::{NetworkConnection, Packet};
 use crate::node::Node;
 use crate::block::Block;
-use crate::block::validate::BlockValidate;
+use crate::block::validate::{BlockValidate, BlockValidationResult};
 use crate::block;
 use crate::chain::BlockChainAddResult;
-use crate::wallet::PrivateWallet;
+use crate::wallet::private_wallet::PrivateWallet;
 use crate::miner;
 use crate::logger::Logger;
 
@@ -12,9 +12,10 @@ use std::sync::{Arc, Mutex};
 use std::io::Write;
 use std::path::PathBuf;
 use std::thread::JoinHandle;
+use std::error::Error;
 
 fn mine_next_block<W>(network_connection: &Arc<Mutex<NetworkConnection<Node<W>, W>>>,
-                      wallet: &PrivateWallet)
+                      wallet: &PrivateWallet) -> Result<(), Box<dyn Error>>
     where W: Write + Clone + Sync + Send + 'static
 {
     let mut block;
@@ -26,9 +27,9 @@ fn mine_next_block<W>(network_connection: &Arc<Mutex<NetworkConnection<Node<W>, 
     }
 
     // Do the mining work
-    block = miner::mine_block_unless_found(network_connection, block);
-    if !block.is_pow_valid() {
-        return;
+    block = miner::mine_block_unless_found(network_connection, block)?;
+    if block.is_pow_valid()? != BlockValidationResult::Ok {
+        return Ok(());
     }
 
     // Add it to the chain if it's still the top
@@ -37,7 +38,7 @@ fn mine_next_block<W>(network_connection: &Arc<Mutex<NetworkConnection<Node<W>, 
     let top = chain.top();
     if top.is_none() || top.unwrap().block_id + 1 == block.block_id 
     {
-        match chain.add(&block)
+        match chain.add(&block)?
         {
             BlockChainAddResult::Ok =>
             {
@@ -51,6 +52,8 @@ fn mine_next_block<W>(network_connection: &Arc<Mutex<NetworkConnection<Node<W>, 
             _ => {},
         }
     }
+
+    Ok(())
 }
 
 pub fn start_miner_thread<W>(network_connection: Arc<Mutex<NetworkConnection<Node<W>, W>>>,

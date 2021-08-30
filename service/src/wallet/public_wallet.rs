@@ -2,6 +2,28 @@ use crate::block::PUB_KEY_LEN;
 use super::Wallet;
 
 use rsa::{RSAPublicKey, PublicKey, PaddingScheme, BigUint};
+use std::error::Error;
+
+#[derive(Debug, PartialEq)]
+pub enum WalletValidationResult
+{
+    Ok,
+    Signature,
+}
+
+impl std::fmt::Display for WalletValidationResult
+{
+
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result
+    {
+        match self
+        {
+            WalletValidationResult::Ok => write!(f, "Ok"),
+            WalletValidationResult::Signature => write!(f, "Signature not valid"),
+        }
+    }
+
+}
 
 pub struct PublicWallet
 {
@@ -40,14 +62,18 @@ impl PublicWallet
         }
     }
 
-    pub fn verify(&self, hash: &[u8], signature: &[u8]) -> bool
+    pub fn verify(&self, hash: &[u8], signature: &[u8]) -> Result<WalletValidationResult, Box<dyn Error>>
     {
         assert_eq!(self.e.is_none(), false);
 
         let n = BigUint::from_bytes_le(&self.public_key);
         let e = BigUint::from_bytes_le(&self.e.unwrap());
-        let key = RSAPublicKey::new(n, e).unwrap();
-        key.verify(PaddingScheme::new_pkcs1v15_sign(None), hash, signature).is_ok()
+        let key = RSAPublicKey::new(n, e)?;
+        if key.verify(PaddingScheme::new_pkcs1v15_sign(None), hash, signature).is_ok() {
+            Ok(WalletValidationResult::Ok)
+        } else {
+            Ok(WalletValidationResult::Signature)
+        }
     }
 
 }
