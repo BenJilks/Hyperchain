@@ -70,8 +70,8 @@ pub fn hash_from_target(compact: &Target) -> [u8; HASH_LEN]
     target
 }
 
-pub fn calculate_target(sample_start_or_none: Option<&Block>, 
-                        sample_end_or_none: Option<&Block>) -> Target
+pub fn calculate_target(sample_start_or_none: Option<Block>, 
+                        sample_end_or_none: Option<Block>) -> Target
 {
     // If we do not have enough data for a sample, use the min target
     if sample_start_or_none.is_none() || sample_end_or_none.is_none() {

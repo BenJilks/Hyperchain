@@ -50,12 +50,12 @@ pub trait BlockValidate
         -> Result<BlockValidationResult, Box<dyn Error>>;
 
     fn validate_target(&self, 
-        start_sample: Option<&Block>, 
-        end_sample: Option<&Block>) -> BlockValidationResult;
+        start_sample: Option<Block>, 
+        end_sample: Option<Block>) -> BlockValidationResult;
 
     fn validate_content(&self,
-        start_sample: Option<&Block>, 
-        end_sample: Option<&Block>) 
+        start_sample: Option<Block>, 
+        end_sample: Option<Block>) 
         -> Result<BlockValidationResult, Box<dyn Error>>;
 
     fn validate(&self, chain: &BlockChain) 
@@ -113,8 +113,8 @@ impl BlockValidate for Block
     }
 
     fn validate_target(&self, 
-                       start_sample: Option<&Block>, 
-                       end_sample: Option<&Block>) -> BlockValidationResult
+                       start_sample: Option<Block>, 
+                       end_sample: Option<Block>) -> BlockValidationResult
     {
         if self.target == calculate_target(start_sample, end_sample) {
             BlockValidationResult::Ok
@@ -124,8 +124,8 @@ impl BlockValidate for Block
     }
 
     fn validate_content(&self,
-                start_sample: Option<&Block>, 
-                end_sample: Option<&Block>) -> Result<BlockValidationResult, Box<dyn Error>>
+                start_sample: Option<Block>, 
+                end_sample: Option<Block>) -> Result<BlockValidationResult, Box<dyn Error>>
     {
         match self.validate_pow()?
         {
@@ -158,7 +158,7 @@ impl BlockValidate for Block
 
         if sample_end.is_some()
         {
-            match self.validate_next(sample_end.unwrap())?
+            match self.validate_next(sample_end.as_ref().unwrap())?
             {
                 BlockValidationResult::Ok => {},
                 err => return Ok(err),

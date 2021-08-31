@@ -1,4 +1,6 @@
 pub mod transaction_queue;
+mod storage;
+use storage::Storage;
 use crate::block::{Block, Hash};
 use crate::block::validate::{BlockValidate, BlockValidationResult};
 use crate::block::target::BLOCK_SAMPLE_SIZE;
@@ -8,10 +10,11 @@ use crate::transaction::Transaction;
 use std::collections::VecDeque;
 use std::io::Write;
 use std::error::Error;
+use std::path::PathBuf;
 
 pub struct BlockChain
 {
-    blocks: Vec<Block>,
+    blocks: Storage,
     transaction_queue: VecDeque<Transaction>,
 }
 
@@ -42,23 +45,23 @@ impl BlockChain
         logger.log(LoggerLevel::Info, "Create new chain");
         BlockChain
         {
-            blocks: Vec::new(),
+            blocks: Storage::new(&PathBuf::from("blockchain")),
             transaction_queue: VecDeque::new(),
         }
     }
 
-    pub fn take_sample_at(&self, block_id: u64) -> (Option<&Block>, Option<&Block>)
+    pub fn take_sample_at(&self, block_id: u64) -> (Option<Block>, Option<Block>)
     {
         let end = self.block(block_id);
-        if end.is_none() || end.unwrap().block_id < BLOCK_SAMPLE_SIZE {
+        if end.is_none() || end.as_ref().unwrap().block_id < BLOCK_SAMPLE_SIZE {
             return (None, end);
         }
 
-        let start = self.block(end.unwrap().block_id - BLOCK_SAMPLE_SIZE);
+        let start = self.block(end.as_ref().unwrap().block_id - BLOCK_SAMPLE_SIZE);
         (start, end)
     }
 
-    pub fn take_sample(&self) -> (Option<&Block>, Option<&Block>)
+    pub fn take_sample(&self) -> (Option<Block>, Option<Block>)
     {
         match self.top()
         {
@@ -81,17 +84,17 @@ impl BlockChain
     pub fn add<W>(&mut self, block: &Block, logger: &mut Logger<W>) -> Result<BlockChainAddResult, Box<dyn Error>>
         where W: Write
     {
-        if block.block_id < self.blocks.len() as u64 
+        if block.block_id < self.blocks.next_top() as u64
         {
             let original = self.block(block.block_id).unwrap();
-            if block == original {
+            if block == &original {
                 return Ok(BlockChainAddResult::Duplicate);
             } else {
                 return Ok(BlockChainAddResult::Invalid(BlockValidationResult::NotNextBlock));
             }
         }
 
-        if block.block_id > self.blocks.len() as u64 {
+        if block.block_id > self.blocks.next_top() as u64 {
             return Ok(BlockChainAddResult::MoreNeeded);
         }
 
@@ -116,12 +119,12 @@ impl BlockChain
         }
 
         self.remove_from_transaction_queue(block);
-        self.blocks.push(block.clone());
+        self.blocks.store(block.clone());
         Ok(BlockChainAddResult::Ok)
     }
 
-    fn take_sample_of_branch_at<'a>(&'a self, branch: &'a [Block], block_id: u64) 
-        -> (Option<&'a Block>, Option<&'a Block>)
+    fn take_sample_of_branch_at(&self, branch: &[Block], block_id: u64) 
+        -> (Option<Block>, Option<Block>)
     {
         assert_eq!(branch.is_empty(), false);
 
@@ -130,11 +133,18 @@ impl BlockChain
         }
 
         let branch_start = branch.first().unwrap();
-        let block_at = |block_id: u64|
+        let block_at = |block_id: u64| -> Option<Block>
         {
-            if block_id >= branch_start.block_id {
-                branch.get((block_id - branch_start.block_id) as usize)
-            } else {
+            if block_id >= branch_start.block_id 
+            {
+                match branch.get((block_id - branch_start.block_id) as usize)
+                {
+                    Some(block) => Some(block.clone()),
+                    None => None,
+                }
+            } 
+            else 
+            {
                 self.block(block_id)
             }
         };
@@ -153,13 +163,13 @@ impl BlockChain
 
         // Can't attach to chain
         let bottom = branch.first().unwrap();
-        if bottom.block_id > self.blocks.len() as u64 {
+        if bottom.block_id > self.blocks.next_top() as u64 {
             return Ok(BlockChainCanMergeResult::Above);
         }
 
         // Not longer then the current branch
         let top = branch.last().unwrap();
-        if top.block_id < self.blocks.len() as u64 {
+        if top.block_id < self.blocks.next_top() as u64 {
             return Ok(BlockChainCanMergeResult::Short);
         }
 
@@ -179,7 +189,7 @@ impl BlockChain
 
                 // FIXME: Validate transactions in this case
                 let (sample_start, sample_end) = self.take_sample_of_branch_at(branch, last_block.block_id);
-                match block.validate_next(last_block)?
+                match block.validate_next(&last_block)?
                 {
                     BlockValidationResult::Ok => {},
                     result => return Ok(BlockChainCanMergeResult::Invalid(result)),
@@ -191,7 +201,7 @@ impl BlockChain
                 }
             }
 
-            last_block_or_none = Some( block );
+            last_block_or_none = Some( block.clone() );
         }
  
         Ok(BlockChainCanMergeResult::Ok)
@@ -200,40 +210,39 @@ impl BlockChain
     pub fn merge_branch(&mut self, branch: Vec<Block>)
     {
         assert_eq!(self.can_merge_branch(&branch).unwrap(), BlockChainCanMergeResult::Ok);
-        for block in branch
-        {
-            let block_id = block.block_id as usize;
-            if block_id < self.blocks.len() {
-                self.blocks[block_id] = block;
-            } else {
-                self.blocks.push(block);
-            }
+        for block in branch {
+            self.blocks.store(block);
         }
     }
 
     pub fn walk<F>(&self, on_block: &mut F)
         where F: FnMut(&Block)
     {
-        for block in &self.blocks {
-            on_block(block);
+        for block_id in 0..self.blocks.next_top() {
+            on_block(&self.block(block_id).unwrap());
         }
     }
 
-    pub fn block(&self, block_id: u64) -> Option<&Block>
+    pub fn block(&self, block_id: u64) -> Option<Block>
     {
-        self.blocks.get(block_id as usize)
+        self.blocks.get(block_id)
     }
 
-    pub fn top(&self) -> Option<&Block>
+    pub fn top(&self) -> Option<Block>
     {
-        self.blocks.last()
+        if self.blocks.next_top() == 0 {
+            None
+        } else {
+            self.blocks.get(self.blocks.next_top() - 1)
+        }
     }
 
     pub fn find_transaction_in_chain(&self, transaction_id: &Hash) 
         -> Option<(Transaction, Block)>
     {
-        for block in &self.blocks
+        for block_id in 0..self.blocks.next_top() 
         {
+            let block = self.block(block_id).unwrap();
             for transaction in &block.transactions
             {
                 match transaction.header.hash()
@@ -241,7 +250,7 @@ impl BlockChain
                     Ok(hash) =>
                     {
                         if hash == transaction_id {
-                            return Some((transaction.clone(), block.clone()));
+                            return Some((transaction.clone(), block));
                         }
                     },
                     Err(_) => {},
