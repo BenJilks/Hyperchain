@@ -159,7 +159,7 @@ mod tests
         let chain = BlockChain::new(&mut logger);
 
         let mut block = Block::new(&chain, &wallet).expect("Can create block");
-        let transaction = Transaction::for_chain(&chain, &wallet, &other, 4.0, 1.0)
+        let transaction = Transaction::for_chain(&chain, &wallet, other.get_address(), 4.0, 1.0)
             .expect("Create transaction");
         block.add_transaction(transaction);
 

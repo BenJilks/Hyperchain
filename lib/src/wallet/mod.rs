@@ -89,9 +89,9 @@ mod tests
         chain.add(&block_b).unwrap();
         
         let mut block_c = Block::new(&chain, &wallet).expect("Create block");
-        block_c.add_transaction(Transaction::for_chain(&chain, &wallet, &other, 4.6, 0.2)
+        block_c.add_transaction(Transaction::for_chain(&chain, &wallet, other.get_address(), 4.6, 0.2)
             .expect("Create transaction"));
-        block_c.add_transaction(Transaction::for_chain(&chain, &other, &wallet, 1.4, 0.2)
+        block_c.add_transaction(Transaction::for_chain(&chain, &other, wallet.get_address(), 1.4, 0.2)
             .expect("Create transaction"));
         block_c = miner::mine_block(block_c);
         chain.add(&block_c).unwrap();

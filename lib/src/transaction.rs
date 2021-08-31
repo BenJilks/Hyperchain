@@ -171,7 +171,7 @@ mod tests
         chain.add(&block).unwrap();
 
         {
-            let transaction = Transaction::for_chain(&chain, &wallet, &other, 2.4, 0.2)
+            let transaction = Transaction::for_chain(&chain, &wallet, other.get_address(), 2.4, 0.2)
                 .expect("Create transaction");
             transaction.header.hash().expect("Hash header");
             assert_eq!(transaction.validate().unwrap(), TransactionValidationResult::Ok);
@@ -179,13 +179,13 @@ mod tests
         }
 
         {
-            let transaction = Transaction::for_chain(&chain, &wallet, &other, -1.6, 0.0)
+            let transaction = Transaction::for_chain(&chain, &wallet, other.get_address(), -1.6, 0.0)
                 .expect("Create transaction");
             assert_ne!(transaction.validate().unwrap(), TransactionValidationResult::Ok);
         }
 
         {
-            let transaction = Transaction::for_chain(&chain, &wallet, &other, 0.0, -0.0001)
+            let transaction = Transaction::for_chain(&chain, &wallet, other.get_address(), 0.0, -0.0001)
                 .expect("Create transaction");
             assert_ne!(transaction.validate().unwrap(), TransactionValidationResult::Ok);
         }
