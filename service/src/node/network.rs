@@ -583,7 +583,7 @@ mod tests
 {
 
     use super::*;
-    use crate::logger::StdLoggerOutput;
+    use libhyperchain::logger::StdLoggerOutput;
 
     struct TestPacketHandler
     {

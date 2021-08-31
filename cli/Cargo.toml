@@ -7,4 +7,5 @@ edition = "2018"
 
 [dependencies]
 libhyperchain = { path = "../lib" }
+clap = "2.33.3"
 

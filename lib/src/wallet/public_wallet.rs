@@ -1,8 +1,11 @@
 use crate::block::PUB_KEY_LEN;
 use super::Wallet;
 
+use serde::{Serialize, Deserialize};
 use rsa::{RSAPublicKey, PublicKey, PaddingScheme, BigUint};
 use std::error::Error;
+
+big_array! { BigArray; }
 
 #[derive(Debug, PartialEq)]
 pub enum WalletValidationResult
@@ -25,9 +28,12 @@ impl std::fmt::Display for WalletValidationResult
 
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PublicWallet
 {
+    #[serde(with = "BigArray")]
     public_key: [u8; PUB_KEY_LEN],
+
     e: Option<[u8; 3]>,
 }
 

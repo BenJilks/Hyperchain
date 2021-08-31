@@ -1,6 +1,5 @@
 use crate::node::network::{NetworkConnection, Packet};
 use crate::node::Node;
-use crate::miner;
 
 use libhyperchain::block::Block;
 use libhyperchain::block::validate::{BlockValidate, BlockValidationResult};
@@ -13,6 +12,35 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::thread::JoinHandle;
 use std::error::Error;
+
+pub fn mine_block_unless_found<W>(network_connection: &Arc<Mutex<NetworkConnection<Node<W>, W>>>, 
+                                  mut block: Block) -> Result<Block, Box<dyn Error>>
+    where W: Write + Clone + Sync + Send + 'static
+{
+    while block.validate_pow()? != BlockValidationResult::Ok
+    { 
+        block.pow += 1;
+
+        // Check this block wasn't already mined
+        if block.pow % 100 == 0
+        {
+            // Delay for testing
+            std::thread::sleep(std::time::Duration::from_millis(10));
+
+            let mut network_connection_lock = network_connection.lock().unwrap();
+            if network_connection_lock.should_shutdown() {
+                break;
+            }
+
+            let chain = &network_connection_lock.handler().chain();
+            if chain.block(block.block_id).is_some() {
+                break;
+            }
+        }
+    }
+
+    Ok(block)
+}
 
 fn mine_next_block<W>(network_connection: &Arc<Mutex<NetworkConnection<Node<W>, W>>>,
                       wallet: &PrivateWallet) -> Result<(), Box<dyn Error>>
@@ -27,7 +55,7 @@ fn mine_next_block<W>(network_connection: &Arc<Mutex<NetworkConnection<Node<W>, 
     }
 
     // Do the mining work
-    block = miner::mine_block_unless_found(network_connection, block)?;
+    block = mine_block_unless_found(network_connection, block)?;
     if block.validate_pow()? != BlockValidationResult::Ok {
         return Ok(());
     }

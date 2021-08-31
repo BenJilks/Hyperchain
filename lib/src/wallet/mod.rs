@@ -7,7 +7,7 @@ use crate::chain::BlockChain;
 use sha2::{Sha256, Digest};
 use serde::{Serialize, Deserialize};
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct WalletStatus
 {
     pub balance: f32,

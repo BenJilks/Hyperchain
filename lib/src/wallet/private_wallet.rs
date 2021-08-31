@@ -1,4 +1,5 @@
 use super::Wallet;
+use super::public_wallet::PublicWallet;
 use crate::block::PUB_KEY_LEN;
 use crate::logger::{Logger, LoggerLevel};
 
@@ -37,6 +38,11 @@ impl PrivateWallet
         {
             key,
         })
+    }
+
+    pub fn as_public(&self) -> PublicWallet
+    {
+        PublicWallet::from_public_key_e(self.get_public_key(), self.get_e())
     }
 
     pub fn write_to_file(&self, path: &PathBuf) -> std::io::Result<()>

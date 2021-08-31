@@ -1,6 +1,5 @@
 extern crate libhyperchain;
 
-mod miner;
 mod node;
 mod service;
 

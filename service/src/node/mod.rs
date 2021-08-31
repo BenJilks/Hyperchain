@@ -162,10 +162,10 @@ mod tests
 
     use super::*;
     use network::NetworkConnection;
-    use crate::logger::{Logger, LoggerLevel, StdLoggerOutput};
-    use crate::wallet::private_wallet::PrivateWallet;
-    use crate::block::Block;
-    use crate::miner;
+    use libhyperchain::logger::{Logger, LoggerLevel, StdLoggerOutput};
+    use libhyperchain::wallet::private_wallet::PrivateWallet;
+    use libhyperchain::block::Block;
+    use libhyperchain::miner;
 
     use std::time::Duration;
     use std::path::PathBuf;

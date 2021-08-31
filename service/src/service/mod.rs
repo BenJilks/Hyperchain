@@ -7,7 +7,19 @@ use libhyperchain::chain::BlockChain;
 use libhyperchain::logger::{Logger, LoggerLevel, StdLoggerOutput};
 use libhyperchain::server;
 use libhyperchain::command::{Command, Response};
+use libhyperchain::wallet::public_wallet::PublicWallet;
+use libhyperchain::wallet::Wallet;
 use std::error::Error;
+use std::io::Write;
+
+fn balance<W>(network_connection: &mut NetworkConnection<Node<W>, W>, 
+              wallet: PublicWallet) -> Response
+    where W: Write + Clone + Send + Sync + 'static
+{
+    let chain = network_connection.handler().chain();
+    let status = wallet.get_status(chain);
+    Response::WalletStatus(status)
+}
 
 pub fn start() -> Result<(), Box<dyn Error>>
 {
@@ -27,11 +39,17 @@ pub fn start() -> Result<(), Box<dyn Error>>
         network_connection.lock().unwrap().manager().register_node("127.0.0.1:8001", None);
         
         miner_thread = start_miner_thread(network_connection.clone(), logger.clone());
+
+        let connection = network_connection.clone();
         server::start(move |command|
         {
             match command
             {
-                Command::Exit => Response::Exit,
+                Command::Exit => 
+                    Response::Exit,
+
+                Command::Balance(wallet) => 
+                    balance(&mut connection.lock().unwrap(), wallet),
             }
         })?;
 

@@ -25,4 +25,5 @@ pub mod transaction;
 pub mod page;
 pub mod chain;
 pub mod logger;
+pub mod miner;
 

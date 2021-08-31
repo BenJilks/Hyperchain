@@ -17,7 +17,11 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Build
+      run: cd lib && cargo build --verbose
       run: cd service && cargo build --verbose
+      run: cd cli && cargo build --verbose
     - name: Run tests
+      run: cd lib && cargo test --verbose
       run: cd service && cargo test --verbose
+      run: cd cli && cargo test --verbose
 

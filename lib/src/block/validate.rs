@@ -142,11 +142,11 @@ mod tests
 
     use super::*;
     use crate::block::transactions::BlockTransactions;
-    use libhyperchain::transaction::Transaction;
-    use libhyperchain::chain::BlockChain;
-    use libhyperchain::logger::{Logger, LoggerLevel};
-    use libhyperchain::wallet::{WalletStatus, Wallet};
-    use libhyperchain::wallet::private_wallet::PrivateWallet;
+    use crate::transaction::Transaction;
+    use crate::chain::BlockChain;
+    use crate::logger::{Logger, LoggerLevel};
+    use crate::wallet::{WalletStatus, Wallet};
+    use crate::wallet::private_wallet::PrivateWallet;
     use crate::miner;
     use std::path::PathBuf;
 
