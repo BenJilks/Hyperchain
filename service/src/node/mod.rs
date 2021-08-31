@@ -45,7 +45,7 @@ impl<W> Node<W>
         }
 
         let bottom = branch.first().unwrap();
-        bottom.is_next_block(block).is_ok()
+        bottom.validate_next(block).is_ok()
     }
 
     fn add_to_branch(&mut self, from: &str, block: Block)
@@ -207,7 +207,7 @@ mod tests
         let block = miner::mine_block(Block::new(chain, wallet)
             .expect("Create block"));
 
-        chain.add(&block);
+        chain.add(&block).unwrap();
         connection_lock.manager().send(Packet::Block(block.clone()));
 
         block
@@ -229,9 +229,9 @@ mod tests
         let mut connection_b = create_node(8031, logger.clone());
         {
             let mut connection_b_lock = connection_b.lock().unwrap();
-            connection_b_lock.handler().chain().add(&block_a);
-            connection_b_lock.handler().chain().add(&block_b);
-            connection_b_lock.handler().chain().add(&block_c);
+            connection_b_lock.handler().chain().add(&block_a).unwrap();
+            connection_b_lock.handler().chain().add(&block_b).unwrap();
+            connection_b_lock.handler().chain().add(&block_c).unwrap();
         }
         mine_block(&mut connection_b, &wallet);
         mine_block(&mut connection_b, &wallet);

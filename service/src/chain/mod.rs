@@ -80,7 +80,7 @@ impl BlockChain
 
         if self.top().is_some()
         {
-            match block.is_next_block(self.top().unwrap())?
+            match block.validate_next(self.top().unwrap())?
             {
                 BlockValidationResult::Ok => {},
                 result => return Ok(BlockChainAddResult::Invalid(result)),
@@ -88,7 +88,7 @@ impl BlockChain
         }
 
         let (sample_start, sample_end) = self.take_sample();
-        match block.is_valid(sample_start, sample_end)?
+        match block.validate(sample_start, sample_end)?
         {
             BlockValidationResult::Ok => {},
             result => return Ok(BlockChainAddResult::Invalid(result)),
@@ -155,12 +155,12 @@ impl BlockChain
                 let last_block = last_block_or_none.unwrap();
 
                 let (sample_start, sample_end) = self.take_sample_of_branch_at(branch, last_block.block_id);
-                match block.is_next_block(last_block)?
+                match block.validate_next(last_block)?
                 {
                     BlockValidationResult::Ok => {},
                     result => return Ok(BlockChainCanMergeResult::Invalid(result)),
                 }
-                match block.is_valid(sample_start, sample_end)?
+                match block.validate(sample_start, sample_end)?
                 {
                     BlockValidationResult::Ok => {},
                     result => return Ok(BlockChainCanMergeResult::Invalid(result)),

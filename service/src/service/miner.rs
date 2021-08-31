@@ -28,7 +28,7 @@ fn mine_next_block<W>(network_connection: &Arc<Mutex<NetworkConnection<Node<W>, 
 
     // Do the mining work
     block = miner::mine_block_unless_found(network_connection, block)?;
-    if block.is_pow_valid()? != BlockValidationResult::Ok {
+    if block.validate_pow()? != BlockValidationResult::Ok {
         return Ok(());
     }
 
@@ -65,9 +65,10 @@ pub fn start_miner_thread<W>(network_connection: Arc<Mutex<NetworkConnection<Nod
 
     std::thread::spawn(move || loop 
     {
-        mine_next_block(&network_connection, &wallet);
+        mine_next_block(&network_connection, &wallet).unwrap();
         if network_connection.lock().unwrap().should_shutdown() {
             break;
         }
     })
 }
+

@@ -9,7 +9,7 @@ use std::error::Error;
 
 pub fn mine_block(mut block: Block) -> Block
 {
-    while block.is_pow_valid().unwrap() != BlockValidationResult::Ok {
+    while block.validate_pow().unwrap() != BlockValidationResult::Ok {
         block.pow += 1;
     }
 
@@ -20,7 +20,7 @@ pub fn mine_block_unless_found<W>(network_connection: &Arc<Mutex<NetworkConnecti
                                   mut block: Block) -> Result<Block, Box<dyn Error>>
     where W: Write + Clone + Sync + Send + 'static
 {
-    while block.is_pow_valid()? != BlockValidationResult::Ok
+    while block.validate_pow()? != BlockValidationResult::Ok
     { 
         block.pow += 1;
 

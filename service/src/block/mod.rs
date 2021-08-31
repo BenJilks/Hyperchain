@@ -121,22 +121,6 @@ impl Block
         })
     }
 
-    pub fn new_debug(block_id: u64, prev_hash: Hash) -> Self
-    {
-        Block
-        {
-            prev_hash,
-            block_id,
-            raward_to: [0u8; HASH_LEN],
-
-            pages: Vec::new(),
-            transactions: Vec::new(),
-            timestamp: current_timestamp(),
-            target: calculate_target(None, None),
-            pow: 0,
-        }
-    }
-
     pub fn add_page(&mut self, page: Page)
     {
         self.pages.push(page);
@@ -195,13 +179,13 @@ mod tests
             .expect("Create transaction");
         block.add_transaction(transaction);
 
-        assert_ne!(block.is_pow_valid().unwrap(), BlockValidationResult::Ok);
-        assert_eq!(block.is_target_valid(None, None), BlockValidationResult::Ok);
-        assert_ne!(block.is_valid(None, None).unwrap(), BlockValidationResult::Ok);
+        assert_ne!(block.validate_pow().unwrap(), BlockValidationResult::Ok);
+        assert_eq!(block.validate_target(None, None), BlockValidationResult::Ok);
+        assert_ne!(block.validate(None, None).unwrap(), BlockValidationResult::Ok);
 
         block = miner::mine_block(block);
-        assert_eq!(block.is_pow_valid().unwrap(), BlockValidationResult::Ok);
-        assert_eq!(block.is_valid(None, None).unwrap(), BlockValidationResult::Ok);
+        assert_eq!(block.validate_pow().unwrap(), BlockValidationResult::Ok);
+        assert_eq!(block.validate(None, None).unwrap(), BlockValidationResult::Ok);
 
         {
             let mut wallet_status = WalletStatus::default();

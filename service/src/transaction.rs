@@ -103,7 +103,7 @@ impl Transaction
         Some( Self::new(header, signature, from.get_e()) )
     }
 
-    pub fn is_valid(&self) -> Result<TransactionValidationResult, Box<dyn Error>>
+    pub fn validate(&self) -> Result<TransactionValidationResult, Box<dyn Error>>
     {
         if self.header.amount < 0.0 {
             return Ok(TransactionValidationResult::Negative);
@@ -168,26 +168,26 @@ mod tests
         let other = PrivateWallet::read_from_file(&PathBuf::from("other.wallet"), &mut logger).unwrap();
 
         let block = miner::mine_block(Block::new(&chain, &wallet).expect("Create block"));
-        chain.add(&block);
+        chain.add(&block).unwrap();
 
         {
             let transaction = Transaction::for_chain(&chain, &wallet, &other, 2.4, 0.2)
                 .expect("Create transaction");
             transaction.header.hash().expect("Hash header");
-            assert_eq!(transaction.is_valid().unwrap(), TransactionValidationResult::Ok);
+            assert_eq!(transaction.validate().unwrap(), TransactionValidationResult::Ok);
             assert_eq!(transaction.to_string(), "aLOExVDb0w... --[ 2.4 + 0.2tx ]--> zCPOqvKFuo...");
         }
 
         {
             let transaction = Transaction::for_chain(&chain, &wallet, &other, -1.6, 0.0)
                 .expect("Create transaction");
-            assert_ne!(transaction.is_valid().unwrap(), TransactionValidationResult::Ok);
+            assert_ne!(transaction.validate().unwrap(), TransactionValidationResult::Ok);
         }
 
         {
             let transaction = Transaction::for_chain(&chain, &wallet, &other, 0.0, -0.0001)
                 .expect("Create transaction");
-            assert_ne!(transaction.is_valid().unwrap(), TransactionValidationResult::Ok);
+            assert_ne!(transaction.validate().unwrap(), TransactionValidationResult::Ok);
         }
     }
 

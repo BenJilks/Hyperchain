@@ -38,14 +38,14 @@ impl std::fmt::Display for BlockValidationResult
 
 pub trait BlockValidate
 {
-    fn is_next_block(&self, prev: &Block) -> Result<BlockValidationResult, Box<dyn Error>>;
-    fn is_pow_valid(&self) -> Result<BlockValidationResult, Box<dyn Error>>;
+    fn validate_next(&self, prev: &Block) -> Result<BlockValidationResult, Box<dyn Error>>;
+    fn validate_pow(&self) -> Result<BlockValidationResult, Box<dyn Error>>;
 
-    fn is_target_valid(&self, 
+    fn validate_target(&self, 
         start_sample: Option<&Block>, 
         end_sample: Option<&Block>) -> BlockValidationResult;
 
-    fn is_valid(&self,
+    fn validate(&self,
         start_sample: Option<&Block>, 
         end_sample: Option<&Block>) -> Result<BlockValidationResult, Box<dyn Error>>;
 }
@@ -53,11 +53,11 @@ pub trait BlockValidate
 impl Block
 {
 
-    fn is_transaction_content_valid(&self) -> Result<BlockValidationResult, Box<dyn Error>>
+    fn validate_content(&self) -> Result<BlockValidationResult, Box<dyn Error>>
     {
         for transaction in &self.transactions 
         {
-            match transaction.is_valid()?
+            match transaction.validate()?
             {
                 TransactionValidationResult::Ok => {},
                 result => return Ok(BlockValidationResult::Transaction(result)),
@@ -72,7 +72,7 @@ impl Block
 impl BlockValidate for Block
 {
 
-    fn is_next_block(&self, prev: &Block) -> Result<BlockValidationResult, Box<dyn Error>>
+    fn validate_next(&self, prev: &Block) -> Result<BlockValidationResult, Box<dyn Error>>
     {
         if self.block_id > 0
         {
@@ -93,7 +93,7 @@ impl BlockValidate for Block
         Ok(BlockValidationResult::Ok)
     }
 
-    fn is_pow_valid(&self) -> Result<BlockValidationResult, Box<dyn Error>>
+    fn validate_pow(&self) -> Result<BlockValidationResult, Box<dyn Error>>
     {
         let hash = self.hash()?;
         let hash_num = BigUint::from_bytes_be(&hash);
@@ -105,7 +105,7 @@ impl BlockValidate for Block
         }
     }
 
-    fn is_target_valid(&self, 
+    fn validate_target(&self, 
                        start_sample: Option<&Block>, 
                        end_sample: Option<&Block>) -> BlockValidationResult
     {
@@ -116,21 +116,21 @@ impl BlockValidate for Block
         }
     }
 
-    fn is_valid(&self,
+    fn validate(&self,
                 start_sample: Option<&Block>, 
                 end_sample: Option<&Block>) -> Result<BlockValidationResult, Box<dyn Error>>
     {
-        match self.is_pow_valid()?
+        match self.validate_pow()?
         {
             BlockValidationResult::Ok => {},
             err => return Ok(err),
         }
-        match self.is_target_valid(start_sample, end_sample)
+        match self.validate_target(start_sample, end_sample)
         {
             BlockValidationResult::Ok => {},
             err => return Ok(err),
         }
-        match self.is_transaction_content_valid()?
+        match self.validate_content()?
         {
             BlockValidationResult::Ok => {},
             err => return Ok(err),
