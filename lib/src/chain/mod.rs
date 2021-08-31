@@ -66,6 +66,17 @@ impl BlockChain
         }
     }
 
+    fn remove_from_transaction_queue(&mut self, block: &Block)
+    {
+        for transaction in &block.transactions
+        {
+            let index = self.transaction_queue.iter().position(|x| x == transaction);
+            if index.is_some() {
+                self.transaction_queue.remove(index.unwrap());
+            }
+        }
+    }
+
     pub fn add(&mut self, block: &Block) -> Result<BlockChainAddResult, Box<dyn Error>>
     {
         if block.block_id < self.blocks.len() as u64 
@@ -98,11 +109,13 @@ impl BlockChain
             result => return Ok(BlockChainAddResult::Invalid(result)),
         }
 
+        self.remove_from_transaction_queue(block);
         self.blocks.push(block.clone());
         Ok(BlockChainAddResult::Ok)
     }
 
-    fn take_sample_of_branch_at<'a>(&'a self, branch: &'a [Block], block_id: u64) -> (Option<&'a Block>, Option<&'a Block>)
+    fn take_sample_of_branch_at<'a>(&'a self, branch: &'a [Block], block_id: u64) 
+        -> (Option<&'a Block>, Option<&'a Block>)
     {
         assert_eq!(branch.is_empty(), false);
 
@@ -212,6 +225,12 @@ impl BlockChain
     pub fn push_transaction_queue(&mut self, transaction: Transaction)
     {
         self.transaction_queue.push_front(transaction);
+    }
+
+    pub fn get_next_transactions_in_queue(&self, count: usize) -> Vec<&Transaction>
+    {
+        let real_count = std::cmp::min(count, self.transaction_queue.len());
+        self.transaction_queue.range(0..real_count).collect()
     }
 
 }

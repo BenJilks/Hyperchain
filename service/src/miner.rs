@@ -1,5 +1,6 @@
 use crate::node::network::{NetworkConnection, Packet};
 use crate::node::Node;
+use crate::block_builder;
 
 use libhyperchain::block::Block;
 use libhyperchain::block::validate::{BlockValidate, BlockValidationResult};
@@ -51,7 +52,7 @@ fn mine_next_block<W>(network_connection: &Arc<Mutex<NetworkConnection<Node<W>, 
         // Create the next block
         let mut network_connection_lock = network_connection.lock().unwrap();
         let chain = &network_connection_lock.handler().chain();
-        block = Block::new(&chain, wallet).unwrap();
+        block = block_builder::build(chain, wallet)?;
     }
 
     // Do the mining work

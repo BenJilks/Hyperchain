@@ -4,6 +4,7 @@ extern crate libhyperchain;
 extern crate slice_as_array;
 
 mod node;
+mod block_builder;
 mod miner;
 mod send;
 mod balance;
