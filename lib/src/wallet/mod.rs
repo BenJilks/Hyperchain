@@ -87,10 +87,10 @@ mod tests
         let other = PrivateWallet::read_from_file(&PathBuf::from("other.wallet"), &mut logger).unwrap();
 
         let block_a = miner::mine_block(Block::new(&chain, &wallet).expect("Create block"));
-        chain.add(&block_a).unwrap();
+        chain.add(&block_a, &mut logger).unwrap();
 
         let block_b = miner::mine_block(Block::new(&chain, &other).expect("Create block"));
-        chain.add(&block_b).unwrap();
+        chain.add(&block_b, &mut logger).unwrap();
         
         let mut block_c = Block::new(&chain, &wallet).expect("Create block");
         block_c.add_transaction(Transaction::for_chain(&chain, &wallet, other.get_address(), 4.6, 0.2)
@@ -98,7 +98,7 @@ mod tests
         block_c.add_transaction(Transaction::for_chain(&chain, &other, wallet.get_address(), 1.4, 0.2)
             .expect("Create transaction"));
         block_c = miner::mine_block(block_c);
-        chain.add(&block_c).unwrap();
+        chain.add(&block_c, &mut logger).unwrap();
 
         let wallet_status = wallet.get_status(&chain);
         assert_eq!(wallet_status.balance, block_a.calculate_reward() + block_c.calculate_reward() - 4.6 - 0.2 + 1.4 + 0.2 + 0.2);

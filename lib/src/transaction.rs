@@ -168,7 +168,7 @@ mod tests
         let other = PrivateWallet::read_from_file(&PathBuf::from("other.wallet"), &mut logger).unwrap();
 
         let block = miner::mine_block(Block::new(&chain, &wallet).expect("Create block"));
-        chain.add(&block).unwrap();
+        chain.add(&block, &mut logger).unwrap();
 
         {
             let transaction = Transaction::for_chain(&chain, &wallet, other.get_address(), 2.4, 0.2)
