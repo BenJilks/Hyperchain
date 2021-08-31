@@ -1,5 +1,8 @@
 extern crate libhyperchain;
 
+#[macro_use]
+extern crate slice_as_array;
+
 mod node;
 mod service;
 

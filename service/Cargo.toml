@@ -10,4 +10,5 @@ edition = "2018"
 libhyperchain = { path = "../lib" }
 tcp-channel = "0.3.2"
 serde = { version = "1.0.125", features = ["derive"] }
+slice_as_array = { version = "1.1.0", default-features = false }
 

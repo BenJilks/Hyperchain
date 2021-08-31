@@ -50,11 +50,12 @@ impl Wallet for PublicWallet
 impl PublicWallet
 {
 
-    pub fn from_public_key(public_key: [u8; PUB_KEY_LEN]) -> Self
+    pub fn from_public_key(public_key: &[u8]) -> Self
     {
+        let key = slice_as_array!(public_key, [u8; PUB_KEY_LEN]).expect("Bad hash length");
         Self
         {
-            public_key,
+            public_key: *key,
             e: None,
         }
     }
@@ -83,3 +84,4 @@ impl PublicWallet
     }
 
 }
+

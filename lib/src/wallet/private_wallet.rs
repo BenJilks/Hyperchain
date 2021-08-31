@@ -8,6 +8,7 @@ use rand::rngs::OsRng;
 use std::fs::File;
 use std::path::PathBuf;
 use std::io::{Read, Write};
+use std::error::Error;
 use slice_as_array;
 
 pub struct PrivateWallet
@@ -40,6 +41,20 @@ impl PrivateWallet
         })
     }
 
+    pub fn serialize(&self) -> Vec<u8>
+    {
+        self.key.to_pkcs8().unwrap()
+    }
+
+    pub fn deserialize(buffer: Vec<u8>) -> Result<Self, Box<dyn Error>>
+    {
+        let key = RSAPrivateKey::from_pkcs8(&buffer)?;
+        Ok(Self
+        {
+            key,
+        })
+    }
+
     pub fn as_public(&self) -> PublicWallet
     {
         PublicWallet::from_public_key_e(self.get_public_key(), self.get_e())
@@ -60,7 +75,7 @@ impl PrivateWallet
         logger.log(LoggerLevel::Info, &format!("Opened wallet '{:?}'", path));
 
         let key = RSAPrivateKey::from_pkcs8(&buffer).unwrap();
-        return Ok(Self
+        Ok(Self
         {
             key,
         })
@@ -78,3 +93,4 @@ impl PrivateWallet
     }
 
 }
+

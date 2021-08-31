@@ -1,8 +1,10 @@
 extern crate libhyperchain;
 extern crate clap;
+extern crate base_62;
 
 use libhyperchain::command::{Command, Response};
 use libhyperchain::client::Client;
+use libhyperchain::wallet::Wallet;
 use libhyperchain::wallet::private_wallet::PrivateWallet;
 use libhyperchain::logger::{Logger, LoggerLevel, StdLoggerOutput};
 use clap::{App, Arg, SubCommand, ArgMatches};
@@ -24,8 +26,37 @@ fn balance(mut client: Client, options: &ArgMatches) -> Result<(), Box<dyn Error
     let wallet = wallet_or_error.unwrap();
     match client.send(Command::Balance(wallet.as_public()))?
     {
-        Response::WalletStatus(status) => println!("Balance: {}", status.balance),
+        Response::WalletStatus(status) => 
+        {
+            println!("Address: {}", base_62::encode(&wallet.get_address()));
+            println!("Balance: {}", status.balance)
+        },
         _ => {},
+    }
+    Ok(())
+}
+
+fn send(mut client: Client, options: &ArgMatches) -> Result<(), Box<dyn Error>>
+{
+    let mut logger = Logger::new(StdLoggerOutput::new(), LoggerLevel::Info);
+    let from_path = options.value_of("from").unwrap();
+
+    let from_or_error = PrivateWallet::read_from_file(&PathBuf::from(from_path), &mut logger);
+    if from_or_error.is_err() 
+    {
+        println!("Error: Unable to open wallet");
+        return Ok(());
+    }
+
+    let from = from_or_error.unwrap();
+    let to = base_62::decode(options.value_of("to").unwrap())?;
+    let amount = options.value_of("amount").unwrap().parse::<f32>()?;
+    let fee = options.value_of("fee").unwrap().parse::<f32>()?;
+    match client.send(Command::Send(from.serialize(), to, amount, fee))?
+    {
+        Response::Sent(id) => 
+            println!("Success, TxID: {}", base_62::encode(&id)),
+        _ => println!("Error"),
     }
     Ok(())
 }
@@ -58,6 +89,32 @@ fn main() -> Result<(), Box<dyn Error>>
                     .takes_value(true)
                     .required(true)
                     .help("Path to wallet file")))
+        .subcommand(SubCommand::with_name("send")
+            .about("Sent coins to someone")
+                .arg(Arg::with_name("from")
+                    .short("f")
+                    .long("from")
+                    .takes_value(true)
+                    .required(true)
+                    .help("Path to from wallet file"))
+                .arg(Arg::with_name("to")
+                    .short("t")
+                    .long("to")
+                    .takes_value(true)
+                    .required(true)
+                    .help("Address of recipient"))
+                .arg(Arg::with_name("amount")
+                     .short("a")
+                     .long("amount")
+                     .takes_value(true)
+                     .required(true)
+                     .help("Amount to send"))
+                .arg(Arg::with_name("fee")
+                     .short("e")
+                     .long("fee")
+                     .takes_value(true)
+                     .required(true)
+                     .help("Transaction fee")))
         .subcommand(SubCommand::with_name("stats")
             .about("Display some blockchain statistics"))
         .subcommand(SubCommand::with_name("shutdown")
@@ -75,6 +132,7 @@ fn main() -> Result<(), Box<dyn Error>>
     match matches.subcommand_name()
     {
         Some("balance") => balance(client, matches.subcommand().1.unwrap())?,
+        Some("send") => send(client, matches.subcommand().1.unwrap())?,
         Some("stats") => stats(client),
         Some("shutdown") => shutdown(client)?,
         Some(&_) | None => println!("Error: Must specify an action"),

@@ -2,13 +2,16 @@ use crate::block::Block;
 use crate::block::validate::{BlockValidate, BlockValidationResult};
 use crate::block::target::BLOCK_SAMPLE_SIZE;
 use crate::logger::{Logger, LoggerLevel};
+use crate::transaction::Transaction;
 
+use std::collections::VecDeque;
 use std::io::Write;
 use std::error::Error;
 
 pub struct BlockChain
 {
     blocks: Vec<Block>,
+    transaction_queue: VecDeque<Transaction>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -39,6 +42,7 @@ impl BlockChain
         BlockChain
         {
             blocks: Vec::new(),
+            transaction_queue: VecDeque::new(),
         }
     }
 
@@ -203,6 +207,11 @@ impl BlockChain
     pub fn top(&self) -> Option<&Block>
     {
         self.blocks.last()
+    }
+
+    pub fn push_transaction_queue(&mut self, transaction: Transaction)
+    {
+        self.transaction_queue.push_front(transaction);
     }
 
 }

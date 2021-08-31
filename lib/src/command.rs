@@ -7,6 +7,7 @@ pub enum Command
 {
     Exit,
     Balance(PublicWallet),
+    Send(Vec<u8>, Vec<u8>, f32, f32),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -14,6 +15,7 @@ pub enum Response
 {
     Exit,
     WalletStatus(WalletStatus),
-    Ok,
+    Sent(Vec<u8>),
+    Failed,
 }
 

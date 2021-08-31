@@ -61,7 +61,7 @@ pub struct Transaction
 
 impl TransactionHeader
 {
-     
+
     pub fn hash(&self) -> Result<Vec<u8>, Box<dyn Error>>
     {
         let result = bincode::serialize(self)?;
@@ -85,7 +85,7 @@ impl Transaction
         }
     }
 
-    pub fn for_chain<W: Wallet>(chain: &BlockChain, from: &PrivateWallet, to: &W, amount: f32, fee: f32) -> Option<Self>
+    pub fn for_chain(chain: &BlockChain, from: &PrivateWallet, to: Hash, amount: f32, fee: f32) -> Option<Self>
     {
         let status = from.get_status(chain);
         let header = TransactionHeader 
@@ -93,7 +93,7 @@ impl Transaction
             // TODO: This id should be calculated correctly
             id: status.max_id + 1,
             from: from.get_public_key(),
-            to: to.get_address(),
+            to: to,
             amount,
             transaction_fee: fee,
         };

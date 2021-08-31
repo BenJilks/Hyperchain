@@ -1,5 +1,7 @@
 mod miner;
+mod send;
 use miner::start_miner_thread;
+use send::send;
 use crate::node::network::NetworkConnection;
 use crate::node::Node;
 
@@ -50,6 +52,9 @@ pub fn start() -> Result<(), Box<dyn Error>>
 
                 Command::Balance(wallet) => 
                     balance(&mut connection.lock().unwrap(), wallet),
+
+                Command::Send(from, to, amount, fee) =>
+                    send(&mut connection.lock().unwrap(), from, to, amount, fee),
             }
         })?;
 
@@ -59,3 +64,4 @@ pub fn start() -> Result<(), Box<dyn Error>>
     miner_thread.join().unwrap();
     Ok(())
 }
+
