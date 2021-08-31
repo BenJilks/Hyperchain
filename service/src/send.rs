@@ -4,6 +4,7 @@ use crate::node::Node;
 use libhyperchain::transaction::Transaction;
 use libhyperchain::service::command::Response;
 use libhyperchain::wallet::private_wallet::PrivateWallet;
+use libhyperchain::chain::transaction_queue::BlockChainTransactionQueue;
 use std::io::Write;
 
 pub fn send<W>(connection: &mut NetworkConnection<Node<W>, W>, 
@@ -26,7 +27,10 @@ pub fn send<W>(connection: &mut NetworkConnection<Node<W>, W>,
 
     let transaction = transaction_or_none.unwrap();
     let transaction_id = transaction.header.hash().unwrap();
-    chain.push_transaction_queue(transaction);
-    Response::Sent(transaction_id)
+    match chain.push_transaction_queue(transaction)
+    {
+        Ok(true) => Response::Sent(transaction_id),
+        Ok(false) | Err(_) => Response::Failed,
+    }
 }
 

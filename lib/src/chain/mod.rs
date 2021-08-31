@@ -1,3 +1,4 @@
+pub mod transaction_queue;
 use crate::block::Block;
 use crate::block::validate::{BlockValidate, BlockValidationResult};
 use crate::block::target::BLOCK_SAMPLE_SIZE;
@@ -226,17 +227,6 @@ impl BlockChain
     pub fn top(&self) -> Option<&Block>
     {
         self.blocks.last()
-    }
-
-    pub fn push_transaction_queue(&mut self, transaction: Transaction)
-    {
-        self.transaction_queue.push_front(transaction);
-    }
-
-    pub fn get_next_transactions_in_queue(&self, count: usize) -> Vec<&Transaction>
-    {
-        let real_count = std::cmp::min(count, self.transaction_queue.len());
-        self.transaction_queue.range(0..real_count).collect()
     }
 
 }
