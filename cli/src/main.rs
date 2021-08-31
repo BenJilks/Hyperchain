@@ -61,6 +61,22 @@ fn send(mut client: Client, options: &ArgMatches) -> Result<(), Box<dyn Error>>
     Ok(())
 }
 
+fn transaction_info(mut client: Client, options: &ArgMatches) 
+    -> Result<(), Box<dyn Error>>
+{
+    let id = base_62::decode(options.value_of("id").unwrap())?;
+
+    match client.send(Command::TransactionInfo(id))?
+    {
+        Response::TransactionInfo(transaction, block) => 
+        {
+            println!("{:?} {:?}", transaction, block);
+        },
+        _ => println!("Error"),
+    }
+    Ok(())
+}
+
 fn stats(_client: Client)
 {
 }
@@ -115,6 +131,14 @@ fn main() -> Result<(), Box<dyn Error>>
                      .takes_value(true)
                      .required(true)
                      .help("Transaction fee")))
+        .subcommand(SubCommand::with_name("transaction-info")
+            .about("Display transaction information")
+            .arg(Arg::with_name("id")
+                 .short("i")
+                 .long("id")
+                 .takes_value(true)
+                 .required(true)
+                 .help("Id of transaction")))
         .subcommand(SubCommand::with_name("stats")
             .about("Display some blockchain statistics"))
         .subcommand(SubCommand::with_name("shutdown")
@@ -133,6 +157,7 @@ fn main() -> Result<(), Box<dyn Error>>
     {
         Some("balance") => balance(client, matches.subcommand().1.unwrap())?,
         Some("send") => send(client, matches.subcommand().1.unwrap())?,
+        Some("transaction-info") => transaction_info(client, matches.subcommand().1.unwrap())?,
         Some("stats") => stats(client),
         Some("shutdown") => shutdown(client)?,
         Some(&_) | None => println!("Error: Must specify an action"),

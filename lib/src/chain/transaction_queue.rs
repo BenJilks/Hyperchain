@@ -1,4 +1,5 @@
 use super::BlockChain;
+use crate::block::Hash;
 use crate::transaction::{Transaction, TransactionValidationResult};
 use crate::wallet::get_status_for_address;
 
@@ -11,6 +12,8 @@ pub trait BlockChainTransactionQueue
         -> Result<bool, Box<dyn Error>>;
 
     fn get_next_transactions_in_queue(&self, count: usize) -> Vec<&Transaction>;
+
+    fn find_transaction_in_queue(&self, transaction_id: &Hash) -> Option<Transaction>;
 
 }
 
@@ -39,6 +42,25 @@ impl BlockChainTransactionQueue for BlockChain
     {
         let real_count = std::cmp::min(count, self.transaction_queue.len());
         self.transaction_queue.range(0..real_count).collect()
+    }
+
+    fn find_transaction_in_queue(&self, transaction_id: &Hash) -> Option<Transaction>
+    {
+        for transaction in &self.transaction_queue
+        {
+            match transaction.header.hash()
+            {
+                Ok(hash) =>
+                {
+                    if hash == transaction_id {
+                        return Some(transaction.clone());
+                    }
+                },
+                Err(_) => {},
+            }
+        }
+
+        None
     }
 
 }

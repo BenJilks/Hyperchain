@@ -1,5 +1,5 @@
 pub mod transaction_queue;
-use crate::block::Block;
+use crate::block::{Block, Hash};
 use crate::block::validate::{BlockValidate, BlockValidationResult};
 use crate::block::target::BLOCK_SAMPLE_SIZE;
 use crate::logger::{Logger, LoggerLevel};
@@ -227,6 +227,29 @@ impl BlockChain
     pub fn top(&self) -> Option<&Block>
     {
         self.blocks.last()
+    }
+
+    pub fn find_transaction_in_chain(&self, transaction_id: &Hash) 
+        -> Option<(Transaction, Block)>
+    {
+        for block in &self.blocks
+        {
+            for transaction in &block.transactions
+            {
+                match transaction.header.hash()
+                {
+                    Ok(hash) =>
+                    {
+                        if hash == transaction_id {
+                            return Some((transaction.clone(), block.clone()));
+                        }
+                    },
+                    Err(_) => {},
+                }
+            }
+        }
+
+        None
     }
 
 }

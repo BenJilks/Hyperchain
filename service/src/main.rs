@@ -8,9 +8,11 @@ mod block_builder;
 mod miner;
 mod send;
 mod balance;
+mod transaction_info;
 use miner::start_miner_thread;
 use send::send;
 use balance::balance;
+use transaction_info::transaction_info;
 use crate::node::network::NetworkConnection;
 use crate::node::Node;
 
@@ -52,6 +54,9 @@ fn main() -> Result<(), Box<dyn Error>>
 
                 Command::Send(from, to, amount, fee) =>
                     send(&mut connection.lock().unwrap(), from, to, amount, fee),
+
+                Command::TransactionInfo(id) =>
+                    transaction_info(&mut connection.lock().unwrap(), id),
             }
         })?;
 
