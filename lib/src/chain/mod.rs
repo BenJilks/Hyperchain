@@ -46,11 +46,11 @@ impl BlockChain
         }
     }
 
-    fn take_sample_at(&self, block_id: u64) -> (Option<&Block>, Option<&Block>)
+    pub fn take_sample_at(&self, block_id: u64) -> (Option<&Block>, Option<&Block>)
     {
         let end = self.block(block_id);
         if end.is_none() || end.unwrap().block_id < BLOCK_SAMPLE_SIZE {
-            return (None, None);
+            return (None, end);
         }
 
         let start = self.block(end.unwrap().block_id - BLOCK_SAMPLE_SIZE);
@@ -77,7 +77,8 @@ impl BlockChain
         }
     }
 
-    pub fn add(&mut self, block: &Block) -> Result<BlockChainAddResult, Box<dyn Error>>
+    pub fn add<W>(&mut self, block: &Block, logger: &mut Logger<W>) -> Result<BlockChainAddResult, Box<dyn Error>>
+        where W: Write
     {
         if block.block_id < self.blocks.len() as u64 
         {
@@ -93,19 +94,23 @@ impl BlockChain
             return Ok(BlockChainAddResult::MoreNeeded);
         }
 
-        if self.top().is_some()
-        {
-            match block.validate_next(self.top().unwrap())?
-            {
-                BlockValidationResult::Ok => {},
-                result => return Ok(BlockChainAddResult::Invalid(result)),
-            }
-        }
-
-        let (sample_start, sample_end) = self.take_sample();
-        match block.validate(sample_start, sample_end)?
+        match block.validate(self)?
         {
             BlockValidationResult::Ok => {},
+            BlockValidationResult::Balance(address) =>
+            {
+                logger.log(LoggerLevel::Warning, 
+                    &format!("Got invalid block, as {} has insufficient balance",
+                        base_62::encode(&address)));
+
+                // NOTE: Purge any pending transactions coming from this address
+                self.transaction_queue
+                    .iter()
+                    .take_while(|x| x.get_from_address() == address)
+                    .count();
+
+                return Ok(BlockChainAddResult::Invalid(BlockValidationResult::Balance(address)));
+            },
             result => return Ok(BlockChainAddResult::Invalid(result)),
         }
 
@@ -171,13 +176,14 @@ impl BlockChain
             {
                 let last_block = last_block_or_none.unwrap();
 
+                // FIXME: Validate transactions in this case
                 let (sample_start, sample_end) = self.take_sample_of_branch_at(branch, last_block.block_id);
                 match block.validate_next(last_block)?
                 {
                     BlockValidationResult::Ok => {},
                     result => return Ok(BlockChainCanMergeResult::Invalid(result)),
                 }
-                match block.validate(sample_start, sample_end)?
+                match block.validate_content(sample_start, sample_end)?
                 {
                     BlockValidationResult::Ok => {},
                     result => return Ok(BlockChainCanMergeResult::Invalid(result)),
@@ -254,27 +260,27 @@ mod tests
         let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet"), &mut logger).unwrap();
         
         let block_a = miner::mine_block(Block::new(&chain_a, &wallet).unwrap());
-        assert_eq!(chain_a.add(&block_a).unwrap(), BlockChainAddResult::Ok);
-        assert_eq!(chain_b.add(&block_a).unwrap(), BlockChainAddResult::Ok);
+        assert_eq!(chain_a.add(&block_a, &mut logger).unwrap(), BlockChainAddResult::Ok);
+        assert_eq!(chain_b.add(&block_a, &mut logger).unwrap(), BlockChainAddResult::Ok);
 
         let block_b = miner::mine_block(Block::new(&chain_a, &wallet).unwrap());
-        assert_eq!(chain_a.add(&block_b).unwrap(), BlockChainAddResult::Ok);
-        assert_eq!(chain_b.add(&block_b).unwrap(), BlockChainAddResult::Ok);
+        assert_eq!(chain_a.add(&block_b, &mut logger).unwrap(), BlockChainAddResult::Ok);
+        assert_eq!(chain_b.add(&block_b, &mut logger).unwrap(), BlockChainAddResult::Ok);
 
         let block_c_a = miner::mine_block(Block::new(&chain_a, &wallet).unwrap());
         let block_c_b = miner::mine_block(Block::new(&chain_b, &wallet).unwrap());
-        assert_eq!(chain_a.add(&block_c_a).unwrap(), BlockChainAddResult::Ok);
-        assert_eq!(chain_b.add(&block_c_b).unwrap(), BlockChainAddResult::Ok);
-        assert_eq!(chain_a.add(&block_b).unwrap(), BlockChainAddResult::Duplicate);
+        assert_eq!(chain_a.add(&block_c_a, &mut logger).unwrap(), BlockChainAddResult::Ok);
+        assert_eq!(chain_b.add(&block_c_b, &mut logger).unwrap(), BlockChainAddResult::Ok);
+        assert_eq!(chain_a.add(&block_b, &mut logger).unwrap(), BlockChainAddResult::Duplicate);
 
         let block_d_b = miner::mine_block(Block::new(&chain_b, &wallet).unwrap());
-        assert_eq!(chain_b.add(&block_d_b).unwrap(), BlockChainAddResult::Ok);
+        assert_eq!(chain_b.add(&block_d_b, &mut logger).unwrap(), BlockChainAddResult::Ok);
 
         let block_e_b = miner::mine_block(Block::new(&chain_b, &wallet).unwrap());
-        assert_eq!(chain_b.add(&block_e_b).unwrap(), BlockChainAddResult::Ok);
+        assert_eq!(chain_b.add(&block_e_b, &mut logger).unwrap(), BlockChainAddResult::Ok);
 
-        assert_eq!(chain_a.add(&block_e_b).unwrap(), BlockChainAddResult::MoreNeeded);
-        assert_ne!(chain_a.add(&block_d_b).unwrap(), BlockChainAddResult::Ok);
+        assert_eq!(chain_a.add(&block_e_b, &mut logger).unwrap(), BlockChainAddResult::MoreNeeded);
+        assert_ne!(chain_a.add(&block_d_b, &mut logger).unwrap(), BlockChainAddResult::Ok);
 
         let mut branch = Vec::<Block>::new();
         branch.push(block_c_b);

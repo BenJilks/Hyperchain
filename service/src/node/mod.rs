@@ -106,7 +106,7 @@ impl<W> PacketHandler<W> for Node<W>
             Packet::Block(block) =>
             {
                 // Try and add the block to the chain, if it's a duplicate or invalid, ignore it
-                match self.chain.add(&block)?
+                match self.chain.add(&block, &mut self.logger)?
                 {
                     BlockChainAddResult::Ok =>
                     {

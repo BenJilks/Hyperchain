@@ -1,6 +1,6 @@
 pub mod private_wallet;
 pub mod public_wallet;
-use crate::block::{Block, PUB_KEY_LEN, HASH_LEN};
+use crate::block::{Block, Hash, PUB_KEY_LEN, HASH_LEN};
 use crate::block::transactions::BlockTransactions;
 use crate::chain::BlockChain;
 
@@ -28,12 +28,27 @@ impl Default for WalletStatus
 
 }
 
+pub fn get_status_for_address(chain: &BlockChain, address: &Hash) -> WalletStatus
+{
+    let mut status = WalletStatus
+    {
+        balance: 0.0,
+        max_id: 0u32,
+    };
+
+    chain.walk(&mut |block: &Block| {
+        block.update_wallet_status(address, &mut status);
+    });
+
+    status
+}
+
 pub trait Wallet
 {
 
     fn get_public_key(&self) -> [u8; PUB_KEY_LEN];
 
-    fn get_address(&self) -> [u8; HASH_LEN]
+    fn get_address(&self) -> Hash
     {
         let mut hasher = Sha256::default();
         hasher.update(&self.get_public_key());
@@ -45,18 +60,7 @@ pub trait Wallet
     fn get_status(&self, chain: &BlockChain) -> WalletStatus
         where Self: Sized
     {
-        let mut status = WalletStatus
-        {
-            balance: 0.0,
-            max_id: 0u32,
-        };
-
-        let address = self.get_address();
-        chain.walk(&mut |block: &Block| {
-            block.update_wallet_status(&address, &mut status);
-        });
-
-        status
+        get_status_for_address(chain, &self.get_address())
     }
 
 }

@@ -63,11 +63,12 @@ fn mine_next_block<W>(network_connection: &Arc<Mutex<NetworkConnection<Node<W>, 
 
     // Add it to the chain if it's still the top
     let mut network_connection_lock = network_connection.lock().unwrap();
+    let mut logger = network_connection_lock.logger.clone();
     let chain = &mut network_connection_lock.handler().chain();
     let top = chain.top();
     if top.is_none() || top.unwrap().block_id + 1 == block.block_id 
     {
-        match chain.add(&block)?
+        match chain.add(&block, &mut logger)?
         {
             BlockChainAddResult::Ok =>
             {

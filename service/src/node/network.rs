@@ -465,7 +465,7 @@ pub struct NetworkConnection<P, W>
     port: u16,
     should_shutdown: bool,
     packet_handler: P,
-    logger: Logger<W>,
+    pub logger: Logger<W>,
 
     message_sender: Option<Sender<Message>>,
     connection_manager: Option<Arc<Mutex<ConnectionManager<W>>>>,

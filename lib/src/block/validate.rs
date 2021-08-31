@@ -1,6 +1,9 @@
-use super::{Block, current_timestamp};
+use super::{Block, Hash, current_timestamp};
+use super::transactions::BlockTransactions;
 use super::target::{calculate_target, hash_from_target};
 use crate::transaction::TransactionValidationResult;
+use crate::chain::BlockChain;
+use crate::wallet::get_status_for_address;
 
 use rsa::BigUint;
 use std::error::Error;
@@ -15,6 +18,7 @@ pub enum BlockValidationResult
     POW,
     Target,
     Transaction(TransactionValidationResult),
+    Balance(Hash),
 }
 
 impl std::fmt::Display for BlockValidationResult
@@ -31,6 +35,7 @@ impl std::fmt::Display for BlockValidationResult
             BlockValidationResult::POW => write!(f, "No valid proof or work"),
             BlockValidationResult::Target => write!(f, "Incorrect target value"),
             BlockValidationResult::Transaction(result) => write!(f, "{}", result),
+            BlockValidationResult::Balance(_) => write!(f, "Insufficient balance"),
         }
     }
 
@@ -38,23 +43,30 @@ impl std::fmt::Display for BlockValidationResult
 
 pub trait BlockValidate
 {
-    fn validate_next(&self, prev: &Block) -> Result<BlockValidationResult, Box<dyn Error>>;
-    fn validate_pow(&self) -> Result<BlockValidationResult, Box<dyn Error>>;
+    fn validate_next(&self, prev: &Block) 
+        -> Result<BlockValidationResult, Box<dyn Error>>;
+
+    fn validate_pow(&self) 
+        -> Result<BlockValidationResult, Box<dyn Error>>;
 
     fn validate_target(&self, 
         start_sample: Option<&Block>, 
         end_sample: Option<&Block>) -> BlockValidationResult;
 
-    fn validate(&self,
+    fn validate_content(&self,
         start_sample: Option<&Block>, 
-        end_sample: Option<&Block>) -> Result<BlockValidationResult, Box<dyn Error>>;
+        end_sample: Option<&Block>) 
+        -> Result<BlockValidationResult, Box<dyn Error>>;
+
+    fn validate(&self, chain: &BlockChain) 
+        -> Result<BlockValidationResult, Box<dyn Error>>;
 }
 
-fn validate_content(block: &Block) -> Result<BlockValidationResult, Box<dyn Error>>
+fn validate_transactions(block: &Block) -> Result<BlockValidationResult, Box<dyn Error>>
 {
     for transaction in &block.transactions 
     {
-        match transaction.validate()?
+        match transaction.validate_content()?
         {
             TransactionValidationResult::Ok => {},
             result => return Ok(BlockValidationResult::Transaction(result)),
@@ -111,7 +123,7 @@ impl BlockValidate for Block
         }
     }
 
-    fn validate(&self,
+    fn validate_content(&self,
                 start_sample: Option<&Block>, 
                 end_sample: Option<&Block>) -> Result<BlockValidationResult, Box<dyn Error>>
     {
@@ -125,10 +137,48 @@ impl BlockValidate for Block
             BlockValidationResult::Ok => {},
             err => return Ok(err),
         }
-        match validate_content(self)?
+        match validate_transactions(self)?
         {
             BlockValidationResult::Ok => {},
             err => return Ok(err),
+        }
+
+        Ok(BlockValidationResult::Ok)
+    }
+
+    fn validate(&self, chain: &BlockChain) 
+        -> Result<BlockValidationResult, Box<dyn Error>>
+    {
+        let (sample_start, sample_end) = 
+            if self.block_id == 0 {
+                (None, None)
+            } else {
+                chain.take_sample_at(self.block_id - 1)
+            };
+
+        if sample_end.is_some()
+        {
+            match self.validate_next(sample_end.unwrap())?
+            {
+                BlockValidationResult::Ok => {},
+                err => return Ok(err),
+            }
+        }
+
+        match self.validate_content(sample_start, sample_end)?
+        {
+            BlockValidationResult::Ok => {},
+            err => return Ok(err),
+        }
+
+        for address in self.get_addresses_used() 
+        {
+            let mut status = get_status_for_address(chain, &address);
+            self.update_wallet_status(&address, &mut status);
+
+            if status.balance < 0.0 {
+                return Ok(BlockValidationResult::Balance(address));
+            }
         }
 
         Ok(BlockValidationResult::Ok)
@@ -165,11 +215,11 @@ mod tests
 
         assert_ne!(block.validate_pow().unwrap(), BlockValidationResult::Ok);
         assert_eq!(block.validate_target(None, None), BlockValidationResult::Ok);
-        assert_ne!(block.validate(None, None).unwrap(), BlockValidationResult::Ok);
+        assert_ne!(block.validate_content(None, None).unwrap(), BlockValidationResult::Ok);
 
         block = miner::mine_block(block);
         assert_eq!(block.validate_pow().unwrap(), BlockValidationResult::Ok);
-        assert_eq!(block.validate(None, None).unwrap(), BlockValidationResult::Ok);
+        assert_eq!(block.validate_content(None, None).unwrap(), BlockValidationResult::Ok);
 
         {
             let mut wallet_status = WalletStatus::default();
