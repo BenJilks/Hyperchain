@@ -93,8 +93,16 @@ fn transaction_info(mut client: Client, options: &ArgMatches)
     Ok(())
 }
 
-fn stats(_client: Client)
+fn new_wallet(options: &ArgMatches) -> Result<(), Box<dyn Error>>
 {
+    let output = options.value_of("output").unwrap();
+
+    println!("Creating new wallet...");
+    let wallet = PrivateWallet::new()?;
+    wallet.write_to_file(&PathBuf::from(output))?;
+    println!("Done!");
+
+    Ok(())
 }
 
 fn shutdown(mut client: Client) -> Result<(), Box<dyn Error>>
@@ -113,6 +121,7 @@ fn main() -> Result<(), Box<dyn Error>>
         .version("0.1.0")
         .author("Ben Jilks <benjyjilks@gmail.com>")
         .about("Command line interface for the hyperchain service")
+
         .subcommand(SubCommand::with_name("balance")
             .about("Display a wallets balance")
                 .arg(Arg::with_name("wallet")
@@ -121,6 +130,7 @@ fn main() -> Result<(), Box<dyn Error>>
                     .takes_value(true)
                     .required(true)
                     .help("Path to wallet file")))
+
         .subcommand(SubCommand::with_name("send")
             .about("Sent coins to someone")
                 .arg(Arg::with_name("from")
@@ -147,6 +157,7 @@ fn main() -> Result<(), Box<dyn Error>>
                      .takes_value(true)
                      .required(true)
                      .help("Transaction fee")))
+        
         .subcommand(SubCommand::with_name("transaction-info")
             .about("Display transaction information")
             .arg(Arg::with_name("id")
@@ -155,10 +166,19 @@ fn main() -> Result<(), Box<dyn Error>>
                  .takes_value(true)
                  .required(true)
                  .help("Id of transaction")))
-        .subcommand(SubCommand::with_name("stats")
-            .about("Display some blockchain statistics"))
+        
+        .subcommand(SubCommand::with_name("new-wallet")
+            .about("Create a new wallet")
+            .arg(Arg::with_name("output")
+                 .short("o")
+                 .long("output")
+                 .takes_value(true)
+                 .required(true)
+                 .help("Output path of new wallet")))
+
         .subcommand(SubCommand::with_name("shutdown")
             .about("Shutdown service"))
+        
         .get_matches();
 
     let client_or_error = Client::new();
@@ -174,11 +194,10 @@ fn main() -> Result<(), Box<dyn Error>>
         Some("balance") => balance(client, matches.subcommand().1.unwrap())?,
         Some("send") => send(client, matches.subcommand().1.unwrap())?,
         Some("transaction-info") => transaction_info(client, matches.subcommand().1.unwrap())?,
-        Some("stats") => stats(client),
+        Some("new-wallet") => new_wallet(matches.subcommand().1.unwrap())?,
         Some("shutdown") => shutdown(client)?,
         Some(&_) | None => println!("Error: Must specify an action"),
     }
 
     Ok(())
 }
-
