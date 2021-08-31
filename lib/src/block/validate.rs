@@ -50,23 +50,18 @@ pub trait BlockValidate
         end_sample: Option<&Block>) -> Result<BlockValidationResult, Box<dyn Error>>;
 }
 
-impl Block
+fn validate_content(block: &Block) -> Result<BlockValidationResult, Box<dyn Error>>
 {
-
-    fn validate_content(&self) -> Result<BlockValidationResult, Box<dyn Error>>
+    for transaction in &block.transactions 
     {
-        for transaction in &self.transactions 
+        match transaction.validate()?
         {
-            match transaction.validate()?
-            {
-                TransactionValidationResult::Ok => {},
-                result => return Ok(BlockValidationResult::Transaction(result)),
-            }
+            TransactionValidationResult::Ok => {},
+            result => return Ok(BlockValidationResult::Transaction(result)),
         }
-
-        Ok(BlockValidationResult::Ok)
     }
 
+    Ok(BlockValidationResult::Ok)
 }
 
 impl BlockValidate for Block
@@ -130,7 +125,7 @@ impl BlockValidate for Block
             BlockValidationResult::Ok => {},
             err => return Ok(err),
         }
-        match self.validate_content()?
+        match validate_content(self)?
         {
             BlockValidationResult::Ok => {},
             err => return Ok(err),
@@ -140,3 +135,61 @@ impl BlockValidate for Block
     }
 
 }
+
+#[cfg(test)]
+mod tests
+{
+
+    use super::*;
+    use crate::block::transactions::BlockTransactions;
+    use libhyperchain::transaction::Transaction;
+    use libhyperchain::chain::BlockChain;
+    use libhyperchain::logger::{Logger, LoggerLevel};
+    use libhyperchain::wallet::{WalletStatus, Wallet};
+    use libhyperchain::wallet::private_wallet::PrivateWallet;
+    use crate::miner;
+    use std::path::PathBuf;
+
+    #[test]
+    fn test_block_verify()
+    {
+        let mut logger = Logger::new(std::io::stdout(), LoggerLevel::Error);
+        let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet"), &mut logger).unwrap();
+        let other = PrivateWallet::read_from_file(&PathBuf::from("other.wallet"), &mut logger).unwrap();
+        let chain = BlockChain::new(&mut logger);
+
+        let mut block = Block::new(&chain, &wallet).expect("Can create block");
+        let transaction = Transaction::for_chain(&chain, &wallet, &other, 4.0, 1.0)
+            .expect("Create transaction");
+        block.add_transaction(transaction);
+
+        assert_ne!(block.validate_pow().unwrap(), BlockValidationResult::Ok);
+        assert_eq!(block.validate_target(None, None), BlockValidationResult::Ok);
+        assert_ne!(block.validate(None, None).unwrap(), BlockValidationResult::Ok);
+
+        block = miner::mine_block(block);
+        assert_eq!(block.validate_pow().unwrap(), BlockValidationResult::Ok);
+        assert_eq!(block.validate(None, None).unwrap(), BlockValidationResult::Ok);
+
+        {
+            let mut wallet_status = WalletStatus::default();
+            block.update_wallet_status(&wallet.get_address(), &mut wallet_status);
+            assert_eq!(wallet_status.balance, block.calculate_reward() - 4.0);
+            assert_eq!(wallet_status.max_id, 1);
+        }
+
+        {
+            let mut wallet_status = WalletStatus::default();
+            block.update_wallet_status(&other.get_address(), &mut wallet_status);
+            assert_eq!(wallet_status.balance, 4.0);
+            assert_eq!(wallet_status.max_id, 0);
+        }
+
+        let addresses_used = block.get_addresses_used();
+        assert_eq!(addresses_used.len(), 2);
+        assert_eq!(addresses_used.contains(&wallet.get_address()), true);
+        assert_eq!(addresses_used.contains(&other.get_address()), true);
+    }
+
+}
+

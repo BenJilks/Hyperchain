@@ -1,13 +1,13 @@
 use crate::node::network::{NetworkConnection, Packet};
 use crate::node::Node;
-use crate::block::Block;
-use crate::block::validate::{BlockValidate, BlockValidationResult};
-use crate::block;
-use crate::chain::BlockChainAddResult;
-use crate::wallet::private_wallet::PrivateWallet;
 use crate::miner;
-use crate::logger::Logger;
 
+use libhyperchain::block::Block;
+use libhyperchain::block::validate::{BlockValidate, BlockValidationResult};
+use libhyperchain::block;
+use libhyperchain::chain::BlockChainAddResult;
+use libhyperchain::wallet::private_wallet::PrivateWallet;
+use libhyperchain::logger::Logger;
 use std::sync::{Arc, Mutex};
 use std::io::Write;
 use std::path::PathBuf;

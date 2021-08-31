@@ -1,8 +1,8 @@
-use crate::block::Block;
-use crate::block::validate::{BlockValidate, BlockValidationResult};
 use crate::node::network::NetworkConnection;
 use crate::node::Node;
 
+use libhyperchain::block::Block;
+use libhyperchain::block::validate::{BlockValidate, BlockValidationResult};
 use std::sync::{Arc, Mutex};
 use std::io::Write;
 use std::error::Error;

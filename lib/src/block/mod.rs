@@ -22,7 +22,7 @@ pub type Hash = [u8; HASH_LEN];
 
 const BLOCK_SIZE: usize = 16 * 1024 * 1024; // 16 MB
 
-fn current_timestamp() -> u128
+pub fn current_timestamp() -> u128
 {
     SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis()
 }
@@ -149,62 +149,6 @@ impl Block
 
         let hash = hasher.clone().finalize();
         Ok( *slice_as_array!(&hash[0..HASH_LEN], [u8; HASH_LEN]).unwrap() )
-    }
-
-}
-
-#[cfg(test)]
-mod tests
-{
-
-    use super::*;
-    use super::validate::{BlockValidate, BlockValidationResult};
-    use super::transactions::BlockTransactions;
-    use crate::logger::{Logger, LoggerLevel};
-    use crate::wallet::WalletStatus;
-    use crate::wallet::private_wallet::PrivateWallet;
-    use crate::miner;
-    use std::path::PathBuf;
-
-    #[test]
-    fn test_block_verify()
-    {
-        let mut logger = Logger::new(std::io::stdout(), LoggerLevel::Error);
-        let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet"), &mut logger).unwrap();
-        let other = PrivateWallet::read_from_file(&PathBuf::from("other.wallet"), &mut logger).unwrap();
-        let chain = BlockChain::new(&mut logger);
-
-        let mut block = Block::new(&chain, &wallet).expect("Can create block");
-        let transaction = Transaction::for_chain(&chain, &wallet, &other, 4.0, 1.0)
-            .expect("Create transaction");
-        block.add_transaction(transaction);
-
-        assert_ne!(block.validate_pow().unwrap(), BlockValidationResult::Ok);
-        assert_eq!(block.validate_target(None, None), BlockValidationResult::Ok);
-        assert_ne!(block.validate(None, None).unwrap(), BlockValidationResult::Ok);
-
-        block = miner::mine_block(block);
-        assert_eq!(block.validate_pow().unwrap(), BlockValidationResult::Ok);
-        assert_eq!(block.validate(None, None).unwrap(), BlockValidationResult::Ok);
-
-        {
-            let mut wallet_status = WalletStatus::default();
-            block.update_wallet_status(&wallet.get_address(), &mut wallet_status);
-            assert_eq!(wallet_status.balance, block.calculate_reward() - 4.0);
-            assert_eq!(wallet_status.max_id, 1);
-        }
-
-        {
-            let mut wallet_status = WalletStatus::default();
-            block.update_wallet_status(&other.get_address(), &mut wallet_status);
-            assert_eq!(wallet_status.balance, 4.0);
-            assert_eq!(wallet_status.max_id, 0);
-        }
-
-        let addresses_used = block.get_addresses_used();
-        assert_eq!(addresses_used.len(), 2);
-        assert_eq!(addresses_used.contains(&wallet.get_address()), true);
-        assert_eq!(addresses_used.contains(&other.get_address()), true);
     }
 
 }

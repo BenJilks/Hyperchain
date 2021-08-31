@@ -1,4 +1,4 @@
-use crate::{Command, Response};
+use crate::command::{Command, Response};
 
 use tcp_channel;
 use tcp_channel::{SenderBuilder, ChannelSend};

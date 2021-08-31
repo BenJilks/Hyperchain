@@ -2,10 +2,11 @@ mod miner;
 use miner::start_miner_thread;
 use crate::node::network::NetworkConnection;
 use crate::node::Node;
-use crate::chain::BlockChain;
-use crate::logger::{Logger, LoggerLevel, StdLoggerOutput};
 
-use libhyperchain::{server, Command, Response};
+use libhyperchain::chain::BlockChain;
+use libhyperchain::logger::{Logger, LoggerLevel, StdLoggerOutput};
+use libhyperchain::server;
+use libhyperchain::command::{Command, Response};
 use std::error::Error;
 
 pub fn start() -> Result<(), Box<dyn Error>>
