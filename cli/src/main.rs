@@ -2,8 +2,8 @@ extern crate libhyperchain;
 extern crate clap;
 extern crate base_62;
 
-use libhyperchain::command::{Command, Response};
-use libhyperchain::client::Client;
+use libhyperchain::service::command::{Command, Response};
+use libhyperchain::service::client::Client;
 use libhyperchain::wallet::Wallet;
 use libhyperchain::wallet::private_wallet::PrivateWallet;
 use libhyperchain::logger::{Logger, LoggerLevel, StdLoggerOutput};

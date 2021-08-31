@@ -1,4 +1,4 @@
-use crate::command::{Command, Response};
+use super::command::{Command, Response};
 
 use tcp_channel::LittleEndian;
 use tcp_channel::{ReceiverBuilder, ChannelRecv};

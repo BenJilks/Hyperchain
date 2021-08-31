@@ -2,7 +2,7 @@ use crate::node::network::NetworkConnection;
 use crate::node::Node;
 
 use libhyperchain::transaction::Transaction;
-use libhyperchain::command::Response;
+use libhyperchain::service::command::Response;
 use libhyperchain::wallet::private_wallet::PrivateWallet;
 use std::io::Write;
 

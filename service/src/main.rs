@@ -16,8 +16,8 @@ use crate::node::Node;
 
 use libhyperchain::chain::BlockChain;
 use libhyperchain::logger::{Logger, LoggerLevel, StdLoggerOutput};
-use libhyperchain::server;
-use libhyperchain::command::{Command, Response};
+use libhyperchain::service::server;
+use libhyperchain::service::command::{Command, Response};
 use std::error::Error;
 
 fn main() -> Result<(), Box<dyn Error>>
