@@ -199,7 +199,7 @@ mod tests
     }
 
     fn mine_block<W>(connection: &Arc<Mutex<NetworkConnection<Node<W>, W>>>, 
-                     wallet: &PrivateWallet) -> Block
+                     wallet: &PrivateWallet, logger: &mut Logger<W>) -> Block
         where W: Write + Clone + Sync + Send + 'static
     {
         let mut connection_lock = connection.lock().unwrap();
@@ -207,7 +207,7 @@ mod tests
         let block = miner::mine_block(Block::new(chain, wallet)
             .expect("Create block"));
 
-        chain.add(&block).unwrap();
+        chain.add(&block, logger).unwrap();
         connection_lock.manager().send(Packet::Block(block.clone()));
 
         block
@@ -220,24 +220,24 @@ mod tests
         let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet"), &mut logger).unwrap();
 
         let mut connection_a = create_node(8030, logger.clone());
-        let block_a = mine_block(&mut connection_a, &wallet);
-        let block_b = mine_block(&mut connection_a, &wallet);
-        let block_c = mine_block(&mut connection_a, &wallet);
-        mine_block(&mut connection_a, &wallet);
-        mine_block(&mut connection_a, &wallet);
+        let block_a = mine_block(&mut connection_a, &wallet, &mut logger);
+        let block_b = mine_block(&mut connection_a, &wallet, &mut logger);
+        let block_c = mine_block(&mut connection_a, &wallet, &mut logger);
+        mine_block(&mut connection_a, &wallet, &mut logger);
+        mine_block(&mut connection_a, &wallet, &mut logger);
 
         let mut connection_b = create_node(8031, logger.clone());
         {
             let mut connection_b_lock = connection_b.lock().unwrap();
-            connection_b_lock.handler().chain().add(&block_a).unwrap();
-            connection_b_lock.handler().chain().add(&block_b).unwrap();
-            connection_b_lock.handler().chain().add(&block_c).unwrap();
+            connection_b_lock.handler().chain().add(&block_a, &mut logger).unwrap();
+            connection_b_lock.handler().chain().add(&block_b, &mut logger).unwrap();
+            connection_b_lock.handler().chain().add(&block_c, &mut logger).unwrap();
         }
-        mine_block(&mut connection_b, &wallet);
-        mine_block(&mut connection_b, &wallet);
-        mine_block(&mut connection_b, &wallet);
-        mine_block(&mut connection_b, &wallet);
-        let block_h_b = mine_block(&mut connection_b, &wallet);
+        mine_block(&mut connection_b, &wallet, &mut logger);
+        mine_block(&mut connection_b, &wallet, &mut logger);
+        mine_block(&mut connection_b, &wallet, &mut logger);
+        mine_block(&mut connection_b, &wallet, &mut logger);
+        let block_h_b = mine_block(&mut connection_b, &wallet, &mut logger);
 
         connection_b.lock().unwrap().manager().register_node("127.0.0.1:8030", None);
         let block_h_a = wait_for_block(&connection_a, 7);
@@ -251,14 +251,14 @@ mod tests
         let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet"), &mut logger).unwrap();
 
         let mut connection_a = create_node(8020, logger.clone());
-        mine_block(&mut connection_a, &wallet);
-        mine_block(&mut connection_a, &wallet);
+        mine_block(&mut connection_a, &wallet, &mut logger);
+        mine_block(&mut connection_a, &wallet, &mut logger);
 
         let mut connection_b = create_node(8021, logger.clone());
-        mine_block(&mut connection_b, &wallet);
-        mine_block(&mut connection_b, &wallet);
-        mine_block(&mut connection_b, &wallet);
-        let block_d_on_b = mine_block(&mut connection_b, &wallet);
+        mine_block(&mut connection_b, &wallet, &mut logger);
+        mine_block(&mut connection_b, &wallet, &mut logger);
+        mine_block(&mut connection_b, &wallet, &mut logger);
+        let block_d_on_b = mine_block(&mut connection_b, &wallet, &mut logger);
         
         connection_b.lock().unwrap().manager().register_node("127.0.0.1:8020", None);
         let block_d_on_a = wait_for_block(&connection_a, 3);
@@ -276,15 +276,15 @@ mod tests
         connection_b.lock().unwrap().manager().register_node("127.0.0.1:8010", None);
 
         // Transfer block a -> b
-        let block_a_on_a = mine_block(&mut connection_a, &wallet);
+        let block_a_on_a = mine_block(&mut connection_a, &wallet, &mut logger);
         let block_a_on_b = wait_for_block(&connection_b, 0);
         assert_eq!(block_a_on_a, block_a_on_b);
 
         // Transfer 3 blocks b -> a
-        let block_b_on_b = mine_block(&mut connection_b, &wallet);
-        let block_c_on_b = mine_block(&mut connection_b, &wallet);
-        let block_d_on_b = mine_block(&mut connection_b, &wallet);
-        let block_e_on_b = mine_block(&mut connection_b, &wallet);
+        let block_b_on_b = mine_block(&mut connection_b, &wallet, &mut logger);
+        let block_c_on_b = mine_block(&mut connection_b, &wallet, &mut logger);
+        let block_d_on_b = mine_block(&mut connection_b, &wallet, &mut logger);
+        let block_e_on_b = mine_block(&mut connection_b, &wallet, &mut logger);
         let block_b_on_a = wait_for_block(&connection_a, 1);
         let block_c_on_a = wait_for_block(&connection_a, 2);
         let block_d_on_a = wait_for_block(&connection_a, 3);
@@ -296,21 +296,21 @@ mod tests
 
         // New node joins with a different, shorter chain
         let mut connection_c = create_node(8012, logger.clone());
-        mine_block(&mut connection_c, &wallet);
-        mine_block(&mut connection_c, &wallet);
-        mine_block(&mut connection_c, &wallet);
+        mine_block(&mut connection_c, &wallet, &mut logger);
+        mine_block(&mut connection_c, &wallet, &mut logger);
+        mine_block(&mut connection_c, &wallet, &mut logger);
         connection_c.lock().unwrap().manager().register_node("127.0.0.1:8010", None);
         let block_e_on_c = wait_for_block(&connection_c, 4);
         assert_eq!(block_e_on_c, block_e_on_a);
 
         // New node joins with a different, longer chain
         let mut connection_d = create_node(8013, logger.clone());
-        mine_block(&mut connection_d, &wallet);
-        mine_block(&mut connection_d, &wallet);
-        mine_block(&mut connection_d, &wallet);
-        mine_block(&mut connection_d, &wallet);
-        mine_block(&mut connection_d, &wallet);
-        let block_f_on_d = mine_block(&mut connection_d, &wallet);
+        mine_block(&mut connection_d, &wallet, &mut logger);
+        mine_block(&mut connection_d, &wallet, &mut logger);
+        mine_block(&mut connection_d, &wallet, &mut logger);
+        mine_block(&mut connection_d, &wallet, &mut logger);
+        mine_block(&mut connection_d, &wallet, &mut logger);
+        let block_f_on_d = mine_block(&mut connection_d, &wallet, &mut logger);
 
         connection_d.lock().unwrap().manager().register_node("127.0.0.1:8010", None);
         let block_f_on_a = wait_for_block(&connection_a, 5);
