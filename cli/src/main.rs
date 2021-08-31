@@ -70,7 +70,23 @@ fn transaction_info(mut client: Client, options: &ArgMatches)
     {
         Response::TransactionInfo(transaction, block) => 
         {
-            println!("{:?} {:?}", transaction, block);
+            println!("From: {}", base_62::encode(&transaction.get_from_address()));
+            println!("To: {}", base_62::encode(&transaction.header.to));
+            println!("Amount: {}", transaction.header.amount);
+            println!("Fee: {}", transaction.header.transaction_fee);
+            
+            match block
+            {
+                Some(block) =>
+                {
+                    println!("In block: {}", block.block_id);
+                },
+
+                None =>
+                {
+                    println!("In block: Pending");
+                }
+            }
         },
         _ => println!("Error"),
     }
