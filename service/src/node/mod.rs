@@ -2,7 +2,8 @@ pub mod network;
 use network::{PacketHandler, ConnectionManager, Packet};
 
 use libhyperchain::logger::{Logger, LoggerLevel};
-use libhyperchain::chain::{BlockChain, BlockChainAddResult, BlockChainCanMergeResult};
+use libhyperchain::chain::{BlockChain, BlockChainAddResult};
+use libhyperchain::chain::branch::BlockChainCanMergeResult;
 use libhyperchain::block::Block;
 use std::io::Write;
 use std::error::Error;
