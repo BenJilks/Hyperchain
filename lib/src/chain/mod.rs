@@ -31,14 +31,15 @@ pub enum BlockChainAddResult
 impl BlockChain
 {
 
-    pub fn new(logger: &mut Logger<impl Write>) -> Self
+    pub fn open(path: &PathBuf, logger: &mut Logger<impl Write>) 
+        -> Result<Self, Box<dyn Error>>
     {
-        logger.log(LoggerLevel::Info, "Create new chain");
-        BlockChain
+        logger.log(LoggerLevel::Info, &format!("Open chain in {:?}", path));
+        Ok(BlockChain
         {
-            blocks: Storage::new(&PathBuf::from("blockchain")),
+            blocks: Storage::new(path)?,
             transaction_queue: VecDeque::new(),
-        }
+        })
     }
 
     pub fn take_sample_at(&self, block_id: u64) -> (Option<Block>, Option<Block>)
@@ -204,12 +205,29 @@ mod tests
 
     use std::path::PathBuf;
 
+    impl BlockChain
+    {
+        pub fn open_temp(logger: &mut Logger<impl Write>) -> Self
+        {
+            let path = std::env::temp_dir().join(rand::random::<u32>().to_string());
+            Self::open(&path, logger).unwrap()
+        }
+    }
+
+    impl Drop for BlockChain
+    {
+        fn drop(&mut self)
+        {
+            let _ = std::fs::remove_dir_all(self.blocks.path());
+        }
+    }
+
     #[test]
     fn test_block_chain()
     {
         let mut logger = Logger::new(std::io::stdout(), LoggerLevel::Error);
-        let mut chain_a = BlockChain::new(&mut logger);
-        let mut chain_b = BlockChain::new(&mut logger);
+        let mut chain_a = BlockChain::open_temp(&mut logger);
+        let mut chain_b = BlockChain::open_temp(&mut logger);
         let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet"), &mut logger).unwrap();
         
         let block_a = miner::mine_block(Block::new(&chain_a, &wallet).unwrap());
@@ -248,3 +266,4 @@ mod tests
    }
 
 }
+

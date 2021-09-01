@@ -21,6 +21,7 @@ use libhyperchain::logger::{Logger, LoggerLevel, StdLoggerOutput};
 use libhyperchain::service::server;
 use libhyperchain::service::command::{Command, Response};
 use std::error::Error;
+use std::path::PathBuf;
 
 fn main() -> Result<(), Box<dyn Error>>
 {
@@ -29,7 +30,7 @@ fn main() -> Result<(), Box<dyn Error>>
     let port = std::env::args().nth(1).unwrap().parse::<u16>()?;
 
     // Create and open node
-    let chain = BlockChain::new(&mut logger);
+    let chain = BlockChain::open(&PathBuf::from("blockchain"), &mut logger)?;
     let node = Node::new(port, chain, logger.clone());
 
     let miner_thread;

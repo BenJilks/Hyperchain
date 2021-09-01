@@ -163,7 +163,7 @@ mod tests
     fn test_transaction()
     {
         let mut logger = Logger::new(std::io::stdout(), LoggerLevel::Error);
-        let mut chain = BlockChain::new(&mut logger);
+        let mut chain = BlockChain::open_temp(&mut logger);
         let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet"), &mut logger).unwrap();
         let other = PrivateWallet::read_from_file(&PathBuf::from("other.wallet"), &mut logger).unwrap();
 

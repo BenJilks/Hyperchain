@@ -188,7 +188,7 @@ mod tests
         let mut logger = Logger::new(std::io::stdout(), LoggerLevel::Error);
         let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet"), &mut logger).unwrap();
         let other = PrivateWallet::read_from_file(&PathBuf::from("other.wallet"), &mut logger).unwrap();
-        let chain = BlockChain::new(&mut logger);
+        let chain = BlockChain::open_temp(&mut logger);
 
         let mut block = Block::new(&chain, &wallet).expect("Can create block");
         let transaction = Transaction::for_chain(&chain, &wallet, other.get_address(), 4.0, 1.0)

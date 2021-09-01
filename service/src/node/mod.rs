@@ -192,7 +192,9 @@ mod tests
     fn create_node<W>(port: u16, mut logger: Logger<W>) -> Arc<Mutex<NetworkConnection<Node<W>, W>>>
         where W: Write + Clone + Sync + Send + 'static
     {
-        let chain = BlockChain::new(&mut logger);
+        let time = libhyperchain::block::current_timestamp();
+        let path = std::env::temp_dir().join(format!("{}{}", time, port.to_string()));
+        let chain = BlockChain::open(&path, &mut logger).unwrap();
         let node = Node::new(port, chain, logger.clone());
         let network_connection = NetworkConnection::new(port, node, logger);
         network_connection
