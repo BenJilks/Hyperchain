@@ -1,9 +1,11 @@
 use super::{BlockChain, BlockValidationResult, BlockChainAddResult};
-use crate::block::Block;
+use crate::block::{Block, Hash};
 use crate::logger::Logger;
+use crate::wallet::WalletStatus;
 
 use std::error::Error;
 use std::io::Write;
+use std::collections::HashMap;
 
 #[derive(Debug, PartialEq)]
 pub enum BlockChainCanMergeResult
@@ -17,6 +19,62 @@ pub enum BlockChainCanMergeResult
 
 impl BlockChain
 {
+
+    fn validate_branch(&mut self, branch: &[Block])
+        -> Result<BlockValidationResult, Box<dyn Error>>
+    {
+        let bottom = branch.first().unwrap();
+        let last_block_id = 
+            if bottom.block_id == 0 {
+                0
+            } else {
+                bottom.block_id - 1
+            };
+
+        let mut last_block_or_none = self.block(last_block_id);
+        let mut wallets = HashMap::<Hash, WalletStatus>::new();
+        for block in branch
+        {
+            for address in block.get_addresses_used()
+            {
+                if !wallets.contains_key(&address) 
+                {
+                    let status = self.get_wallet_status_up_to_block(last_block_id, &address);
+                    wallets.insert(address, status);
+                }
+
+                let status = wallets.get_mut(&address).unwrap();
+                let new_status = block.update_wallet_status(&address, status.clone());
+                if new_status.is_none() || new_status.as_ref().unwrap().balance < 0.0 {
+                    return Ok(BlockValidationResult::Balance(address));
+                }
+                *status = new_status.unwrap();
+            }
+
+            if last_block_or_none.is_some()
+            {
+                let last_block = last_block_or_none.unwrap();
+
+                // FIXME: Validate transactions in this case
+                let (sample_start, sample_end) = self.take_sample_of_branch_at(branch, last_block.block_id);
+                match block.validate_next(&last_block)?
+                {
+                    BlockValidationResult::Ok => {},
+                    result => return Ok(result),
+                }
+
+                match block.validate_content(sample_start, sample_end)?
+                {
+                    BlockValidationResult::Ok => {},
+                    result => return Ok(result),
+                }
+            }
+
+            last_block_or_none = Some( block.clone() );
+        }
+ 
+        Ok(BlockValidationResult::Ok)
+    }
 
     pub fn can_merge_branch(&mut self, branch: &[Block]) 
         -> Result<BlockChainCanMergeResult, Box<dyn Error>>
@@ -38,37 +96,11 @@ impl BlockChain
         }
 
         // Validate branch
-        let mut last_block_or_none = 
-            if bottom.block_id == 0 {
-                None
-            } else {
-                self.block(bottom.block_id - 1)
-            };
-
-        for block in branch
+        match self.validate_branch(branch)?
         {
-            if last_block_or_none.is_some()
-            {
-                let last_block = last_block_or_none.unwrap();
-
-                // FIXME: Validate transactions in this case
-                let (sample_start, sample_end) = self.take_sample_of_branch_at(branch, last_block.block_id);
-                match block.validate_next(&last_block)?
-                {
-                    BlockValidationResult::Ok => {},
-                    result => return Ok(BlockChainCanMergeResult::Invalid(result)),
-                }
-                match block.validate_content(sample_start, sample_end)?
-                {
-                    BlockValidationResult::Ok => {},
-                    result => return Ok(BlockChainCanMergeResult::Invalid(result)),
-                }
-            }
-
-            last_block_or_none = Some( block.clone() );
+            BlockValidationResult::Ok => Ok(BlockChainCanMergeResult::Ok),
+            result => Ok(BlockChainCanMergeResult::Invalid(result)),
         }
- 
-        Ok(BlockChainCanMergeResult::Ok)
     }
 
     pub fn merge_branch<W>(&mut self, branch: Vec<Block>, logger: &mut Logger<W>)
