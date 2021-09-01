@@ -33,7 +33,7 @@ pub fn mine_block_unless_found<W>(network_connection: &Arc<Mutex<NetworkConnecti
                 break;
             }
 
-            let chain = &network_connection_lock.handler().chain();
+            let chain = &mut network_connection_lock.handler().chain();
             if chain.block(block.block_id).is_some() {
                 break;
             }
@@ -51,7 +51,7 @@ fn mine_next_block<W>(network_connection: &Arc<Mutex<NetworkConnection<Node<W>, 
     {
         // Create the next block
         let mut network_connection_lock = network_connection.lock().unwrap();
-        let chain = &network_connection_lock.handler().chain();
+        let chain = &mut network_connection_lock.handler().chain();
         block = block_builder::build(chain, wallet)?;
     }
 

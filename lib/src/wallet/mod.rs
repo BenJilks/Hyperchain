@@ -27,7 +27,7 @@ impl Default for WalletStatus
 
 }
 
-pub fn get_status_for_address(chain: &BlockChain, address: &Hash) -> WalletStatus
+pub fn get_status_for_address(chain: &mut BlockChain, address: &Hash) -> WalletStatus
 {
     let mut status = WalletStatus
     {
@@ -56,7 +56,7 @@ pub trait Wallet
         *slice_as_array!(&hash, [u8; HASH_LEN]).unwrap()
     }
 
-    fn get_status(&self, chain: &BlockChain) -> WalletStatus
+    fn get_status(&self, chain: &mut BlockChain) -> WalletStatus
         where Self: Sized
     {
         get_status_for_address(chain, &self.get_address())
@@ -85,25 +85,25 @@ mod tests
         let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet"), &mut logger).unwrap();
         let other = PrivateWallet::read_from_file(&PathBuf::from("other.wallet"), &mut logger).unwrap();
 
-        let block_a = miner::mine_block(Block::new(&chain, &wallet).expect("Create block"));
+        let block_a = miner::mine_block(Block::new(&mut chain, &wallet).expect("Create block"));
         chain.add(&block_a, &mut logger).unwrap();
 
-        let block_b = miner::mine_block(Block::new(&chain, &other).expect("Create block"));
+        let block_b = miner::mine_block(Block::new(&mut chain, &other).expect("Create block"));
         chain.add(&block_b, &mut logger).unwrap();
         
-        let mut block_c = Block::new(&chain, &wallet).expect("Create block");
-        block_c.add_transaction(Transaction::for_chain(&chain, &wallet, other.get_address(), 4.6, 0.2)
+        let mut block_c = Block::new(&mut chain, &wallet).expect("Create block");
+        block_c.add_transaction(Transaction::for_chain(&mut chain, &wallet, other.get_address(), 4.6, 0.2)
             .expect("Create transaction"));
-        block_c.add_transaction(Transaction::for_chain(&chain, &other, wallet.get_address(), 1.4, 0.2)
+        block_c.add_transaction(Transaction::for_chain(&mut chain, &other, wallet.get_address(), 1.4, 0.2)
             .expect("Create transaction"));
         block_c = miner::mine_block(block_c);
         chain.add(&block_c, &mut logger).unwrap();
 
-        let wallet_status = wallet.get_status(&chain);
+        let wallet_status = wallet.get_status(&mut chain);
         assert_eq!(wallet_status.balance, block_a.calculate_reward() + block_c.calculate_reward() - 4.6 - 0.2 + 1.4 + 0.2 + 0.2);
         assert_eq!(wallet_status.max_id, 1);
 
-        let other_status = other.get_status(&chain);
+        let other_status = other.get_status(&mut chain);
         assert_eq!(other_status.balance, block_b.calculate_reward() + (4.6 - 1.4 - 0.2));
         assert_eq!(other_status.max_id, 1);
     }

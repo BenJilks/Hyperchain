@@ -85,7 +85,7 @@ impl Transaction
         }
     }
 
-    pub fn for_chain(chain: &BlockChain, from: &PrivateWallet, to: Hash, amount: f32, fee: f32) -> Option<Self>
+    pub fn for_chain(chain: &mut BlockChain, from: &PrivateWallet, to: Hash, amount: f32, fee: f32) -> Option<Self>
     {
         let status = from.get_status(chain);
         let header = TransactionHeader 
@@ -167,11 +167,11 @@ mod tests
         let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet"), &mut logger).unwrap();
         let other = PrivateWallet::read_from_file(&PathBuf::from("other.wallet"), &mut logger).unwrap();
 
-        let block = miner::mine_block(Block::new(&chain, &wallet).expect("Create block"));
+        let block = miner::mine_block(Block::new(&mut chain, &wallet).expect("Create block"));
         chain.add(&block, &mut logger).unwrap();
 
         {
-            let transaction = Transaction::for_chain(&chain, &wallet, other.get_address(), 2.4, 0.2)
+            let transaction = Transaction::for_chain(&mut chain, &wallet, other.get_address(), 2.4, 0.2)
                 .expect("Create transaction");
             transaction.header.hash().expect("Hash header");
             assert_eq!(transaction.validate_content().unwrap(), TransactionValidationResult::Ok);
@@ -179,13 +179,13 @@ mod tests
         }
 
         {
-            let transaction = Transaction::for_chain(&chain, &wallet, other.get_address(), -1.6, 0.0)
+            let transaction = Transaction::for_chain(&mut chain, &wallet, other.get_address(), -1.6, 0.0)
                 .expect("Create transaction");
             assert_ne!(transaction.validate_content().unwrap(), TransactionValidationResult::Ok);
         }
 
         {
-            let transaction = Transaction::for_chain(&chain, &wallet, other.get_address(), 0.0, -0.0001)
+            let transaction = Transaction::for_chain(&mut chain, &wallet, other.get_address(), 0.0, -0.0001)
                 .expect("Create transaction");
             assert_ne!(transaction.validate_content().unwrap(), TransactionValidationResult::Ok);
         }

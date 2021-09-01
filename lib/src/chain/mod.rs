@@ -15,7 +15,7 @@ use std::path::PathBuf;
 
 pub struct BlockChain
 {
-    blocks: Storage,
+    blocks: Storage<Block>,
     transaction_queue: VecDeque<Transaction>,
 }
 
@@ -42,7 +42,7 @@ impl BlockChain
         })
     }
 
-    pub fn take_sample_at(&self, block_id: u64) -> (Option<Block>, Option<Block>)
+    pub fn take_sample_at(&mut self, block_id: u64) -> (Option<Block>, Option<Block>)
     {
         let end = self.block(block_id);
         if end.is_none() || end.as_ref().unwrap().block_id < BLOCK_SAMPLE_SIZE {
@@ -53,7 +53,7 @@ impl BlockChain
         (start, end)
     }
 
-    pub fn take_sample(&self) -> (Option<Block>, Option<Block>)
+    pub fn take_sample(&mut self) -> (Option<Block>, Option<Block>)
     {
         match self.top()
         {
@@ -111,11 +111,11 @@ impl BlockChain
         }
 
         self.remove_from_transaction_queue(block);
-        self.blocks.store(block.clone());
+        self.blocks.store(block.block_id, block.clone());
         Ok(BlockChainAddResult::Ok)
     }
 
-    fn take_sample_of_branch_at(&self, branch: &[Block], block_id: u64) 
+    fn take_sample_of_branch_at(&mut self, branch: &[Block], block_id: u64) 
         -> (Option<Block>, Option<Block>)
     {
         assert_eq!(branch.is_empty(), false);
@@ -125,7 +125,7 @@ impl BlockChain
         }
 
         let branch_start = branch.first().unwrap();
-        let block_at = |block_id: u64| -> Option<Block>
+        let mut block_at = |block_id: u64| -> Option<Block>
         {
             if block_id >= branch_start.block_id 
             {
@@ -146,7 +146,7 @@ impl BlockChain
         (sample_start, sample_end)
     }
 
-    pub fn walk<F>(&self, on_block: &mut F)
+    pub fn walk<F>(&mut self, on_block: &mut F)
         where F: FnMut(&Block)
     {
         for block_id in 0..self.blocks.next_top() {
@@ -154,12 +154,12 @@ impl BlockChain
         }
     }
 
-    pub fn block(&self, block_id: u64) -> Option<Block>
+    pub fn block(&mut self, block_id: u64) -> Option<Block>
     {
         self.blocks.get(block_id)
     }
 
-    pub fn top(&self) -> Option<Block>
+    pub fn top(&mut self) -> Option<Block>
     {
         if self.blocks.next_top() == 0 {
             None
@@ -168,7 +168,7 @@ impl BlockChain
         }
     }
 
-    pub fn find_transaction_in_chain(&self, transaction_id: &Hash) 
+    pub fn find_transaction_in_chain(&mut self, transaction_id: &Hash) 
         -> Option<(Transaction, Block)>
     {
         for block_id in 0..self.blocks.next_top() 
@@ -230,24 +230,24 @@ mod tests
         let mut chain_b = BlockChain::open_temp(&mut logger);
         let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet"), &mut logger).unwrap();
         
-        let block_a = miner::mine_block(Block::new(&chain_a, &wallet).unwrap());
+        let block_a = miner::mine_block(Block::new(&mut chain_a, &wallet).unwrap());
         assert_eq!(chain_a.add(&block_a, &mut logger).unwrap(), BlockChainAddResult::Ok);
         assert_eq!(chain_b.add(&block_a, &mut logger).unwrap(), BlockChainAddResult::Ok);
 
-        let block_b = miner::mine_block(Block::new(&chain_a, &wallet).unwrap());
+        let block_b = miner::mine_block(Block::new(&mut chain_a, &wallet).unwrap());
         assert_eq!(chain_a.add(&block_b, &mut logger).unwrap(), BlockChainAddResult::Ok);
         assert_eq!(chain_b.add(&block_b, &mut logger).unwrap(), BlockChainAddResult::Ok);
 
-        let block_c_a = miner::mine_block(Block::new(&chain_a, &wallet).unwrap());
-        let block_c_b = miner::mine_block(Block::new(&chain_b, &wallet).unwrap());
+        let block_c_a = miner::mine_block(Block::new(&mut chain_a, &wallet).unwrap());
+        let block_c_b = miner::mine_block(Block::new(&mut chain_b, &wallet).unwrap());
         assert_eq!(chain_a.add(&block_c_a, &mut logger).unwrap(), BlockChainAddResult::Ok);
         assert_eq!(chain_b.add(&block_c_b, &mut logger).unwrap(), BlockChainAddResult::Ok);
         assert_eq!(chain_a.add(&block_b, &mut logger).unwrap(), BlockChainAddResult::Duplicate);
 
-        let block_d_b = miner::mine_block(Block::new(&chain_b, &wallet).unwrap());
+        let block_d_b = miner::mine_block(Block::new(&mut chain_b, &wallet).unwrap());
         assert_eq!(chain_b.add(&block_d_b, &mut logger).unwrap(), BlockChainAddResult::Ok);
 
-        let block_e_b = miner::mine_block(Block::new(&chain_b, &wallet).unwrap());
+        let block_e_b = miner::mine_block(Block::new(&mut chain_b, &wallet).unwrap());
         assert_eq!(chain_b.add(&block_e_b, &mut logger).unwrap(), BlockChainAddResult::Ok);
 
         assert_eq!(chain_a.add(&block_e_b, &mut logger).unwrap(), BlockChainAddResult::MoreNeeded);

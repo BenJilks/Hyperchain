@@ -88,7 +88,7 @@ impl Block
         10.0
     }
 
-    pub fn new<W: Wallet>(chain: &BlockChain, raward_to: &W) -> Result<Self, Box<dyn Error>>
+    pub fn new<W: Wallet>(chain: &mut BlockChain, raward_to: &W) -> Result<Self, Box<dyn Error>>
     {
         let (sample_start, sample_end) = chain.take_sample();
         let target = calculate_target(sample_start, sample_end);

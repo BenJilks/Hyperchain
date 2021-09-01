@@ -16,7 +16,7 @@ pub enum BlockChainCanMergeResult
 impl BlockChain
 {
 
-    pub fn can_merge_branch(&self, branch: &[Block]) 
+    pub fn can_merge_branch(&mut self, branch: &[Block]) 
         -> Result<BlockChainCanMergeResult, Box<dyn Error>>
     {
         if branch.is_empty() {
@@ -73,7 +73,7 @@ impl BlockChain
     {
         assert_eq!(self.can_merge_branch(&branch).unwrap(), BlockChainCanMergeResult::Ok);
         for block in branch {
-            self.blocks.store(block);
+            self.blocks.store(block.block_id, block);
         }
     }
 

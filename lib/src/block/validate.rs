@@ -129,7 +129,7 @@ impl Block
         Ok(BlockValidationResult::Ok)
     }
 
-    pub fn validate(&self, chain: &BlockChain) 
+    pub fn validate(&self, chain: &mut BlockChain) 
         -> Result<BlockValidationResult, Box<dyn Error>>
     {
         let (sample_start, sample_end) = 
@@ -188,10 +188,10 @@ mod tests
         let mut logger = Logger::new(std::io::stdout(), LoggerLevel::Error);
         let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet"), &mut logger).unwrap();
         let other = PrivateWallet::read_from_file(&PathBuf::from("other.wallet"), &mut logger).unwrap();
-        let chain = BlockChain::open_temp(&mut logger);
+        let mut chain = BlockChain::open_temp(&mut logger);
 
-        let mut block = Block::new(&chain, &wallet).expect("Can create block");
-        let transaction = Transaction::for_chain(&chain, &wallet, other.get_address(), 4.0, 1.0)
+        let mut block = Block::new(&mut chain, &wallet).expect("Can create block");
+        let transaction = Transaction::for_chain(&mut chain, &wallet, other.get_address(), 4.0, 1.0)
             .expect("Create transaction");
         block.add_transaction(transaction);
 
