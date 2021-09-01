@@ -4,7 +4,6 @@ use network::{PacketHandler, ConnectionManager, Packet};
 use libhyperchain::logger::{Logger, LoggerLevel};
 use libhyperchain::chain::{BlockChain, BlockChainAddResult, BlockChainCanMergeResult};
 use libhyperchain::block::Block;
-use libhyperchain::block::validate::BlockValidate;
 use std::io::Write;
 use std::error::Error;
 use std::collections::HashMap;

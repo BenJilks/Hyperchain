@@ -1,7 +1,6 @@
 pub mod private_wallet;
 pub mod public_wallet;
 use crate::block::{Block, Hash, PUB_KEY_LEN, HASH_LEN};
-use crate::block::transactions::BlockTransactions;
 use crate::chain::BlockChain;
 
 use sha2::{Sha256, Digest};

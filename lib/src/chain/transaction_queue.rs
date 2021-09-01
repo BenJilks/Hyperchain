@@ -5,22 +5,10 @@ use crate::wallet::get_status_for_address;
 
 use std::error::Error;
 
-pub trait BlockChainTransactionQueue
+impl BlockChain
 {
 
-    fn push_transaction_queue(&mut self, transaction: Transaction) 
-        -> Result<bool, Box<dyn Error>>;
-
-    fn get_next_transactions_in_queue(&self, count: usize) -> Vec<&Transaction>;
-
-    fn find_transaction_in_queue(&self, transaction_id: &Hash) -> Option<Transaction>;
-
-}
-
-impl BlockChainTransactionQueue for BlockChain
-{
-
-    fn push_transaction_queue(&mut self, transaction: Transaction) 
+    pub fn push_transaction_queue(&mut self, transaction: Transaction) 
         -> Result<bool, Box<dyn Error>>
     {
         if transaction.validate_content()? != TransactionValidationResult::Ok {
@@ -38,13 +26,13 @@ impl BlockChainTransactionQueue for BlockChain
         Ok(true)
     }
 
-    fn get_next_transactions_in_queue(&self, count: usize) -> Vec<&Transaction>
+    pub fn get_next_transactions_in_queue(&self, count: usize) -> Vec<&Transaction>
     {
         let real_count = std::cmp::min(count, self.transaction_queue.len());
         self.transaction_queue.range(0..real_count).collect()
     }
 
-    fn find_transaction_in_queue(&self, transaction_id: &Hash) -> Option<Transaction>
+    pub fn find_transaction_in_queue(&self, transaction_id: &Hash) -> Option<Transaction>
     {
         for transaction in &self.transaction_queue
         {

@@ -3,16 +3,10 @@ use crate::wallet::WalletStatus;
 
 use std::collections::HashSet;
 
-pub trait BlockTransactions
-{
-    fn get_addresses_used(&self) -> Vec<[u8; HASH_LEN]>;
-    fn update_wallet_status(&self, address: &[u8; HASH_LEN], status: &mut WalletStatus);
-}
-
-impl BlockTransactions for Block
+impl Block
 {
 
-    fn get_addresses_used(&self) -> Vec<[u8; HASH_LEN]>
+    pub fn get_addresses_used(&self) -> Vec<[u8; HASH_LEN]>
     {
         let mut addresses_in_use = HashSet::<[u8; HASH_LEN]>::new();
         addresses_in_use.insert(self.raward_to);
@@ -26,7 +20,8 @@ impl BlockTransactions for Block
         addresses_in_use.into_iter().collect::<Vec<_>>()
     }
 
-    fn update_wallet_status(&self, address: &[u8; HASH_LEN], status: &mut WalletStatus)
+    pub fn update_wallet_status(&self, address: &[u8; HASH_LEN], 
+                                status: &mut WalletStatus)
     {
         if &self.raward_to == address {
             status.balance += self.calculate_reward()

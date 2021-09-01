@@ -3,7 +3,7 @@ use crate::node::Node;
 use crate::block_builder;
 
 use libhyperchain::block::Block;
-use libhyperchain::block::validate::{BlockValidate, BlockValidationResult};
+use libhyperchain::block::validate::BlockValidationResult;
 use libhyperchain::block;
 use libhyperchain::chain::BlockChainAddResult;
 use libhyperchain::wallet::private_wallet::PrivateWallet;

@@ -4,7 +4,6 @@ use crate::node::Node;
 use libhyperchain::transaction::Transaction;
 use libhyperchain::service::command::Response;
 use libhyperchain::wallet::private_wallet::PrivateWallet;
-use libhyperchain::chain::transaction_queue::BlockChainTransactionQueue;
 use std::io::Write;
 
 pub fn send<W>(connection: &mut NetworkConnection<Node<W>, W>, 

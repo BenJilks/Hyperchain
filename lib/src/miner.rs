@@ -1,5 +1,5 @@
 use crate::block::Block;
-use crate::block::validate::{BlockValidate, BlockValidationResult};
+use crate::block::validate::BlockValidationResult;
 
 pub fn mine_block(mut block: Block) -> Block
 {

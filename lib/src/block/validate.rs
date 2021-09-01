@@ -1,5 +1,4 @@
 use super::{Block, Hash, current_timestamp};
-use super::transactions::BlockTransactions;
 use super::target::{calculate_target, hash_from_target};
 use crate::transaction::TransactionValidationResult;
 use crate::chain::BlockChain;
@@ -41,45 +40,26 @@ impl std::fmt::Display for BlockValidationResult
 
 }
 
-pub trait BlockValidate
+impl Block
 {
-    fn validate_next(&self, prev: &Block) 
-        -> Result<BlockValidationResult, Box<dyn Error>>;
 
-    fn validate_pow(&self) 
-        -> Result<BlockValidationResult, Box<dyn Error>>;
-
-    fn validate_target(&self, 
-        start_sample: Option<Block>, 
-        end_sample: Option<Block>) -> BlockValidationResult;
-
-    fn validate_content(&self,
-        start_sample: Option<Block>, 
-        end_sample: Option<Block>) 
-        -> Result<BlockValidationResult, Box<dyn Error>>;
-
-    fn validate(&self, chain: &BlockChain) 
-        -> Result<BlockValidationResult, Box<dyn Error>>;
-}
-
-fn validate_transactions(block: &Block) -> Result<BlockValidationResult, Box<dyn Error>>
-{
-    for transaction in &block.transactions 
+    fn validate_transactions(&self) 
+        -> Result<BlockValidationResult, Box<dyn Error>>
     {
-        match transaction.validate_content()?
+        for transaction in &self.transactions 
         {
-            TransactionValidationResult::Ok => {},
-            result => return Ok(BlockValidationResult::Transaction(result)),
+            match transaction.validate_content()?
+            {
+                TransactionValidationResult::Ok => {},
+                result => return Ok(BlockValidationResult::Transaction(result)),
+            }
         }
+
+        Ok(BlockValidationResult::Ok)
     }
 
-    Ok(BlockValidationResult::Ok)
-}
-
-impl BlockValidate for Block
-{
-
-    fn validate_next(&self, prev: &Block) -> Result<BlockValidationResult, Box<dyn Error>>
+    pub fn validate_next(&self, prev: &Block) 
+        -> Result<BlockValidationResult, Box<dyn Error>>
     {
         if self.block_id > 0
         {
@@ -100,7 +80,8 @@ impl BlockValidate for Block
         Ok(BlockValidationResult::Ok)
     }
 
-    fn validate_pow(&self) -> Result<BlockValidationResult, Box<dyn Error>>
+    pub fn validate_pow(&self) 
+        -> Result<BlockValidationResult, Box<dyn Error>>
     {
         let hash = self.hash()?;
         let hash_num = BigUint::from_bytes_be(&hash);
@@ -112,9 +93,10 @@ impl BlockValidate for Block
         }
     }
 
-    fn validate_target(&self, 
-                       start_sample: Option<Block>, 
-                       end_sample: Option<Block>) -> BlockValidationResult
+    pub fn validate_target(&self, 
+                           start_sample: Option<Block>, 
+                           end_sample: Option<Block>) 
+        -> BlockValidationResult
     {
         if self.target == calculate_target(start_sample, end_sample) {
             BlockValidationResult::Ok
@@ -123,9 +105,10 @@ impl BlockValidate for Block
         }
     }
 
-    fn validate_content(&self,
-                start_sample: Option<Block>, 
-                end_sample: Option<Block>) -> Result<BlockValidationResult, Box<dyn Error>>
+    pub fn validate_content(&self,
+                            start_sample: Option<Block>, 
+                            end_sample: Option<Block>) 
+        -> Result<BlockValidationResult, Box<dyn Error>>
     {
         match self.validate_pow()?
         {
@@ -137,7 +120,7 @@ impl BlockValidate for Block
             BlockValidationResult::Ok => {},
             err => return Ok(err),
         }
-        match validate_transactions(self)?
+        match self.validate_transactions()?
         {
             BlockValidationResult::Ok => {},
             err => return Ok(err),
@@ -146,7 +129,7 @@ impl BlockValidate for Block
         Ok(BlockValidationResult::Ok)
     }
 
-    fn validate(&self, chain: &BlockChain) 
+    pub fn validate(&self, chain: &BlockChain) 
         -> Result<BlockValidationResult, Box<dyn Error>>
     {
         let (sample_start, sample_end) = 
@@ -191,7 +174,6 @@ mod tests
 {
 
     use super::*;
-    use crate::block::transactions::BlockTransactions;
     use crate::transaction::Transaction;
     use crate::chain::BlockChain;
     use crate::logger::{Logger, LoggerLevel};

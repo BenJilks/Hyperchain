@@ -1,6 +1,5 @@
 use libhyperchain::block::Block;
 use libhyperchain::chain::BlockChain;
-use libhyperchain::chain::transaction_queue::BlockChainTransactionQueue;
 use libhyperchain::wallet::Wallet;
 use std::error::Error;
 

@@ -2,7 +2,7 @@ pub mod transaction_queue;
 mod storage;
 use storage::Storage;
 use crate::block::{Block, Hash};
-use crate::block::validate::{BlockValidate, BlockValidationResult};
+use crate::block::validate::BlockValidationResult;
 use crate::block::target::BLOCK_SAMPLE_SIZE;
 use crate::logger::{Logger, LoggerLevel};
 use crate::transaction::Transaction;
