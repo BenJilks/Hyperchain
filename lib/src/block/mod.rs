@@ -1,6 +1,6 @@
 pub mod validate;
-pub mod transactions;
 pub mod target;
+mod transactions;
 use crate::transaction::Transaction;
 use crate::page::Page;
 use crate::chain::BlockChain;
@@ -152,4 +152,3 @@ impl Block
     }
 
 }
-

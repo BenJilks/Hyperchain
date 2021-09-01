@@ -1,7 +1,6 @@
 use super::{Block, Hash, current_timestamp};
 use super::target::{calculate_target, hash_from_target};
 use crate::transaction::TransactionValidationResult;
-use crate::chain::BlockChain;
 
 use rsa::BigUint;
 use std::error::Error;
@@ -128,50 +127,6 @@ impl Block
         Ok(BlockValidationResult::Ok)
     }
 
-    pub fn validate(&self, chain: &mut BlockChain) 
-        -> Result<BlockValidationResult, Box<dyn Error>>
-    {
-        let (sample_start, sample_end) = 
-            if self.block_id == 0 {
-                (None, None)
-            } else {
-                chain.take_sample_at(self.block_id - 1)
-            };
-
-        if sample_end.is_some()
-        {
-            match self.validate_next(sample_end.as_ref().unwrap())?
-            {
-                BlockValidationResult::Ok => {},
-                err => return Ok(err),
-            }
-        }
-
-        match self.validate_content(sample_start, sample_end)?
-        {
-            BlockValidationResult::Ok => {},
-            err => return Ok(err),
-        }
-
-        for address in self.get_addresses_used() 
-        {
-            let status = chain.get_wallet_status(&address);
-            match self.update_wallet_status(&address, status)
-            {
-                Some(status) =>
-                {
-                    if status.balance < 0.0 {
-                        return Ok(BlockValidationResult::Balance(address));
-                    }
-                },
-                None => 
-                    return Ok(BlockValidationResult::Balance(address)),
-            }
-        }
-
-        Ok(BlockValidationResult::Ok)
-    }
-
 }
 
 #[cfg(test)]
@@ -229,4 +184,3 @@ mod tests
     }
 
 }
-

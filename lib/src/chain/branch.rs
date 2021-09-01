@@ -1,4 +1,5 @@
-use super::{BlockChain, BlockValidationResult, BlockChainAddResult};
+use super::{BlockChain, BLOCK_SAMPLE_SIZE};
+use super::{BlockValidationResult, BlockChainAddResult};
 use crate::block::{Block, Hash};
 use crate::logger::Logger;
 use crate::wallet::WalletStatus;
@@ -20,7 +21,38 @@ pub enum BlockChainCanMergeResult
 impl BlockChain
 {
 
-    fn validate_branch(&mut self, branch: &[Block])
+    fn take_sample_of_branch_at(&mut self, branch: &[Block], block_id: u64) 
+        -> (Option<Block>, Option<Block>)
+    {
+        assert_eq!(branch.is_empty(), false);
+
+        if block_id < BLOCK_SAMPLE_SIZE {
+            return (None, None);
+        }
+
+        let branch_start = branch.first().unwrap();
+        let mut block_at = |block_id: u64| -> Option<Block>
+        {
+            if block_id >= branch_start.block_id 
+            {
+                match branch.get((block_id - branch_start.block_id) as usize)
+                {
+                    Some(block) => Some(block.clone()),
+                    None => None,
+                }
+            } 
+            else 
+            {
+                self.block(block_id)
+            }
+        };
+
+        let sample_start = block_at(block_id - BLOCK_SAMPLE_SIZE);
+        let sample_end = block_at(block_id);
+        (sample_start, sample_end)
+    }
+
+    pub fn validate_branch(&mut self, branch: &[Block])
         -> Result<BlockValidationResult, Box<dyn Error>>
     {
         let bottom = branch.first().unwrap();
@@ -118,4 +150,3 @@ impl BlockChain
     }
 
 }
-

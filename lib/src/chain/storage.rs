@@ -174,4 +174,3 @@ impl<T> Storage<T>
     }
 
 }
-

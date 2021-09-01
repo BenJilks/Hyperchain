@@ -96,7 +96,7 @@ impl BlockChain
             return Ok(BlockChainAddResult::MoreNeeded);
         }
 
-        match block.validate(self)?
+        match self.validate_branch(&[block.clone()])?
         {
             BlockValidationResult::Ok => {},
             BlockValidationResult::Balance(address) =>
@@ -121,37 +121,6 @@ impl BlockChain
         self.blocks.store(block.block_id, block.clone());
         self.remove_from_transaction_queue(block);
         Ok(BlockChainAddResult::Ok)
-    }
-
-    fn take_sample_of_branch_at(&mut self, branch: &[Block], block_id: u64) 
-        -> (Option<Block>, Option<Block>)
-    {
-        assert_eq!(branch.is_empty(), false);
-
-        if block_id < BLOCK_SAMPLE_SIZE {
-            return (None, None);
-        }
-
-        let branch_start = branch.first().unwrap();
-        let mut block_at = |block_id: u64| -> Option<Block>
-        {
-            if block_id >= branch_start.block_id 
-            {
-                match branch.get((block_id - branch_start.block_id) as usize)
-                {
-                    Some(block) => Some(block.clone()),
-                    None => None,
-                }
-            } 
-            else 
-            {
-                self.block(block_id)
-            }
-        };
-
-        let sample_start = block_at(block_id - BLOCK_SAMPLE_SIZE);
-        let sample_end = block_at(block_id);
-        (sample_start, sample_end)
     }
 
     pub fn walk<F>(&mut self, on_block: &mut F)
@@ -250,4 +219,3 @@ mod tests
    }
 
 }
-

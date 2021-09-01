@@ -8,7 +8,8 @@ impl BlockChain
 
     pub fn get_wallet_status_up_to_block(&mut self, to: u64, address: &Hash) -> WalletStatus
     {
-        for block_id in (0..=to).rev()
+        let real_to = std::cmp::min(to + 1, self.blocks.next_top());
+        for block_id in (0..real_to).rev()
         {
             let metadata = self.metadata.get(block_id).unwrap();
             if metadata.wallets.contains_key(address) {
@@ -53,4 +54,3 @@ impl BlockChain
     }
 
 }
-
