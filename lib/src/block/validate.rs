@@ -155,11 +155,17 @@ impl Block
 
         for address in self.get_addresses_used() 
         {
-            let mut status = chain.get_wallet_status(&address);
-            self.update_wallet_status(&address, &mut status);
-
-            if status.balance < 0.0 {
-                return Ok(BlockValidationResult::Balance(address));
+            let status = chain.get_wallet_status(&address);
+            match self.update_wallet_status(&address, status)
+            {
+                Some(status) =>
+                {
+                    if status.balance < 0.0 {
+                        return Ok(BlockValidationResult::Balance(address));
+                    }
+                },
+                None => 
+                    return Ok(BlockValidationResult::Balance(address)),
             }
         }
 
@@ -204,14 +210,14 @@ mod tests
 
         {
             let mut wallet_status = WalletStatus::default();
-            block.update_wallet_status(&wallet.get_address(), &mut wallet_status);
+            wallet_status = block.update_wallet_status(&wallet.get_address(), wallet_status).unwrap();
             assert_eq!(wallet_status.balance, block.calculate_reward() - 4.0);
             assert_eq!(wallet_status.max_id, 1);
         }
 
         {
             let mut wallet_status = WalletStatus::default();
-            block.update_wallet_status(&other.get_address(), &mut wallet_status);
+            wallet_status = block.update_wallet_status(&other.get_address(), wallet_status).unwrap();
             assert_eq!(wallet_status.balance, 4.0);
             assert_eq!(wallet_status.max_id, 0);
         }

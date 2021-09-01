@@ -21,7 +21,7 @@ impl Block
     }
 
     pub fn update_wallet_status(&self, address: &[u8; HASH_LEN], 
-                                status: &mut WalletStatus)
+                                mut status: WalletStatus) -> Option<WalletStatus>
     {
         if &self.raward_to == address {
             status.balance += self.calculate_reward()
@@ -33,7 +33,10 @@ impl Block
             if &transaction.get_from_address() == address
             {
                 status.balance -= header.amount + header.transaction_fee;
-                status.max_id = std::cmp::max(status.max_id, header.id);
+                if header.id < status.max_id {
+                    return None;
+                }
+                status.max_id = header.id;
             }
 
             if &header.to == address {
@@ -46,6 +49,7 @@ impl Block
         }
 
         // TODO: Pages
+        Some(status)
     }
 
 }
