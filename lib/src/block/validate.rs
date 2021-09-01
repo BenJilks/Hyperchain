@@ -2,7 +2,6 @@ use super::{Block, Hash, current_timestamp};
 use super::target::{calculate_target, hash_from_target};
 use crate::transaction::TransactionValidationResult;
 use crate::chain::BlockChain;
-use crate::wallet::get_status_for_address;
 
 use rsa::BigUint;
 use std::error::Error;
@@ -156,7 +155,7 @@ impl Block
 
         for address in self.get_addresses_used() 
         {
-            let mut status = get_status_for_address(chain, &address);
+            let mut status = chain.get_wallet_status(&address);
             self.update_wallet_status(&address, &mut status);
 
             if status.balance < 0.0 {

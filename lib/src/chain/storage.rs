@@ -65,7 +65,7 @@ fn load_chunk_file<T>(path: PathBuf) -> Chunk<T>
 
 fn load_metadata(path: &PathBuf) -> Result<Metadata, Box<dyn Error>>
 {
-    match File::open(path.join("metadata"))
+    match File::open(path.join("metadata.json"))
     {
         Ok(file) => Ok(serde_json::from_reader(file)?),
         Err(_) => Ok(Default::default()),
@@ -95,7 +95,7 @@ impl<T> Storage<T>
 
     fn save_metadata(&self)
     {
-        match File::create(self.path.join("metadata"))
+        match File::create(self.path.join("metadata.json"))
         {
             Ok(file) => { let _ = serde_json::to_writer(file, &self.metadata); },
             Err(_) => {},
@@ -152,6 +152,12 @@ impl<T> Storage<T>
         let mut chunk = self.get_chunk(chunk_id);
         chunk.data[index] = Some(block);
         self.store_chunk(chunk_id, chunk);
+    }
+
+    pub fn truncate(&mut self, new_size: u64)
+    {
+        self.metadata.next_top = new_size;
+        self.save_metadata();
     }
 
     pub fn get(&mut self, block_id: u64) -> Option<T>

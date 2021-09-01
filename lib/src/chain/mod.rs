@@ -1,8 +1,11 @@
 pub mod branch;
 mod transaction_queue;
 mod storage;
+mod transactions;
+mod metadata;
 use storage::Storage;
-use crate::block::{Block, Hash};
+use metadata::BlockMetadata;
+use crate::block::Block;
 use crate::block::validate::BlockValidationResult;
 use crate::block::target::BLOCK_SAMPLE_SIZE;
 use crate::logger::{Logger, LoggerLevel};
@@ -15,6 +18,7 @@ use std::path::PathBuf;
 
 pub struct BlockChain
 {
+    metadata: Storage<BlockMetadata>,
     blocks: Storage<Block>,
     transaction_queue: VecDeque<Transaction>,
 }
@@ -37,6 +41,7 @@ impl BlockChain
         logger.log(LoggerLevel::Info, &format!("Open chain in {:?}", path));
         Ok(BlockChain
         {
+            metadata: Storage::new(&path.join("metadata"))?,
             blocks: Storage::new(path)?,
             transaction_queue: VecDeque::new(),
         })
@@ -73,7 +78,8 @@ impl BlockChain
         }
     }
 
-    pub fn add<W>(&mut self, block: &Block, logger: &mut Logger<W>) -> Result<BlockChainAddResult, Box<dyn Error>>
+    pub fn add<W>(&mut self, block: &Block, logger: &mut Logger<W>) 
+            -> Result<BlockChainAddResult, Box<dyn Error>>
         where W: Write
     {
         if block.block_id < self.blocks.next_top() as u64
@@ -110,8 +116,10 @@ impl BlockChain
             result => return Ok(BlockChainAddResult::Invalid(result)),
         }
 
-        self.remove_from_transaction_queue(block);
+        let metadata = self.metadata_for_block(&block);
+        self.metadata.store(block.block_id, metadata);
         self.blocks.store(block.block_id, block.clone());
+        self.remove_from_transaction_queue(block);
         Ok(BlockChainAddResult::Ok)
     }
 
@@ -166,30 +174,6 @@ impl BlockChain
         } else {
             self.blocks.get(self.blocks.next_top() - 1)
         }
-    }
-
-    pub fn find_transaction_in_chain(&mut self, transaction_id: &Hash) 
-        -> Option<(Transaction, Block)>
-    {
-        for block_id in 0..self.blocks.next_top() 
-        {
-            let block = self.block(block_id).unwrap();
-            for transaction in &block.transactions
-            {
-                match transaction.header.hash()
-                {
-                    Ok(hash) =>
-                    {
-                        if hash == transaction_id {
-                            return Some((transaction.clone(), block));
-                        }
-                    },
-                    Err(_) => {},
-                }
-            }
-        }
-
-        None
     }
 
 }
@@ -261,7 +245,7 @@ mod tests
         branch.push(block_e_b);
         assert_eq!(chain_a.can_merge_branch(&branch).unwrap(), BlockChainCanMergeResult::Ok);
 
-        chain_a.merge_branch(branch);
+        chain_a.merge_branch(branch, &mut logger);
         assert_eq!(chain_a.top().unwrap().block_id, 4);
    }
 

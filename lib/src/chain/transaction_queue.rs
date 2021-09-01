@@ -1,7 +1,6 @@
 use super::BlockChain;
 use crate::block::Hash;
 use crate::transaction::{Transaction, TransactionValidationResult};
-use crate::wallet::get_status_for_address;
 
 use std::error::Error;
 
@@ -15,7 +14,7 @@ impl BlockChain
             return Ok(false);
         }
 
-        let mut status = get_status_for_address(self, &transaction.get_from_address());
+        let mut status = self.get_wallet_status(&transaction.get_from_address());
         status.balance -= transaction.header.amount;
         status.balance -= transaction.header.transaction_fee;
         if status.balance < 0.0 || transaction.header.id <= status.max_id {

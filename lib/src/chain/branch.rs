@@ -1,7 +1,9 @@
-use super::{BlockChain, BlockValidationResult};
+use super::{BlockChain, BlockValidationResult, BlockChainAddResult};
 use crate::block::Block;
+use crate::logger::Logger;
 
 use std::error::Error;
+use std::io::Write;
 
 #[derive(Debug, PartialEq)]
 pub enum BlockChainCanMergeResult
@@ -69,14 +71,19 @@ impl BlockChain
         Ok(BlockChainCanMergeResult::Ok)
     }
 
-    pub fn merge_branch(&mut self, branch: Vec<Block>)
+    pub fn merge_branch<W>(&mut self, branch: Vec<Block>, logger: &mut Logger<W>)
+        where W: Write
     {
         assert_eq!(self.can_merge_branch(&branch).unwrap(), BlockChainCanMergeResult::Ok);
+
+        let bottom = branch.first().unwrap();
+        self.metadata.truncate(bottom.block_id);
+        self.blocks.truncate(bottom.block_id);
+
         for block in branch {
-            self.blocks.store(block.block_id, block);
+            assert_eq!(self.add(&block, logger).unwrap(), BlockChainAddResult::Ok);
         }
     }
 
 }
-
 

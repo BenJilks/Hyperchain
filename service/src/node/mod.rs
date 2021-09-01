@@ -72,7 +72,7 @@ impl<W> Node<W>
         if self.chain.can_merge_branch(&branch)? == BlockChainCanMergeResult::Ok
         {
             self.logger.log(LoggerLevel::Info, &format!("[{}] Merge longer branch", self.port));
-            self.chain.merge_branch(branch);
+            self.chain.merge_branch(branch, &mut self.logger);
         }
         Ok(())
     }
