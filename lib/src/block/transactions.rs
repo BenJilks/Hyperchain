@@ -33,7 +33,7 @@ impl Block
             if &transaction.get_from_address() == address
             {
                 status.balance -= header.amount + header.transaction_fee;
-                if header.id < status.max_id {
+                if header.id <= status.max_id {
                     return None;
                 }
                 status.max_id = header.id;

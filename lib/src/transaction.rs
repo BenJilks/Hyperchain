@@ -1,5 +1,4 @@
 use crate::block::{Signature, Hash, HASH_LEN, PUB_KEY_LEN};
-use crate::chain::BlockChain;
 use crate::wallet::Wallet;
 use crate::wallet::private_wallet::PrivateWallet;
 use crate::wallet::public_wallet::{PublicWallet, WalletValidationResult};
@@ -75,23 +74,11 @@ impl TransactionHeader
 impl Transaction
 {
 
-    pub fn new(header: TransactionHeader, signature: Signature, e: [u8; 3]) -> Self
+    pub fn new(id: u32, from: &PrivateWallet, to: Hash, amount: f32, fee: f32) -> Self
     {
-        Self
-        {
-            header,
-            signature,
-            e,
-        }
-    }
-
-    pub fn for_chain(chain: &mut BlockChain, from: &PrivateWallet, to: Hash, amount: f32, fee: f32) -> Option<Self>
-    {
-        let status = from.get_status(chain);
         let header = TransactionHeader 
         { 
-            // TODO: This id should be calculated correctly
-            id: status.max_id + 1,
+            id: id,
             from: from.get_public_key(),
             to: to,
             amount,
@@ -100,7 +87,12 @@ impl Transaction
 
         let signature_vec = from.sign(&header.hash().unwrap()).unwrap();
         let signature = *slice_as_array!(&signature_vec, [u8; PUB_KEY_LEN]).unwrap();
-        Some( Self::new(header, signature, from.get_e()) )
+        Self
+        {
+            header,
+            signature, 
+            e: from.get_e(),
+        }
     }
 
     pub fn validate_content(&self) -> Result<TransactionValidationResult, Box<dyn Error>>
@@ -171,25 +163,21 @@ mod tests
         chain.add(&block, &mut logger).unwrap();
 
         {
-            let transaction = Transaction::for_chain(&mut chain, &wallet, other.get_address(), 2.4, 0.2)
-                .expect("Create transaction");
+            let transaction = Transaction::new(0, &wallet, other.get_address(), 2.4, 0.2);
             transaction.header.hash().expect("Hash header");
             assert_eq!(transaction.validate_content().unwrap(), TransactionValidationResult::Ok);
             assert_eq!(transaction.to_string(), "aLOExVDb0w... --[ 2.4 + 0.2tx ]--> zCPOqvKFuo...");
         }
 
         {
-            let transaction = Transaction::for_chain(&mut chain, &wallet, other.get_address(), -1.6, 0.0)
-                .expect("Create transaction");
+            let transaction = Transaction::new(1, &wallet, other.get_address(), -1.6, 0.0);
             assert_ne!(transaction.validate_content().unwrap(), TransactionValidationResult::Ok);
         }
 
         {
-            let transaction = Transaction::for_chain(&mut chain, &wallet, other.get_address(), 0.0, -0.0001)
-                .expect("Create transaction");
+            let transaction = Transaction::new(2, &wallet, other.get_address(), 0.0, -0.0001);
             assert_ne!(transaction.validate_content().unwrap(), TransactionValidationResult::Ok);
         }
     }
 
 }
-

@@ -151,8 +151,7 @@ mod tests
         let mut chain = BlockChain::open_temp(&mut logger);
 
         let mut block = Block::new(&mut chain, &wallet).expect("Can create block");
-        let transaction = Transaction::for_chain(&mut chain, &wallet, other.get_address(), 4.0, 1.0)
-            .expect("Create transaction");
+        let transaction = Transaction::new(1, &wallet, other.get_address(), 4.0, 1.0);
         block.add_transaction(transaction);
 
         assert_ne!(block.validate_pow().unwrap(), BlockValidationResult::Ok);
