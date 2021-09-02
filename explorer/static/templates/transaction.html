@@ -1,0 +1,31 @@
+<html>
+    <head>
+        <title>Transaction</title>
+        <link rel="stylesheet" href="style.css">
+    </head>
+    <body>
+        <article>
+            <h1>{{ id }}</h1>
+            <div class="item big">
+                <text>From</text>
+                <a href="/wallet?address={{ from }}">{{ from }}</a>
+            </div>
+            <div class="item big">
+                <text>To</text>
+                <a href="/wallet?address={{ to }}">{{ to }}</a>
+            </div>
+            <div class="item big">
+                <text>Amount</text>
+                <text>{{ amount }}mb</text>
+            </div>
+            <div class="item big">
+                <text>Fee</text>
+                <text>{{ fee }}mb</text>
+            </div>
+            <div class="item big">
+                <text>Block</text>
+                <a href="/block?id={{ block }}">{{ block }}</a>
+            </div>
+        </article>
+    </body>
+</html>

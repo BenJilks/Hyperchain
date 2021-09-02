@@ -1,0 +1,39 @@
+
+body
+{
+    background-color: #F5F5F5;
+}
+
+h1, h2
+{
+    margin: 0.2em;
+    margin-bottom: 0.8em;
+}
+
+article
+{
+    display: block;
+    background-color: white;
+    border: 1px solid lightblue;
+    padding: 1em;
+    margin: 1em;
+}
+
+.item text:first-child
+{
+    display: inline-block;
+    width: 5em;
+    margin-right: 0.5em;
+    font-weight: bold;
+    text-align: right;
+}
+
+.item.big
+{
+    font-size: 1.5em;
+}
+
+.item.big text:first-child
+{
+    width: 10em;
+}

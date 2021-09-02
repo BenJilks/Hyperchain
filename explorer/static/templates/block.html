@@ -1,22 +1,30 @@
 <html>
-    <body>
-        <title>Wallet</title>
+    <head>
+        <title>Block {{ id }}</title>
         <link rel="stylesheet" href="style.css">
-    </body>
-    <html>
+    </head>
+    <body>
         <article>
-            <h1>{{ address }}</h1>
+            <h1>Block {{ id }}</h1>
             <div class="item big">
-                <text>Balance</text>
-                <text>{{ balance }}mb</text>
+                <text>Timestamp</text>
+                <text>{{ timestamp }}</text>
             </div>
             <div class="item big">
-                <text>Transaction Count</text>
-                <text>{{ transaction_count }}</text>
+                <text>Winner</text>
+                <a href="/wallet?address={{ winner }}">{{ winner }}</a>
+            </div>
+            <div class="item big">
+                <text>Difficulty</text>
+                <text>{{ difficulty }}</text>
+            </div>
+            <div class="item big">
+                <text>pow</text>
+                <text>{{ pow }}</text>
             </div>
         </article>
 
-        {{ #each history }}
+        {{ #each transactions }}
             <article>
                 {{ #with this }}
                     <h2><a href="/transaction?id={{ id }}">{{ id }}</a></h2>
@@ -42,6 +50,6 @@
                     </div>
                 {{ /with }}
             </article>
-        {{ /each }}
-    </html>
+        {{ /each}}
+    </body>
 </html>

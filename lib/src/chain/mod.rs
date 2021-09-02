@@ -67,17 +67,6 @@ impl BlockChain
         }
     }
 
-    fn remove_from_transaction_queue(&mut self, block: &Block)
-    {
-        for transaction in &block.transactions
-        {
-            let index = self.transaction_queue.iter().position(|x| x == transaction);
-            if index.is_some() {
-                self.transaction_queue.remove(index.unwrap());
-            }
-        }
-    }
-
     pub fn add<W>(&mut self, block: &Block, logger: &mut Logger<W>) 
             -> Result<BlockChainAddResult, Box<dyn Error>>
         where W: Write

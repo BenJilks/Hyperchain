@@ -32,4 +32,3 @@ pub fn send<W>(connection: &mut NetworkConnection<Node<W>, W>,
         Ok(false) | Err(_) => Response::Failed,
     }
 }
-

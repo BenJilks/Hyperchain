@@ -9,10 +9,14 @@ mod miner;
 mod send;
 mod balance;
 mod transaction_info;
+mod transaction_history;
+mod blocks;
 use miner::start_miner_thread;
 use send::send;
 use balance::balance;
+use transaction_history::transaction_history;
 use transaction_info::transaction_info;
+use blocks::blocks;
 use crate::node::network::NetworkConnection;
 use crate::node::Node;
 
@@ -50,14 +54,20 @@ fn main() -> Result<(), Box<dyn Error>>
                 Command::Exit => 
                     Response::Exit,
 
-                Command::Balance(wallet) => 
-                    balance(&mut connection.lock().unwrap(), wallet),
+                Command::Balance(address) => 
+                    balance(&mut connection.lock().unwrap(), address),
 
                 Command::Send(from, to, amount, fee) =>
                     send(&mut connection.lock().unwrap(), from, to, amount, fee),
 
                 Command::TransactionInfo(id) =>
                     transaction_info(&mut connection.lock().unwrap(), id),
+                
+                Command::TransactionHistory(address) =>
+                    transaction_history(&mut connection.lock().unwrap(), address),
+                
+                Command::Blocks(from, to) =>
+                    blocks(&mut connection.lock().unwrap(), from, to),
             }
         })?;
 

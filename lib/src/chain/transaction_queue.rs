@@ -1,11 +1,22 @@
 use super::BlockChain;
-use crate::block::Hash;
+use crate::block::{Block, Hash};
 use crate::transaction::{Transaction, TransactionValidationResult};
 
 use std::error::Error;
 
 impl BlockChain
 {
+
+    pub fn remove_from_transaction_queue(&mut self, block: &Block)
+    {
+        for transaction in &block.transactions
+        {
+            let index = self.transaction_queue.iter().position(|x| x == transaction);
+            if index.is_some() {
+                self.transaction_queue.remove(index.unwrap());
+            }
+        }
+    }
 
     pub fn push_transaction_queue(&mut self, transaction: Transaction) 
         -> Result<bool, Box<dyn Error>>
