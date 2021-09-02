@@ -1,5 +1,4 @@
 use crate::wallet::WalletStatus;
-use crate::wallet::public_wallet::PublicWallet;
 use crate::transaction::Transaction;
 use crate::block::Block;
 use serde::{Serialize, Deserialize};
@@ -8,7 +7,7 @@ use serde::{Serialize, Deserialize};
 pub enum Command
 {
     Exit,
-    Balance(PublicWallet),
+    Balance(Vec<u8>),
     Send(Vec<u8>, Vec<u8>, f32, f32),
     TransactionInfo(Vec<u8>),
 }
@@ -22,4 +21,3 @@ pub enum Response
     TransactionInfo(Transaction, Option<Block>),
     Failed,
 }
-

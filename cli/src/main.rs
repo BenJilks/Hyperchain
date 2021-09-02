@@ -24,9 +24,9 @@ fn balance(mut client: Client, options: &ArgMatches) -> Result<(), Box<dyn Error
     }
 
     let wallet = wallet_or_error.unwrap();
-    match client.send(Command::Balance(wallet.as_public()))?
+    match client.send(Command::Balance(wallet.get_address().to_vec()))?
     {
-        Response::WalletStatus(status) => 
+        Response::WalletStatus(status) =>
         {
             println!("Address: {}", base_62::encode(&wallet.get_address()));
             println!("Balance: {}", status.balance)
