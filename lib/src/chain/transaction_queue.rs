@@ -45,7 +45,7 @@ impl BlockChain
         status
     }
 
-    pub fn push_transaction_queue(&mut self, from: &PrivateWallet, to: Hash, amount: f32, fee: f32)
+    pub fn new_transaction(&mut self, from: &PrivateWallet, to: Hash, amount: f32, fee: f32)
         -> Result<Option<Transaction>, Box<dyn Error>>
     {
         let mut status = self.get_wallet_status_after_queue(&from.get_address());
@@ -60,8 +60,22 @@ impl BlockChain
             return Ok(None);
         }
 
-        self.transaction_queue.push_back(transaction.clone());
         Ok(Some(transaction))
+    }
+
+    pub fn push_transaction_queue(&mut self, transaction: Transaction) -> bool
+    {
+        // NOTE: We validate before adding, as everything in the transaction 
+        //       queue is assumed to be valid.
+        let mut status = self.get_wallet_status_after_queue(&transaction.get_from_address());
+        status.balance -= transaction.header.amount;
+        status.balance -= transaction.header.transaction_fee;
+        if status.balance < 0.0 || transaction.header.id <= status.max_id {
+            return false;
+        }
+
+        self.transaction_queue.push_back(transaction);
+        true
     }
 
     pub fn get_next_transactions_in_queue(&self, count: usize) -> Vec<&Transaction>

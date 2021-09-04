@@ -146,6 +146,18 @@ impl<W> PacketHandler<W> for Node<W>
                     connection_manager.send_to(Packet::Block(block.unwrap().clone()), |x| x == from);
                 }
             },
+
+            Packet::Transaction(transaction) =>
+            {
+                self.logger.log(LoggerLevel::Info, 
+                    &format!("Got transaction {}", transaction.to_string()));
+                
+                if !self.chain.push_transaction_queue(transaction) 
+                {
+                    self.logger.log(LoggerLevel::Warning,
+                        &format!("Invalid transaction"));
+                }
+            }
             
             Packet::Ping => 
                 self.logger.log(LoggerLevel::Info, "Ping!"),
@@ -320,4 +332,3 @@ mod tests
     }
 
 }
-

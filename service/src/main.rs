@@ -1,4 +1,5 @@
 extern crate libhyperchain;
+extern crate clap;
 
 #[macro_use]
 extern crate slice_as_array;
@@ -24,14 +25,34 @@ use libhyperchain::chain::BlockChain;
 use libhyperchain::logger::{Logger, LoggerLevel, StdLoggerOutput};
 use libhyperchain::service::server;
 use libhyperchain::service::command::{Command, Response};
+use clap::{App, Arg};
 use std::error::Error;
 use std::path::PathBuf;
 
 fn main() -> Result<(), Box<dyn Error>>
 {
+    let matches = App::new("Hyperchain Cli")
+        .version("0.1.0")
+        .author("Ben Jilks <benjyjilks@gmail.com>")
+        .about("Hyperchain node service process")
+        .arg(Arg::with_name("port")
+            .short("p")
+            .long("port")
+            .takes_value(true)
+            .required(false)
+            .help("Port of main node connection"))
+        .arg(Arg::with_name("local-server")
+            .short("l")
+            .long("local-server")
+            .takes_value(false)
+            .required(false)
+            .help("Disable running local server"))
+        .get_matches();
+
     // Crate logger and read port from command line
     let mut logger = Logger::new(StdLoggerOutput::new(), LoggerLevel::Info);
-    let port = std::env::args().nth(1).unwrap().parse::<u16>()?;
+    let port = matches.value_of("port").unwrap_or("8001").parse::<u16>().unwrap();
+    let disable_local_server = matches.is_present("local-server");
 
     // Create and open node
     let chain = BlockChain::open(&PathBuf::from("blockchain"), &mut logger)?;
@@ -39,13 +60,19 @@ fn main() -> Result<(), Box<dyn Error>>
 
     let miner_thread;
     {
-        let network_connection = NetworkConnection::new(port, node, logger.clone());
-
         // Register a common node to connect to
+        let network_connection = NetworkConnection::new(port, node, logger.clone());
         network_connection.lock().unwrap().manager().register_node("127.0.0.1:8001", None);
-        
-        miner_thread = start_miner_thread(network_connection.clone(), logger.clone());
 
+        // Start miner thread
+        miner_thread = start_miner_thread(network_connection.clone(), logger.clone());
+        if disable_local_server
+        {
+            miner_thread.join().unwrap();
+            return Ok(());
+        }
+
+        // Start local server
         let connection = network_connection.clone();
         server::start(move |command|
         {
@@ -77,4 +104,3 @@ fn main() -> Result<(), Box<dyn Error>>
     miner_thread.join().unwrap();
     Ok(())
 }
-
