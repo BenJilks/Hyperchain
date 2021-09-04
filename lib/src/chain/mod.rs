@@ -8,7 +8,7 @@ use metadata::BlockMetadata;
 use crate::block::Block;
 use crate::block::validate::BlockValidationResult;
 use crate::logger::{Logger, LoggerLevel};
-use crate::transaction::Transaction;
+use crate::transaction::transfer::Transfer;
 use crate::config::BLOCK_SAMPLE_SIZE;
 
 use std::collections::VecDeque;
@@ -20,7 +20,7 @@ pub struct BlockChain
 {
     metadata: Storage<BlockMetadata>,
     blocks: Storage<Block>,
-    transaction_queue: VecDeque<Transaction>,
+    transfer_queue: VecDeque<Transfer>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -43,7 +43,7 @@ impl BlockChain
         {
             metadata: Storage::new(&path.join("metadata"))?,
             blocks: Storage::new(path)?,
-            transaction_queue: VecDeque::new(),
+            transfer_queue: VecDeque::new(),
         })
     }
 
@@ -94,8 +94,8 @@ impl BlockChain
                     &format!("Got invalid block, as {} has insufficient balance",
                         base_62::encode(&address)));
 
-                // NOTE: Purge any pending transactions coming from this address
-                self.transaction_queue
+                // NOTE: Purge any pending transfers coming from this address
+                self.transfer_queue
                     .iter()
                     .take_while(|x| x.get_from_address() == address)
                     .count();

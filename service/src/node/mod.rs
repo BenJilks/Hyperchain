@@ -147,21 +147,21 @@ impl<W> PacketHandler<W> for Node<W>
                 }
             },
 
-            Packet::Transaction(transaction) =>
+            Packet::Transfer(transfer) =>
             {
                 self.logger.log(LoggerLevel::Info, 
-                    &format!("Got transaction {}", transaction.to_string()));
+                    &format!("Got transfer {}", transfer.to_string()));
                 
-                if self.chain.push_transaction_queue(transaction.clone())
+                if self.chain.push_transaction_queue(transfer.clone())
                 {
                     connection_manager.send_to(
-                        Packet::Transaction(transaction), 
+                        Packet::Transfer(transfer), 
                         |x| x == from);
                 }
                 else
                 {
                     self.logger.log(LoggerLevel::Warning,
-                        &format!("Invalid transaction"));
+                        &format!("Invalid transfer"));
                 }
             }
             

@@ -1,7 +1,7 @@
 use crate::node::network::NetworkConnection;
 use crate::node::Node;
 
-use libhyperchain::transaction::Transaction;
+use libhyperchain::transaction::transfer::Transfer;
 use libhyperchain::service::command::Response;
 use libhyperchain::block::Block;
 use libhyperchain::config::HASH_LEN;
@@ -21,20 +21,19 @@ pub fn transaction_history<W>(connection: &mut NetworkConnection<Node<W>, W>,
 
     // FIXME: Extremely slow, need to use metadata to 
     //        optimise this!
-    let mut transactions = Vec::<(Transaction, Option<Block>)>::new();
+    let mut transfers = Vec::<(Transfer, Option<Block>)>::new();
     chain.walk(&mut |block|
     {
-        for transaction in &block.transactions 
+        for transfer in &block.transfers 
         {
-            if &transaction.header.to == address ||
-                &transaction.get_from_address() == address
+            if &transfer.header.to == address ||
+                &transfer.get_from_address() == address
             {
-                transactions.push((transaction.clone(), Some(block.clone())));
+                transfers.push((transfer.clone(), Some(block.clone())));
             }
         }
     });
 
     // TODO: Pending
-
-    Response::TransactionHistory(transactions)
+    Response::TransactionHistory(transfers)
 }

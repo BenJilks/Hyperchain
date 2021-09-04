@@ -11,7 +11,7 @@ impl Block
         let mut addresses_in_use = HashSet::<[u8; HASH_LEN]>::new();
         addresses_in_use.insert(self.raward_to);
         
-        for transaction in &self.transactions
+        for transaction in &self.transfers
         {
             addresses_in_use.insert(transaction.get_from_address());
             addresses_in_use.insert(transaction.header.to);
@@ -27,12 +27,12 @@ impl Block
             status.balance += self.calculate_reward()
         }
 
-        for transaction in &self.transactions
+        for transfer in &self.transfers
         {
-            let header = &transaction.header;
-            if &transaction.get_from_address() == address
+            let header = &transfer.header;
+            if &transfer.get_from_address() == address
             {
-                status.balance -= header.amount + header.transaction_fee;
+                status.balance -= header.amount + header.fee;
                 if header.id <= status.max_id {
                     return None;
                 }
@@ -44,7 +44,7 @@ impl Block
             }
 
             if &self.raward_to == address {
-                status.balance += header.transaction_fee;
+                status.balance += header.fee;
             }
         }
 

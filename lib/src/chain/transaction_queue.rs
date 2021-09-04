@@ -1,6 +1,6 @@
 use super::BlockChain;
 use crate::block::Block;
-use crate::transaction::{Transaction, TransactionValidationResult};
+use crate::transaction::transfer::{Transfer, TransferValidationResult};
 use crate::wallet::{Wallet, WalletStatus};
 use crate::wallet::private_wallet::PrivateWallet;
 use crate::config::Hash;
@@ -12,11 +12,11 @@ impl BlockChain
 
     pub fn remove_from_transaction_queue(&mut self, block: &Block)
     {
-        for transaction in &block.transactions
+        for transfer in &block.transfers
         {
-            let index = self.transaction_queue.iter().position(|x| x == transaction);
+            let index = self.transfer_queue.iter().position(|x| x == transfer);
             if index.is_some() {
-                self.transaction_queue.remove(index.unwrap());
+                self.transfer_queue.remove(index.unwrap());
             }
         }
     }
@@ -24,28 +24,28 @@ impl BlockChain
     fn get_wallet_status_after_queue(&mut self, address: &Hash) -> WalletStatus
     {
         let mut status = self.get_wallet_status(address);
-        for transaction in &self.transaction_queue
+        for transfer in &self.transfer_queue
         {
-            if &transaction.get_from_address() == address 
+            if &transfer.get_from_address() == address 
             {
                 // NOTE: We assume everything in the queue is 
                 //       valid, for now.
 
-                status.balance -= transaction.header.amount;
-                status.balance -= transaction.header.transaction_fee;
-                status.max_id = transaction.header.id;
+                status.balance -= transfer.header.amount;
+                status.balance -= transfer.header.fee;
+                status.max_id = transfer.header.id;
             }
 
-            if &transaction.header.to == address {
-                status.balance += transaction.header.amount;
+            if &transfer.header.to == address {
+                status.balance += transfer.header.amount;
             }
         }
 
         status
     }
 
-    pub fn new_transaction(&mut self, from: &PrivateWallet, to: Hash, amount: f32, fee: f32)
-        -> Result<Option<Transaction>, Box<dyn Error>>
+    pub fn new_transfer(&mut self, from: &PrivateWallet, to: Hash, amount: f32, fee: f32)
+        -> Result<Option<Transfer>, Box<dyn Error>>
     {
         let mut status = self.get_wallet_status_after_queue(&from.get_address());
         status.balance -= amount;
@@ -54,45 +54,45 @@ impl BlockChain
             return Ok(None);
         }
 
-        let transaction = Transaction::new(status.max_id + 1, from, to, amount, fee);
-        if transaction.validate_content()? != TransactionValidationResult::Ok {
+        let transfer = Transfer::new(status.max_id + 1, from, to, amount, fee);
+        if transfer.validate_content()? != TransferValidationResult::Ok {
             return Ok(None);
         }
 
-        Ok(Some(transaction))
+        Ok(Some(transfer))
     }
 
-    pub fn push_transaction_queue(&mut self, transaction: Transaction) -> bool
+    pub fn push_transaction_queue(&mut self, transfer: Transfer) -> bool
     {
         // NOTE: We validate before adding, as everything in the transaction 
         //       queue is assumed to be valid.
-        let mut status = self.get_wallet_status_after_queue(&transaction.get_from_address());
-        status.balance -= transaction.header.amount;
-        status.balance -= transaction.header.transaction_fee;
-        if status.balance < 0.0 || transaction.header.id <= status.max_id {
+        let mut status = self.get_wallet_status_after_queue(&transfer.get_from_address());
+        status.balance -= transfer.header.amount;
+        status.balance -= transfer.header.fee;
+        if status.balance < 0.0 || transfer.header.id <= status.max_id {
             return false;
         }
 
-        self.transaction_queue.push_back(transaction);
+        self.transfer_queue.push_back(transfer);
         true
     }
 
-    pub fn get_next_transactions_in_queue(&self, count: usize) -> Vec<&Transaction>
+    pub fn get_next_transactions_in_queue(&self, count: usize) -> Vec<&Transfer>
     {
-        let real_count = std::cmp::min(count, self.transaction_queue.len());
-        self.transaction_queue.range(0..real_count).collect()
+        let real_count = std::cmp::min(count, self.transfer_queue.len());
+        self.transfer_queue.range(0..real_count).collect()
     }
 
-    pub fn find_transaction_in_queue(&self, transaction_id: &Hash) -> Option<Transaction>
+    pub fn find_transaction_in_queue(&self, transfer_id: &Hash) -> Option<Transfer>
     {
-        for transaction in &self.transaction_queue
+        for transfer in &self.transfer_queue
         {
-            match transaction.header.hash()
+            match transfer.header.hash()
             {
                 Ok(hash) =>
                 {
-                    if hash == transaction_id {
-                        return Some(transaction.clone());
+                    if hash == transfer_id {
+                        return Some(transfer.clone());
                     }
                 },
                 Err(_) => {},

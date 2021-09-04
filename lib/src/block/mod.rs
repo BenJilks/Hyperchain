@@ -2,8 +2,8 @@ pub mod validate;
 pub mod target;
 mod transactions;
 use target::{calculate_target, Target};
-use crate::transaction::Transaction;
-use crate::page::Page;
+use crate::transaction::transfer::Transfer;
+// use crate::page::Page;
 use crate::chain::BlockChain;
 use crate::wallet::Wallet;
 use crate::config::{Hash, HASH_LEN, BLOCK_SIZE};
@@ -28,8 +28,8 @@ pub struct Block
     pub block_id: u64,
     pub raward_to: Hash,
 
-    pub pages: Vec<Page>,
-    pub transactions: Vec<Transaction>,
+    // pub pages: Vec<Page>,
+    pub transfers: Vec<Transfer>,
     pub timestamp: u128,
     pub target: Target,
     pub pow: u64, // TODO: This should be a correct size
@@ -107,22 +107,22 @@ impl Block
             block_id: block_id,
             raward_to: raward_to.get_address(),
 
-            pages: Vec::new(),
-            transactions: Vec::new(),
+            // pages: Vec::new(),
+            transfers: Vec::new(),
             timestamp: timestamp,
             target: target,
             pow: 0,
         })
     }
 
-    pub fn add_page(&mut self, page: Page)
-    {
-        self.pages.push(page);
-    }
+    // pub fn add_page(&mut self, page: Page)
+    // {
+    //     self.pages.push(page);
+    // }
 
-    pub fn add_transaction(&mut self, transaction: Transaction)
+    pub fn add_transfer(&mut self, transfer: Transfer)
     {
-        self.transactions.push(transaction);
+        self.transfers.push(transfer);
     }
 
     pub fn as_bytes(&self) -> Result<Vec<u8>, Box<dyn Error>>

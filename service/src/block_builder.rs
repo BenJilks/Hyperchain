@@ -6,10 +6,10 @@ use std::error::Error;
 pub fn build<W>(chain: &mut BlockChain, wallet: &W) -> Result<Block, Box<dyn Error>>
     where W: Wallet
 {
-    // FIXME: Validate transactions
+    // FIXME: Validate transfer
     let mut block = Block::new(chain, wallet)?;
-    for transaction in chain.get_next_transactions_in_queue(10) {
-        block.add_transaction(transaction.clone());
+    for transfer in chain.get_next_transactions_in_queue(10) {
+        block.add_transfer(transfer.clone());
     }
 
     Ok(block)

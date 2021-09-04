@@ -1,6 +1,6 @@
 use libhyperchain::logger::{LoggerLevel, Logger};
 use libhyperchain::block::Block;
-use libhyperchain::transaction::Transaction;
+use libhyperchain::transaction::transfer::Transfer;
 use tcp_channel::{ReceiverBuilder, ChannelRecv};
 use tcp_channel::{SenderBuilder, ChannelSend};
 use tcp_channel::LittleEndian;
@@ -24,7 +24,7 @@ pub enum Packet
     OnConnected(u16),
     Block(Block),
     BlockRequest(u64),
-    Transaction(Transaction),
+    Transfer(Transfer),
     Ping,
 }
 

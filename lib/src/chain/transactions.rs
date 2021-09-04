@@ -1,5 +1,5 @@
 use super::BlockChain;
-use crate::transaction::Transaction;
+use crate::transaction::transfer::Transfer;
 use crate::block::Block;
 use crate::wallet::WalletStatus;
 use crate::config::Hash;
@@ -30,20 +30,20 @@ impl BlockChain
         }
     }
 
-    pub fn find_transaction_in_chain(&mut self, transaction_id: &Hash) 
-        -> Option<(Transaction, Block)>
+    pub fn find_transaction_in_chain(&mut self, transfer_id: &Hash) 
+        -> Option<(Transfer, Block)>
     {
         for block_id in 0..self.blocks.next_top() 
         {
             let block = self.block(block_id).unwrap();
-            for transaction in &block.transactions
+            for transfer in &block.transfers
             {
-                match transaction.header.hash()
+                match transfer.header.hash()
                 {
                     Ok(hash) =>
                     {
-                        if hash == transaction_id {
-                            return Some((transaction.clone(), block));
+                        if hash == transfer_id {
+                            return Some((transfer.clone(), block));
                         }
                     },
                     Err(_) => {},

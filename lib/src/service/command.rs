@@ -1,5 +1,5 @@
 use crate::wallet::WalletStatus;
-use crate::transaction::Transaction;
+use crate::transaction::transfer::Transfer;
 use crate::block::Block;
 use serde::{Serialize, Deserialize};
 
@@ -20,8 +20,8 @@ pub enum Response
     Exit,
     WalletStatus(WalletStatus),
     Sent(Vec<u8>),
-    TransactionInfo(Transaction, Option<Block>),
-    TransactionHistory(Vec<(Transaction, Option<Block>)>),
+    TransactionInfo(Transfer, Option<Block>),
+    TransactionHistory(Vec<(Transfer, Option<Block>)>),
     Blocks(Vec<Block>),
     Failed,
 }
