@@ -2,7 +2,7 @@ use crate::node::network::NetworkConnection;
 use crate::node::Node;
 
 use libhyperchain::service::command::Response;
-use libhyperchain::block::HASH_LEN;
+use libhyperchain::config::HASH_LEN;
 use std::io::Write;
 
 pub fn transaction_info<W>(connection: &mut NetworkConnection<Node<W>, W>, 

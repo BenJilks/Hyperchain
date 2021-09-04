@@ -1,7 +1,8 @@
 use super::BlockChain;
 use crate::transaction::Transaction;
-use crate::block::{Block, Hash};
+use crate::block::Block;
 use crate::wallet::WalletStatus;
+use crate::config::Hash;
 
 impl BlockChain
 {

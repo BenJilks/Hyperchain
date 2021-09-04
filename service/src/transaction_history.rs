@@ -3,7 +3,8 @@ use crate::node::Node;
 
 use libhyperchain::transaction::Transaction;
 use libhyperchain::service::command::Response;
-use libhyperchain::block::{Block, HASH_LEN};
+use libhyperchain::block::Block;
+use libhyperchain::config::HASH_LEN;
 use std::io::Write;
 
 pub fn transaction_history<W>(connection: &mut NetworkConnection<Node<W>, W>,

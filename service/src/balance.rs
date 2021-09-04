@@ -1,8 +1,8 @@
 use crate::node::network::NetworkConnection;
 use crate::node::Node;
 
-use libhyperchain::block::HASH_LEN;
 use libhyperchain::service::command::Response;
+use libhyperchain::config::HASH_LEN;
 use std::io::Write;
 
 pub fn balance<W>(network_connection: &mut NetworkConnection<Node<W>, W>, 

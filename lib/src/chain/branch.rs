@@ -1,8 +1,9 @@
 use super::{BlockChain, BLOCK_SAMPLE_SIZE};
 use super::{BlockValidationResult, BlockChainAddResult};
-use crate::block::{Block, Hash};
+use crate::block::Block;
 use crate::logger::Logger;
 use crate::wallet::WalletStatus;
+use crate::config::Hash;
 
 use std::error::Error;
 use std::io::Write;

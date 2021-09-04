@@ -1,7 +1,7 @@
 use super::Wallet;
 use super::public_wallet::PublicWallet;
-use crate::block::PUB_KEY_LEN;
 use crate::logger::{Logger, LoggerLevel};
+use crate::config::PUB_KEY_LEN;
 
 use rsa::{RSAPrivateKey, PaddingScheme, PrivateKeyEncoding, PublicKeyParts};
 use rand::rngs::OsRng;

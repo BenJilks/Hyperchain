@@ -152,7 +152,13 @@ impl<W> PacketHandler<W> for Node<W>
                 self.logger.log(LoggerLevel::Info, 
                     &format!("Got transaction {}", transaction.to_string()));
                 
-                if !self.chain.push_transaction_queue(transaction) 
+                if self.chain.push_transaction_queue(transaction.clone())
+                {
+                    connection_manager.send_to(
+                        Packet::Transaction(transaction), 
+                        |x| x == from);
+                }
+                else
                 {
                     self.logger.log(LoggerLevel::Warning,
                         &format!("Invalid transaction"));

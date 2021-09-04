@@ -1,11 +1,12 @@
 pub mod validate;
 pub mod target;
 mod transactions;
+use target::{calculate_target, Target};
 use crate::transaction::Transaction;
 use crate::page::Page;
 use crate::chain::BlockChain;
 use crate::wallet::Wallet;
-use target::{calculate_target, Target};
+use crate::config::{Hash, HASH_LEN, BLOCK_SIZE};
 
 use sha2::{Sha256, Digest};
 use serde::{Serialize, Deserialize};
@@ -14,13 +15,6 @@ use std::error::Error;
 use std::fmt::Display;
 use bincode;
 use slice_as_array;
-
-pub const PUB_KEY_LEN: usize = 256;
-pub const HASH_LEN: usize = 32;
-pub type Signature = [u8; PUB_KEY_LEN];
-pub type Hash = [u8; HASH_LEN];
-
-const BLOCK_SIZE: usize = 16 * 1024 * 1024; // 16 MB
 
 pub fn current_timestamp() -> u128
 {

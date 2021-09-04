@@ -1,12 +1,10 @@
 use super::HASH_LEN;
 use super::Block;
+use crate::config::{BLOCK_SAMPLE_SIZE, BLOCK_TIME};
 
 const TARGET_LEN: usize = 4;
 const MIN_TARGET: [u8; TARGET_LEN] = [0x00, 0xFF, 0xFF, 0x20];
 pub type Target = [u8; TARGET_LEN];
-
-const BLOCK_TIME: u64 = 1000;
-pub const BLOCK_SAMPLE_SIZE: u64 = 10;
 
 fn index(target: &Target) -> u32
 {

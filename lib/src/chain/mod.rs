@@ -7,9 +7,9 @@ use storage::Storage;
 use metadata::BlockMetadata;
 use crate::block::Block;
 use crate::block::validate::BlockValidationResult;
-use crate::block::target::BLOCK_SAMPLE_SIZE;
 use crate::logger::{Logger, LoggerLevel};
 use crate::transaction::Transaction;
+use crate::config::BLOCK_SAMPLE_SIZE;
 
 use std::collections::VecDeque;
 use std::io::Write;

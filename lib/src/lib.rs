@@ -16,6 +16,7 @@ extern crate serde;
 #[macro_use]
 extern crate serde_big_array;
 
+pub mod config;
 pub mod service;
 pub mod wallet;
 pub mod block;

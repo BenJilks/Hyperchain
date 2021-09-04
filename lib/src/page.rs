@@ -1,6 +1,6 @@
-use crate::block::{Signature, PUB_KEY_LEN};
 use crate::wallet::private_wallet::PrivateWallet;
 use crate::wallet::Wallet;
+use crate::config::{Signature, PUB_KEY_LEN};
 
 use serde::{Serialize, Deserialize};
 use sha2::{Sha256, Digest};

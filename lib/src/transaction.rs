@@ -1,7 +1,7 @@
-use crate::block::{Signature, Hash, HASH_LEN, PUB_KEY_LEN};
 use crate::wallet::Wallet;
 use crate::wallet::private_wallet::PrivateWallet;
 use crate::wallet::public_wallet::{PublicWallet, WalletValidationResult};
+use crate::config::{Signature, Hash, PUB_KEY_LEN, HASH_LEN};
 use sha2::{Sha256, Digest};
 use serde::{Serialize, Deserialize};
 use bincode;

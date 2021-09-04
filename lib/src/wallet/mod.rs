@@ -1,6 +1,6 @@
 pub mod private_wallet;
 pub mod public_wallet;
-use crate::block::{Hash, PUB_KEY_LEN, HASH_LEN};
+use crate::config::{Hash, HASH_LEN, PUB_KEY_LEN};
 use crate::chain::BlockChain;
 
 use sha2::{Sha256, Digest};
@@ -78,7 +78,7 @@ mod tests
         
         let mut block_c = Block::new(&mut chain, &wallet).expect("Create block");
         block_c.add_transaction(Transaction::new(1, &wallet, other.get_address(), 4.6, 0.2));
-        block_c.add_transaction(Transaction::new(2, &other, wallet.get_address(), 1.4, 0.2));
+        block_c.add_transaction(Transaction::new(1, &other, wallet.get_address(), 1.4, 0.2));
         block_c = miner::mine_block(block_c);
         chain.add(&block_c, &mut logger).unwrap();
 

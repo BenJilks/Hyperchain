@@ -1,12 +1,11 @@
 use super::BlockChain;
-use crate::block::{Block, Hash};
+use crate::block::Block;
 use crate::transaction::{Transaction, TransactionValidationResult};
 use crate::wallet::{Wallet, WalletStatus};
 use crate::wallet::private_wallet::PrivateWallet;
+use crate::config::Hash;
 
 use std::error::Error;
-
-
 
 impl BlockChain
 {

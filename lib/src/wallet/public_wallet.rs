@@ -1,5 +1,5 @@
-use crate::block::PUB_KEY_LEN;
 use super::Wallet;
+use crate::config::PUB_KEY_LEN;
 
 use serde::{Serialize, Deserialize};
 use rsa::{RSAPublicKey, PublicKey, PaddingScheme, BigUint};
