@@ -150,7 +150,7 @@ impl<W> PacketHandler<W> for Node<W>
             Packet::Transfer(transfer) =>
             {
                 self.logger.log(LoggerLevel::Info, 
-                    &format!("Got transfer {}", transfer.to_string()));
+                    &format!("Got transfer {:?}", transfer));
                 
                 if self.chain.push_transaction_queue(transfer.clone())
                 {

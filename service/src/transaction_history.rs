@@ -1,6 +1,7 @@
 use crate::node::network::NetworkConnection;
 use crate::node::Node;
 
+use libhyperchain::transaction::Transaction;
 use libhyperchain::transaction::transfer::Transfer;
 use libhyperchain::service::command::Response;
 use libhyperchain::block::Block;
@@ -21,7 +22,7 @@ pub fn transaction_history<W>(connection: &mut NetworkConnection<Node<W>, W>,
 
     // FIXME: Extremely slow, need to use metadata to 
     //        optimise this!
-    let mut transfers = Vec::<(Transfer, Option<Block>)>::new();
+    let mut transfers = Vec::<(Transaction<Transfer>, Option<Block>)>::new();
     chain.walk(&mut |block|
     {
         for transfer in &block.transfers 

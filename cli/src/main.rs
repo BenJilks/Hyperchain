@@ -73,7 +73,7 @@ fn transaction_info(mut client: Client, options: &ArgMatches)
             println!("From: {}", base_62::encode(&transaction.get_from_address()));
             println!("To: {}", base_62::encode(&transaction.header.to));
             println!("Amount: {}", transaction.header.amount);
-            println!("Fee: {}", transaction.header.transaction_fee);
+            println!("Fee: {}", transaction.header.fee);
             
             match block
             {

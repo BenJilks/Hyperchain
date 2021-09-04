@@ -1,6 +1,6 @@
 use super::{Block, Hash, current_timestamp};
 use super::target::{calculate_target, hash_from_target};
-use crate::transaction::transfer::TransferValidationResult;
+use crate::transaction::TransactionValidationResult;
 
 use rsa::BigUint;
 use std::error::Error;
@@ -14,7 +14,7 @@ pub enum BlockValidationResult
     Timestamp,
     POW,
     Target,
-    Transfer(TransferValidationResult),
+    Transaction(TransactionValidationResult),
     Balance(Hash),
 }
 
@@ -31,7 +31,7 @@ impl std::fmt::Display for BlockValidationResult
             BlockValidationResult::Timestamp => write!(f, "Timestamp not in a valid range"),
             BlockValidationResult::POW => write!(f, "No valid proof or work"),
             BlockValidationResult::Target => write!(f, "Incorrect target value"),
-            BlockValidationResult::Transfer(result) => write!(f, "{}", result),
+            BlockValidationResult::Transaction(result) => write!(f, "{}", result),
             BlockValidationResult::Balance(_) => write!(f, "Insufficient balance"),
         }
     }
@@ -48,8 +48,8 @@ impl Block
         {
             match transfer.validate_content()?
             {
-                TransferValidationResult::Ok => {},
-                result => return Ok(BlockValidationResult::Transfer(result)),
+                TransactionValidationResult::Ok => {},
+                result => return Ok(BlockValidationResult::Transaction(result)),
             }
         }
 
@@ -134,6 +134,7 @@ mod tests
 {
 
     use super::*;
+    use crate::transaction::Transaction;
     use crate::transaction::transfer::Transfer;
     use crate::chain::BlockChain;
     use crate::logger::{Logger, LoggerLevel};
@@ -151,8 +152,8 @@ mod tests
         let mut chain = BlockChain::open_temp(&mut logger);
 
         let mut block = Block::new(&mut chain, &wallet).expect("Can create block");
-        let transfer = Transfer::new(1, &wallet, other.get_address(), 4.0, 1.0);
-        block.add_transfer(transfer);
+        let transaction = Transaction::new(&wallet, Transfer::new(1, other.get_address(), 4.0, 1.0));
+        block.add_transfer(transaction);
 
         assert_ne!(block.validate_pow().unwrap(), BlockValidationResult::Ok);
         assert_eq!(block.validate_target(None, None), BlockValidationResult::Ok);

@@ -33,4 +33,3 @@ pub fn transaction_info<W>(connection: &mut NetworkConnection<Node<W>, W>,
 
     Response::Failed
 }
-

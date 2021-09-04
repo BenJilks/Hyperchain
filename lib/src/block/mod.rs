@@ -2,6 +2,7 @@ pub mod validate;
 pub mod target;
 mod transactions;
 use target::{calculate_target, Target};
+use crate::transaction::Transaction;
 use crate::transaction::transfer::Transfer;
 // use crate::page::Page;
 use crate::chain::BlockChain;
@@ -29,7 +30,7 @@ pub struct Block
     pub raward_to: Hash,
 
     // pub pages: Vec<Page>,
-    pub transfers: Vec<Transfer>,
+    pub transfers: Vec<Transaction<Transfer>>,
     pub timestamp: u128,
     pub target: Target,
     pub pow: u64, // TODO: This should be a correct size
@@ -120,7 +121,7 @@ impl Block
     //     self.pages.push(page);
     // }
 
-    pub fn add_transfer(&mut self, transfer: Transfer)
+    pub fn add_transfer(&mut self, transfer: Transaction<Transfer>)
     {
         self.transfers.push(transfer);
     }

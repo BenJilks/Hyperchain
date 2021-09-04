@@ -29,7 +29,7 @@ pub fn send<W>(connection: &mut NetworkConnection<Node<W>, W>,
         }
 
         transfer = transfer_or_error.unwrap().unwrap();
-        transfer_id = transfer.header.hash().unwrap();
+        transfer_id = transfer.hash().unwrap();
         assert_eq!(chain.push_transaction_queue(transfer.clone()), true);
     }
 

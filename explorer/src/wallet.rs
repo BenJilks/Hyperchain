@@ -4,6 +4,7 @@ use super::transaction::data_for_transaction;
 use libhyperchain::service::command::{Command, Response};
 use libhyperchain::wallet::WalletStatus;
 use libhyperchain::transaction::Transaction;
+use libhyperchain::transaction::transfer::Transfer;
 use libhyperchain::block::Block;
 use libhyperchain::service::client::Client;
 use actix_web::{get, web};
@@ -27,7 +28,7 @@ fn get_wallet_status(client: &mut Client, address: &Vec<u8>) -> WalletStatus
 }
 
 fn get_transaction_history(client: &mut Client, address: &Vec<u8>) 
-    -> Vec<(Transaction, Option<Block>)>
+    -> Vec<(Transaction<Transfer>, Option<Block>)>
 {
     let wallet_status = client.send(Command::TransactionHistory(address.clone())).unwrap();
     match wallet_status

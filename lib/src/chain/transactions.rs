@@ -1,4 +1,5 @@
 use super::BlockChain;
+use crate::transaction::Transaction;
 use crate::transaction::transfer::Transfer;
 use crate::block::Block;
 use crate::wallet::WalletStatus;
@@ -31,14 +32,14 @@ impl BlockChain
     }
 
     pub fn find_transaction_in_chain(&mut self, transfer_id: &Hash) 
-        -> Option<(Transfer, Block)>
+        -> Option<(Transaction<Transfer>, Block)>
     {
         for block_id in 0..self.blocks.next_top() 
         {
             let block = self.block(block_id).unwrap();
             for transfer in &block.transfers
             {
-                match transfer.header.hash()
+                match transfer.hash()
                 {
                     Ok(hash) =>
                     {

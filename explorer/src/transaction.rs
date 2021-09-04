@@ -1,6 +1,7 @@
 use crate::AppData;
 
 use libhyperchain::transaction::Transaction;
+use libhyperchain::transaction::transfer::Transfer;
 use libhyperchain::block::Block;
 use libhyperchain::service::command::{Command, Response};
 use actix_web::{get, web};
@@ -13,10 +14,10 @@ struct TransactionParameters
     id: String,
 }
 
-pub fn data_for_transaction((transaction, block): &(Transaction, Option<Block>)) 
+pub fn data_for_transaction((transaction, block): &(Transaction<Transfer>, Option<Block>)) 
     -> serde_json::Value
 {
-    let hash = transaction.header.hash().unwrap();
+    let hash = transaction.hash().unwrap();
     let id = base_62::encode(&hash);
     let from = base_62::encode(&transaction.get_from_address());
     let to = base_62::encode(&transaction.header.to);
@@ -33,7 +34,7 @@ pub fn data_for_transaction((transaction, block): &(Transaction, Option<Block>))
         "from": from,
         "to": to,
         "amount": transaction.header.amount,
-        "fee": transaction.header.transaction_fee,
+        "fee": transaction.header.fee,
         "block": block_id,
     })
 }

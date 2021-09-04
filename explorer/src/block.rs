@@ -37,7 +37,7 @@ pub async fn block_handler(request: HttpRequest) -> impl Responder
                 "difficulty": difficulty,
                 "pow": block.pow,
                 "transactions":
-                    block.transactions
+                    block.transfers
                         .iter()
                         .map(|x| (x.clone(), None::<Block>))
                         .collect::<Vec<_>>()

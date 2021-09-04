@@ -57,6 +57,7 @@ mod tests
     use super::private_wallet::PrivateWallet;
     use crate::logger::{Logger, LoggerLevel};
     use crate::block::Block;
+    use crate::transaction::Transaction;
     use crate::transaction::transfer::Transfer;
     use crate::chain::BlockChain;
     use crate::miner;
@@ -77,8 +78,8 @@ mod tests
         chain.add(&block_b, &mut logger).unwrap();
         
         let mut block_c = Block::new(&mut chain, &wallet).expect("Create block");
-        block_c.add_transfer(Transfer::new(1, &wallet, other.get_address(), 4.6, 0.2));
-        block_c.add_transfer(Transfer::new(1, &other, wallet.get_address(), 1.4, 0.2));
+        block_c.add_transfer(Transaction::new(&wallet, Transfer::new(1, other.get_address(), 4.6, 0.2)));
+        block_c.add_transfer(Transaction::new(&other, Transfer::new(1, wallet.get_address(), 1.4, 0.2)));
         block_c = miner::mine_block(block_c);
         chain.add(&block_c, &mut logger).unwrap();
 

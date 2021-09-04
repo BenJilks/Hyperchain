@@ -8,6 +8,7 @@ use metadata::BlockMetadata;
 use crate::block::Block;
 use crate::block::validate::BlockValidationResult;
 use crate::logger::{Logger, LoggerLevel};
+use crate::transaction::Transaction;
 use crate::transaction::transfer::Transfer;
 use crate::config::BLOCK_SAMPLE_SIZE;
 
@@ -20,7 +21,7 @@ pub struct BlockChain
 {
     metadata: Storage<BlockMetadata>,
     blocks: Storage<Block>,
-    transfer_queue: VecDeque<Transfer>,
+    transfer_queue: VecDeque<Transaction<Transfer>>,
 }
 
 #[derive(Debug, PartialEq)]
