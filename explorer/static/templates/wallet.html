@@ -21,6 +21,10 @@
                 {{ #with this }}
                     <h2><a href="/transaction?id={{ id }}">{{ id }}</a></h2>
                     <div class="item">
+                        <text>Type</text>
+                        <text>{{ type }}</text>
+                    </div>
+                    <div class="item">
                         <text>From</text>
                         <a href="/wallet?address={{ from }}">{{ from }}</a>
                     </div>

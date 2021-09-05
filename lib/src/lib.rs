@@ -22,5 +22,6 @@ pub mod wallet;
 pub mod block;
 pub mod transaction;
 pub mod chain;
+pub mod data_store;
 pub mod logger;
 pub mod miner;

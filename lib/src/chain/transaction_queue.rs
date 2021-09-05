@@ -6,6 +6,7 @@ use crate::transaction::transfer::Transfer;
 use crate::transaction::page::Page;
 use crate::wallet::{Wallet, WalletStatus};
 use crate::wallet::private_wallet::PrivateWallet;
+use crate::data_store::DataUnit;
 use crate::config::Hash;
 
 use serde::Serialize;
@@ -103,11 +104,11 @@ impl BlockChain
         self.new_transaction(from, Transfer::new(status.max_id + 1, to, amount, fee))
     }
 
-    pub fn new_page(&mut self, from: &PrivateWallet, data_hashes: Vec<Hash>, data_length: u32, fee: f32)
+    pub fn new_page(&mut self, from: &PrivateWallet, data: &DataUnit, fee: f32)
         -> Result<Option<Transaction<Page>>, Box<dyn Error>>
     {
         let status = self.get_wallet_status_after_queue(&from.get_address());
-        self.new_transaction(from, Page::new(status.max_id + 1, data_hashes, data_length, fee))
+        self.new_transaction(from, Page::new_from_data(status.max_id + 1, data, fee)?)
     }
 
     pub fn push_transfer_queue(&mut self, transaction: Transaction<Transfer>) -> bool

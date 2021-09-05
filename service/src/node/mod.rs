@@ -5,7 +5,9 @@ use libhyperchain::logger::{Logger, LoggerLevel};
 use libhyperchain::chain::{BlockChain, BlockChainAddResult};
 use libhyperchain::chain::branch::BlockChainCanMergeResult;
 use libhyperchain::block::Block;
+use libhyperchain::data_store::DataStore;
 use std::io::Write;
+use std::path::PathBuf;
 use std::error::Error;
 use std::collections::HashMap;
 
@@ -13,8 +15,10 @@ pub struct Node<W>
     where W: Write + Clone + Sync + Send + 'static
 {
     port: u16,
-    chain: BlockChain,
     logger: Logger<W>,
+    
+    chain: BlockChain,
+    data_store: DataStore,
     branches: HashMap<String, Vec<Block>>,
 }
 
@@ -22,20 +26,30 @@ impl<W> Node<W>
     where W: Write + Clone + Sync + Send + 'static
 {
 
-    pub fn new(port: u16, chain: BlockChain, logger: Logger<W>) -> Self
+    pub fn new(port: u16, path: PathBuf, mut logger: Logger<W>) -> Result<Self, Box<dyn Error>>
     {
-        Self
+        let chain = BlockChain::open(&path.join("blockchain"), &mut logger)?;
+        let data_store = DataStore::open(&path.join("data"))?;
+
+        Ok(Self
         {
             port,
-            chain,
             logger,
+
+            chain,
+            data_store,
             branches: HashMap::new(),
-        }
+        })
     }
 
     pub fn chain(&mut self) -> &mut BlockChain
     {
         &mut self.chain
+    }
+
+    pub fn data_store(&mut self) -> &mut DataStore
+    {
+        &mut self.data_store
     }
 
     fn is_valid_next_entry_in_branch(branch: &Vec<Block>, block: &Block) -> bool
@@ -156,14 +170,36 @@ impl<W> PacketHandler<W> for Node<W>
                 {
                     connection_manager.send_to(
                         Packet::Transfer(transfer), 
-                        |x| x == from);
+                        |x| x != from);
                 }
                 else
                 {
                     self.logger.log(LoggerLevel::Warning,
                         &format!("Invalid transfer"));
                 }
-            }
+            },
+
+            Packet::Page(page, data) =>
+            {
+                self.logger.log(LoggerLevel::Info, 
+                    &format!("Got page {:?}", page));
+                
+                if page.header.is_data_valid(&data)?
+                    && self.chain.push_page_queue(page.clone())
+                {
+                    let id = page.hash()?;
+                    self.data_store.store(&id, &data)?;
+
+                    connection_manager.send_to(
+                        Packet::Page(page, data),
+                        |x| x != from);
+                }
+                else
+                {
+                    self.logger.log(LoggerLevel::Warning,
+                        &format!("Invalid page"));
+                }
+            },
             
             Packet::Ping => 
                 self.logger.log(LoggerLevel::Info, "Ping!"),
@@ -207,13 +243,12 @@ mod tests
         }
     }
 
-    fn create_node<W>(port: u16, mut logger: Logger<W>) -> Arc<Mutex<NetworkConnection<Node<W>, W>>>
+    fn create_node<W>(port: u16, logger: Logger<W>) -> Arc<Mutex<NetworkConnection<Node<W>, W>>>
         where W: Write + Clone + Sync + Send + 'static
     {
         let time = libhyperchain::block::current_timestamp();
         let path = std::env::temp_dir().join(format!("{}{}", time, port.to_string()));
-        let chain = BlockChain::open(&path, &mut logger).unwrap();
-        let node = Node::new(port, chain, logger.clone());
+        let node = Node::new(port, path, logger.clone()).unwrap();
         let network_connection = NetworkConnection::new(port, node, logger);
         network_connection
     }

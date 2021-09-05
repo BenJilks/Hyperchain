@@ -9,8 +9,10 @@ use libhyperchain::wallet::private_wallet::PrivateWallet;
 use libhyperchain::transaction::TransactionVariant;
 use libhyperchain::logger::{Logger, LoggerLevel, StdLoggerOutput};
 use clap::{App, Arg, SubCommand, ArgMatches};
-use std::error::Error;
 use std::path::PathBuf;
+use std::fs::File;
+use std::io::Read;
+use std::error::Error;
 
 fn balance(mut client: Client, options: &ArgMatches) -> Result<(), Box<dyn Error>>
 {
@@ -75,7 +77,13 @@ fn update_page(mut client: Client, options: &ArgMatches) -> Result<(), Box<dyn E
     }
 
     let from = from_or_error.unwrap();
-    match client.send(Command::UpdatePage(from.serialize()))?
+    let name = options.value_of("name").unwrap().to_owned();
+    
+    let page_path = options.value_of("page").unwrap();
+    let mut page = Vec::new();
+    File::open(&page_path)?.read_to_end(&mut page)?;
+
+    match client.send(Command::UpdatePage(from.serialize(), name, page))?
     {
         Response::Sent(id) => 
             println!("Success, TxID: {}", base_62::encode(&id)),
@@ -196,7 +204,19 @@ fn main() -> Result<(), Box<dyn Error>>
                 .long("from")
                 .takes_value(true)
                 .required(true)
-                .help("Path to from wallet file")))
+                .help("Path to from wallet file"))
+            .arg(Arg::with_name("name")
+                .short("n")
+                .long("name")
+                .takes_value(true)
+                .required(true)
+                .help("Page path and file name"))
+            .arg(Arg::with_name("page")
+                .short("p")
+                .long("page")
+                .takes_value(true)
+                .required(true)
+                .help("Path to page file")))
         
         .subcommand(SubCommand::with_name("transaction-info")
             .about("Display transaction information")

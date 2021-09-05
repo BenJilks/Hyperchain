@@ -1,5 +1,6 @@
 use super::Block;
 use crate::wallet::WalletStatus;
+use crate::transaction::TransactionVariant;
 use crate::config::Hash;
 
 use std::collections::HashSet;
@@ -38,8 +39,30 @@ impl Block
             }
         }
 
-        // TODO: Pages
+        for page in &self.pages
+        {
+            let is_block_winner = &self.raward_to == address;
+            match page.update_wallet_status(address, status, is_block_winner)
+            {
+                Some(new_status) => status = new_status,
+                None => return None,
+            }
+        }
+
         Some(status)
+    }
+
+    pub fn transactions(&self) -> Vec<TransactionVariant>
+    {
+        let mut transactions = Vec::new();
+        for transfer in &self.transfers {
+            transactions.push(TransactionVariant::Transfer(transfer.clone()));
+        }
+        for page in &self.pages {
+            transactions.push(TransactionVariant::Page(page.clone()));
+        }
+
+        transactions
     }
 
 }

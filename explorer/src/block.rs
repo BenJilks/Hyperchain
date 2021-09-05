@@ -37,13 +37,13 @@ pub async fn block_handler(request: HttpRequest) -> impl Responder
                 "difficulty": difficulty,
                 "pow": block.pow,
                 "transactions":
-                    block.transfers
+                    block.transactions()
                         .iter()
                         .map(|x| (x.clone(), None::<Block>))
                         .collect::<Vec<_>>()
                         .iter()
                         .map(data_for_transaction)
-                        .collect::<Vec<_>>()
+                        .collect::<Vec<_>>(),
             });
         
             let body = app_data.hb.render("block", &data).unwrap();

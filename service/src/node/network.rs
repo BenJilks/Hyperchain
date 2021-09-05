@@ -2,10 +2,14 @@ use libhyperchain::logger::{LoggerLevel, Logger};
 use libhyperchain::block::Block;
 use libhyperchain::transaction::Transaction;
 use libhyperchain::transaction::transfer::Transfer;
+use libhyperchain::transaction::page::Page;
+use libhyperchain::data_store::DataUnit;
+
 use tcp_channel::{ReceiverBuilder, ChannelRecv};
 use tcp_channel::{SenderBuilder, ChannelSend};
 use tcp_channel::LittleEndian;
 use serde::{Serialize, Deserialize};
+
 use std::io::{Write, BufReader, BufWriter};
 use std::net::{TcpStream, TcpListener};
 use std::thread::JoinHandle;
@@ -26,6 +30,7 @@ pub enum Packet
     Block(Block),
     BlockRequest(u64),
     Transfer(Transaction<Transfer>),
+    Page(Transaction<Page>, DataUnit),
     Ping,
 }
 

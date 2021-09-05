@@ -23,7 +23,6 @@ use blocks::blocks;
 use crate::node::network::NetworkConnection;
 use crate::node::Node;
 
-use libhyperchain::chain::BlockChain;
 use libhyperchain::logger::{Logger, LoggerLevel, StdLoggerOutput};
 use libhyperchain::service::server;
 use libhyperchain::service::command::{Command, Response};
@@ -52,13 +51,12 @@ fn main() -> Result<(), Box<dyn Error>>
         .get_matches();
 
     // Crate logger and read port from command line
-    let mut logger = Logger::new(StdLoggerOutput::new(), LoggerLevel::Info);
+    let logger = Logger::new(StdLoggerOutput::new(), LoggerLevel::Info);
     let port = matches.value_of("port").unwrap_or("8001").parse::<u16>().unwrap();
     let disable_local_server = matches.is_present("local-server");
 
     // Create and open node
-    let chain = BlockChain::open(&PathBuf::from("blockchain"), &mut logger)?;
-    let node = Node::new(port, chain, logger.clone());
+    let node = Node::new(port, PathBuf::from("hyperchain"), logger.clone())?;
 
     let miner_thread;
     {
@@ -89,8 +87,8 @@ fn main() -> Result<(), Box<dyn Error>>
                 Command::Send(from, to, amount, fee) =>
                     send(&mut connection.lock().unwrap(), from, to, amount, fee),
 
-                Command::UpdatePage(from) =>
-                    update_page(&mut connection.lock().unwrap(), from),
+                Command::UpdatePage(from, name, data) =>
+                    update_page(&mut connection.lock().unwrap(), from, name, data),
 
                 Command::TransactionInfo(id) =>
                     transaction_info(&mut connection.lock().unwrap(), id),
