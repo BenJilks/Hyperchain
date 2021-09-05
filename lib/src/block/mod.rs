@@ -4,7 +4,7 @@ mod transactions;
 use target::{calculate_target, Target};
 use crate::transaction::Transaction;
 use crate::transaction::transfer::Transfer;
-// use crate::page::Page;
+use crate::transaction::page::Page;
 use crate::chain::BlockChain;
 use crate::wallet::Wallet;
 use crate::config::{Hash, HASH_LEN, BLOCK_SIZE};
@@ -29,7 +29,7 @@ pub struct Block
     pub block_id: u64,
     pub raward_to: Hash,
 
-    // pub pages: Vec<Page>,
+    pub pages: Vec<Transaction<Page>>,
     pub transfers: Vec<Transaction<Transfer>>,
     pub timestamp: u128,
     pub target: Target,
@@ -108,7 +108,7 @@ impl Block
             block_id: block_id,
             raward_to: raward_to.get_address(),
 
-            // pages: Vec::new(),
+            pages: Vec::new(),
             transfers: Vec::new(),
             timestamp: timestamp,
             target: target,
@@ -116,10 +116,10 @@ impl Block
         })
     }
 
-    // pub fn add_page(&mut self, page: Page)
-    // {
-    //     self.pages.push(page);
-    // }
+    pub fn add_page(&mut self, page: Transaction<Page>)
+    {
+        self.pages.push(page);
+    }
 
     pub fn add_transfer(&mut self, transfer: Transaction<Transfer>)
     {

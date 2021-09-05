@@ -1,14 +1,15 @@
-use super::{Block, HASH_LEN};
+use super::Block;
 use crate::wallet::WalletStatus;
+use crate::config::Hash;
 
 use std::collections::HashSet;
 
 impl Block
 {
 
-    pub fn get_addresses_used(&self) -> Vec<[u8; HASH_LEN]>
+    pub fn get_addresses_used(&self) -> Vec<Hash>
     {
-        let mut addresses_in_use = HashSet::<[u8; HASH_LEN]>::new();
+        let mut addresses_in_use = HashSet::<Hash>::new();
         addresses_in_use.insert(self.raward_to);
         
         for transaction in &self.transfers
@@ -20,8 +21,8 @@ impl Block
         addresses_in_use.into_iter().collect::<Vec<_>>()
     }
 
-    pub fn update_wallet_status(&self, address: &[u8; HASH_LEN], 
-                                mut status: WalletStatus) -> Option<WalletStatus>
+    pub fn update_wallet_status(&self, address: &Hash, mut status: WalletStatus) 
+        -> Option<WalletStatus>
     {
         if &self.raward_to == address {
             status.balance += self.calculate_reward()
@@ -29,22 +30,11 @@ impl Block
 
         for transfer in &self.transfers
         {
-            let header = &transfer.header;
-            if &transfer.get_from_address() == address
+            let is_block_winner = &self.raward_to == address;
+            match transfer.update_wallet_status(address, status, is_block_winner)
             {
-                status.balance -= header.amount + header.fee;
-                if header.id <= status.max_id {
-                    return None;
-                }
-                status.max_id = header.id;
-            }
-
-            if &header.to == address {
-                status.balance += header.amount;
-            }
-
-            if &self.raward_to == address {
-                status.balance += header.fee;
+                Some(new_status) => status = new_status,
+                None => return None,
             }
         }
 

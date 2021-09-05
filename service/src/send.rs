@@ -30,7 +30,7 @@ pub fn send<W>(connection: &mut NetworkConnection<Node<W>, W>,
 
         transfer = transfer_or_error.unwrap().unwrap();
         transfer_id = transfer.hash().unwrap();
-        assert_eq!(chain.push_transaction_queue(transfer.clone()), true);
+        assert_eq!(chain.push_transfer_queue(transfer.clone()), true);
     }
 
     connection.manager().send(Packet::Transfer(transfer));

@@ -1,9 +1,11 @@
 pub mod transfer;
 pub mod page;
-use crate::wallet::Wallet;
+use transfer::Transfer;
+use page::Page;
+use crate::wallet::{Wallet, WalletStatus};
 use crate::wallet::private_wallet::PrivateWallet;
 use crate::wallet::public_wallet::{PublicWallet, WalletValidationResult};
-use crate::config::{Signature, PUB_KEY_LEN, HASH_LEN};
+use crate::config::{Signature, Hash, PUB_KEY_LEN, HASH_LEN};
 
 use serde::{Serialize, Deserialize};
 use sha2::{Sha256, Digest};
@@ -21,7 +23,14 @@ pub enum TransactionValidationResult
 
 pub trait TransactionHeader
 {
-    fn validate(&self) -> Result<TransactionValidationResult, Box<dyn Error>>;
+
+    fn validate(&self) 
+        -> Result<TransactionValidationResult, Box<dyn Error>>;
+
+    fn update_wallet_status(&self, address: &Hash, status: WalletStatus, 
+                            is_from_address: bool, is_block_winner: bool)
+        -> Option<WalletStatus>;
+
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
@@ -37,6 +46,13 @@ pub struct Transaction<H>
     pub signature: Signature,
     
     pub e: [u8; 3],
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum TransactionVariant
+{
+    Transfer(Transaction<Transfer>),
+    Page(Transaction<Page>),
 }
 
 impl std::fmt::Display for TransactionValidationResult
@@ -83,6 +99,16 @@ impl<H> Transaction<H>
     pub fn hash(&self) -> Result<Vec<u8>, Box<dyn Error>>
     {
         hash_header(&self.header)
+    }
+
+    pub fn update_wallet_status(&self, address: &Hash, status: WalletStatus, 
+                                is_block_winner: bool)
+        -> Option<WalletStatus>
+    {
+        let is_from_address = &self.get_from_address() == address;
+
+        self.header.update_wallet_status(address, status,
+            is_from_address, is_block_winner)
     }
 
     pub fn validate_content(&self) -> Result<TransactionValidationResult, Box<dyn Error>>

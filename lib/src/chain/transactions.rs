@@ -1,9 +1,31 @@
 use super::BlockChain;
-use crate::transaction::Transaction;
-use crate::transaction::transfer::Transfer;
+use crate::transaction::{Transaction, TransactionHeader, TransactionVariant};
 use crate::block::Block;
 use crate::wallet::WalletStatus;
 use crate::config::Hash;
+
+use serde::Serialize;
+
+fn find_transaction<H>(transactions: &Vec<Transaction<H>>, transaction_id: &Hash)
+        -> Option<Transaction<H>>
+    where H: TransactionHeader + Serialize + Clone
+{
+    for transaction in transactions
+    {
+        match transaction.hash()
+        {
+            Ok(hash) =>
+            {
+                if hash == transaction_id {
+                    return Some(transaction.clone());
+                }
+            },
+            Err(_) => {},
+        }
+    }
+
+    None
+}
 
 impl BlockChain
 {
@@ -31,24 +53,21 @@ impl BlockChain
         }
     }
 
-    pub fn find_transaction_in_chain(&mut self, transfer_id: &Hash) 
-        -> Option<(Transaction<Transfer>, Block)>
+    pub fn find_transaction_in_chain(&mut self, transaction_id: &Hash) 
+        -> Option<(TransactionVariant, Block)>
     {
         for block_id in 0..self.blocks.next_top() 
         {
             let block = self.block(block_id).unwrap();
-            for transfer in &block.transfers
-            {
-                match transfer.hash()
-                {
-                    Ok(hash) =>
-                    {
-                        if hash == transfer_id {
-                            return Some((transfer.clone(), block));
-                        }
-                    },
-                    Err(_) => {},
-                }
+
+            let transfer = find_transaction(&block.transfers, transaction_id);
+            if transfer.is_some() {
+                return Some((TransactionVariant::Transfer(transfer.unwrap()), block.clone()));
+            }
+
+            let page = find_transaction(&block.pages, transaction_id);
+            if page.is_some() {
+                return Some((TransactionVariant::Page(page.unwrap()), block.clone()));
             }
         }
 

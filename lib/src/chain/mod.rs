@@ -10,6 +10,7 @@ use crate::block::validate::BlockValidationResult;
 use crate::logger::{Logger, LoggerLevel};
 use crate::transaction::Transaction;
 use crate::transaction::transfer::Transfer;
+use crate::transaction::page::Page;
 use crate::config::BLOCK_SAMPLE_SIZE;
 
 use std::collections::VecDeque;
@@ -21,6 +22,8 @@ pub struct BlockChain
 {
     metadata: Storage<BlockMetadata>,
     blocks: Storage<Block>,
+
+    page_queue: VecDeque<Transaction<Page>>,
     transfer_queue: VecDeque<Transaction<Transfer>>,
 }
 
@@ -44,6 +47,8 @@ impl BlockChain
         {
             metadata: Storage::new(&path.join("metadata"))?,
             blocks: Storage::new(path)?,
+
+            page_queue: VecDeque::new(),
             transfer_queue: VecDeque::new(),
         })
     }

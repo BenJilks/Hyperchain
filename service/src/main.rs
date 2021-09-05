@@ -8,12 +8,14 @@ mod node;
 mod block_builder;
 mod miner;
 mod send;
+mod update_page;
 mod balance;
 mod transaction_info;
 mod transaction_history;
 mod blocks;
 use miner::start_miner_thread;
 use send::send;
+use update_page::update_page;
 use balance::balance;
 use transaction_history::transaction_history;
 use transaction_info::transaction_info;
@@ -86,6 +88,9 @@ fn main() -> Result<(), Box<dyn Error>>
 
                 Command::Send(from, to, amount, fee) =>
                     send(&mut connection.lock().unwrap(), from, to, amount, fee),
+
+                Command::UpdatePage(from) =>
+                    update_page(&mut connection.lock().unwrap(), from),
 
                 Command::TransactionInfo(id) =>
                     transaction_info(&mut connection.lock().unwrap(), id),

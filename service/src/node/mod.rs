@@ -152,7 +152,7 @@ impl<W> PacketHandler<W> for Node<W>
                 self.logger.log(LoggerLevel::Info, 
                     &format!("Got transfer {:?}", transfer));
                 
-                if self.chain.push_transaction_queue(transfer.clone())
+                if self.chain.push_transfer_queue(transfer.clone())
                 {
                     connection_manager.send_to(
                         Packet::Transfer(transfer), 

@@ -1,4 +1,5 @@
 use super::{TransactionHeader, TransactionValidationResult};
+use crate::wallet::WalletStatus;
 use crate::config::Hash;
 
 use serde::{Serialize, Deserialize};
@@ -41,6 +42,30 @@ impl TransactionHeader for Transfer
         } else {
             Ok(TransactionValidationResult::Ok)
         }
+    }
+
+    fn update_wallet_status(&self, address: &Hash, mut status: WalletStatus,
+                            is_from_address: bool, is_block_winner: bool)
+        -> Option<WalletStatus>
+    {
+        if is_from_address
+        {
+            status.balance -= self.amount + self.fee;
+            if self.id <= status.max_id {
+                return None;
+            }
+            status.max_id = self.id;
+        }
+
+        if &self.to == address {
+            status.balance += self.amount;
+        }
+
+        if is_block_winner {
+            status.balance += self.fee;
+        }
+
+        Some(status)
     }
 
 }
