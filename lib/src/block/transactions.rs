@@ -19,6 +19,10 @@ impl Block
             addresses_in_use.insert(transaction.header.to);
         }
 
+        for page in &self.pages {
+            addresses_in_use.insert(page.get_from_address());
+        }
+
         addresses_in_use.into_iter().collect::<Vec<_>>()
     }
 

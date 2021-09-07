@@ -3,8 +3,8 @@ use serde::{Serialize, Deserialize};
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct CreatePageData
 {
-    name: String,
-    page: Vec<u8>,
+    pub name: String,
+    pub page: Vec<u8>,
 }
 
 impl CreatePageData

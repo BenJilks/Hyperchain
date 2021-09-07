@@ -10,6 +10,7 @@ extern crate serde_json;
 mod wallet;
 mod transaction;
 mod block;
+mod site;
 
 use libhyperchain::service::client::Client;
 use actix_web::{web, App};
@@ -52,9 +53,12 @@ async fn main() -> Result<(), Box<dyn Error>>
                 .service(wallet::wallet_handler)
                 .service(transaction::transaction_handler)
                 .service(block::block_handler)
+                .service(site::site_index_redirect_handler)
+                .service(site::site_index_handler)
+                .service(site::site_handler)
                 .service(Files::new("/", "./static/root").index_file("index.html"))
         })
-        .bind("127.0.0.1:8080")?
+        .bind("0.0.0.0:8080")?
         .run()
         .await?;
 

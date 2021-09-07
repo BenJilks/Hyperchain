@@ -1,5 +1,6 @@
 use super::BlockChain;
 use crate::transaction::{Transaction, TransactionHeader, TransactionVariant};
+use crate::transaction::page::Page;
 use crate::block::Block;
 use crate::wallet::WalletStatus;
 use crate::config::Hash;
@@ -51,6 +52,47 @@ impl BlockChain
         } else {
             self.get_wallet_status_up_to_block(self.blocks.next_top() - 1, address)
         }
+    }
+
+    pub fn last_page_update(&mut self, address: &Hash) -> Option<Block>
+    {
+        for block_id in (0..self.blocks.next_top()).rev()
+        {
+            let metadata = self.metadata.get(block_id).unwrap();
+            if metadata.page_updates.contains_key(address) {
+                return self.blocks.get(block_id);
+            }
+        }
+
+        None
+    }
+
+    pub fn get_page_updates(&mut self, address: &Hash) 
+        -> Vec<Transaction<Page>>
+    {
+        let mut updates = Vec::new();
+        for block_id in (0..self.blocks.next_top()).rev()
+        {
+            let metadata = self.metadata.get(block_id).unwrap();
+            if !metadata.page_updates.contains_key(address) {
+                continue;
+            }
+
+            let block = self.block(block_id).unwrap();
+            for page in block.pages.iter().rev() 
+            {
+                if &page.get_from_address() == address {
+                    updates.push(page.clone());
+                }
+            }
+
+            if metadata.page_updates[address].is_creation {
+                break;
+            }
+        }
+
+        updates.reverse();
+        updates
     }
 
     pub fn find_transaction_in_chain(&mut self, transaction_id: &Hash) 

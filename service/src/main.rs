@@ -12,6 +12,7 @@ mod update_page;
 mod balance;
 mod transaction_info;
 mod transaction_history;
+mod page;
 mod blocks;
 use miner::start_miner_thread;
 use send::send;
@@ -19,6 +20,8 @@ use update_page::update_page;
 use balance::balance;
 use transaction_history::transaction_history;
 use transaction_info::transaction_info;
+use page::page_updates;
+use page::page_data;
 use blocks::blocks;
 use crate::node::network::NetworkConnection;
 use crate::node::Node;
@@ -95,6 +98,12 @@ fn main() -> Result<(), Box<dyn Error>>
                 
                 Command::TransactionHistory(address) =>
                     transaction_history(&mut connection.lock().unwrap(), address),
+                
+                Command::PageUpdates(address) =>
+                    page_updates(&mut connection.lock().unwrap(), address),
+
+                Command::PageData(transaction_id) =>
+                    page_data(&mut connection.lock().unwrap(), transaction_id),
                 
                 Command::Blocks(from, to) =>
                     blocks(&mut connection.lock().unwrap(), from, to),
