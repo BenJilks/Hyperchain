@@ -7,7 +7,7 @@ use crate::transaction::transfer::Transfer;
 use crate::transaction::page::Page;
 use crate::chain::BlockChain;
 use crate::wallet::Wallet;
-use crate::config::{Hash, HASH_LEN, BLOCK_SIZE};
+use crate::config::{Hash, HASH_LEN};
 
 use sha2::{Sha256, Digest};
 use serde::{Serialize, Deserialize};
@@ -128,12 +128,7 @@ impl Block
 
     pub fn as_bytes(&self) -> Result<Vec<u8>, Box<dyn Error>>
     {
-        let bytes = bincode::serialize(self)?;
-        if bytes.len() > BLOCK_SIZE {
-            Err(Box::new(BlockError::BlockTooLarge))
-        } else {
-            Ok(bytes)
-        }
+        Ok(bincode::serialize(self)?)
     }
 
     pub fn hash(&self) -> Result<Hash, Box<dyn Error>>
