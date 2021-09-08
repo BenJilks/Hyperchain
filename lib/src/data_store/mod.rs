@@ -1,11 +1,14 @@
 pub mod page;
 use page::CreatePageData;
+use crate::transaction::Transaction;
+use crate::transaction::page::Page;
 use crate::config::{Hash, HASH_LEN, PAGE_CHUNK_SIZE};
 
 use serde::{Serialize, Deserialize};
 use sha2::{Sha256, Digest};
 use std::path::PathBuf;
 use std::fs::File;
+use std::collections::HashMap;
 use std::error::Error;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -64,6 +67,21 @@ impl DataStore
         {
             path: path.clone(),
         })
+    }
+
+    pub fn for_page_updates(&self, updates: &Vec<Transaction<Page>>) 
+        -> Result<HashMap<Hash, DataUnit>, Box<dyn Error>>
+    {
+        let mut data = HashMap::new();
+        for update in updates 
+        {
+            let hash_vec = update.hash()?;
+            let hash = *slice_as_array!(&hash_vec, [u8; HASH_LEN]).unwrap();
+            let unit = self.get(&hash)?;
+            data.insert(hash, unit);
+        }
+
+        Ok(data)
     }
 
     pub fn store(&self, transaction_id: &[u8], data: &DataUnit) 

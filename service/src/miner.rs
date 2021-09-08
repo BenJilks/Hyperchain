@@ -76,7 +76,8 @@ fn mine_next_block<W>(network_connection: &Arc<Mutex<NetworkConnection<Node<W>, 
                     block.block_id, 
                     block::target::difficulty(&block.target));
 
-                network_connection_lock.manager().send(Packet::Block(block));
+                let data = network_connection_lock.handler().data_store().for_page_updates(&block.pages)?;
+                network_connection_lock.manager().send(Packet::Block(block, data));
             },
 
             _ => {},
@@ -91,7 +92,7 @@ pub fn start_miner_thread<W>(network_connection: Arc<Mutex<NetworkConnection<Nod
     where W: Write + Clone + Sync + Send + 'static
 {
     // Create chain a wallet
-    let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet"), &mut logger).unwrap();
+    let wallet = PrivateWallet::read_from_file(&PathBuf::from("test.wallet"), &mut logger).unwrap();
 
     std::thread::spawn(move || loop 
     {
@@ -101,4 +102,3 @@ pub fn start_miner_thread<W>(network_connection: Arc<Mutex<NetworkConnection<Nod
         }
     })
 }
-

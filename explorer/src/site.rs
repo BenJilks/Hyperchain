@@ -96,4 +96,3 @@ pub async fn site_handler(web::Path((site, page)): web::Path<(String, String)>,
     let mut client = app_data.client();
     get_page(&mut client, site, page)
 }
-

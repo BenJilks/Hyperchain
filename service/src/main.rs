@@ -65,7 +65,7 @@ fn main() -> Result<(), Box<dyn Error>>
     {
         // Register a common node to connect to
         let network_connection = NetworkConnection::new(port, node, logger.clone());
-        network_connection.lock().unwrap().manager().register_node("127.0.0.1:8001", None);
+        network_connection.lock().unwrap().manager().register_node("192.168.0.27:8001", None);
 
         // Start miner thread
         miner_thread = start_miner_thread(network_connection.clone(), logger.clone());

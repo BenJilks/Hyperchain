@@ -4,6 +4,7 @@ use libhyperchain::transaction::Transaction;
 use libhyperchain::transaction::transfer::Transfer;
 use libhyperchain::transaction::page::Page;
 use libhyperchain::data_store::DataUnit;
+use libhyperchain::config::Hash;
 
 use tcp_channel::{ReceiverBuilder, ChannelRecv};
 use tcp_channel::{SenderBuilder, ChannelSend};
@@ -27,7 +28,7 @@ pub enum Packet
 {
     KnownNode(String),
     OnConnected(u16),
-    Block(Block),
+    Block(Block, HashMap<Hash, DataUnit>),
     BlockRequest(u64),
     Transfer(Transaction<Transfer>),
     Page(Transaction<Page>, DataUnit),
