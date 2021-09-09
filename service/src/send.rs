@@ -1,6 +1,6 @@
 use crate::node::network::NetworkConnection;
+use crate::node::packet_handler::Packet;
 use crate::node::Node;
-use crate::node::network::Packet;
 
 use libhyperchain::service::command::Response;
 use libhyperchain::wallet::private_wallet::PrivateWallet;

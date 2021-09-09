@@ -1,5 +1,9 @@
 pub mod network;
-use network::{PacketHandler, ConnectionManager, Packet};
+pub mod packet_handler;
+mod connection;
+mod manager;
+use packet_handler::{PacketHandler, Packet};
+use manager::ConnectionManager;
 
 use libhyperchain::logger::{Logger, LoggerLevel};
 use libhyperchain::chain::{BlockChain, BlockChainAddResult};
@@ -10,10 +14,14 @@ use libhyperchain::transaction::Transaction;
 use libhyperchain::transaction::transfer::Transfer;
 use libhyperchain::transaction::page::Page;
 use libhyperchain::config::{Hash, HASH_LEN};
+use tcp_channel::LittleEndian;
 use std::io::Write;
 use std::path::PathBuf;
 use std::error::Error;
 use std::collections::HashMap;
+
+type TcpReceiver<T> = tcp_channel::Receiver<T, LittleEndian>;
+type TcpSender<T> = tcp_channel::Sender<T, LittleEndian>;
 
 pub struct Node<W>
     where W: Write + Clone + Sync + Send + 'static

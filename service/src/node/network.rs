@@ -1,87 +1,31 @@
+use super::packet_handler::{PacketHandler, Message};
+use super::packet_handler::start_message_handler;
+use super::manager::ConnectionManager;
+
 use libhyperchain::logger::{LoggerLevel, Logger};
-use libhyperchain::block::Block;
-use libhyperchain::transaction::Transaction;
-use libhyperchain::transaction::transfer::Transfer;
-use libhyperchain::transaction::page::Page;
-use libhyperchain::data_store::DataUnit;
-use libhyperchain::config::Hash;
-
-use tcp_channel::{ReceiverBuilder, ChannelRecv};
-use tcp_channel::{SenderBuilder, ChannelSend};
-use tcp_channel::LittleEndian;
-use serde::{Serialize, Deserialize};
-
-use std::io::{Write, BufReader, BufWriter};
+use std::io::Write;
 use std::net::{TcpStream, TcpListener};
 use std::thread::JoinHandle;
-use std::sync::mpsc::{channel, Sender, Receiver, RecvTimeoutError};
+use std::sync::mpsc::{channel, Sender, Receiver};
 use std::sync::{Mutex, MutexGuard, Arc};
-use std::collections::{HashSet, HashMap};
-use std::time::Duration;
-use std::error::Error;
 
-type TcpReceiver<T> = tcp_channel::Receiver<T, LittleEndian>;
-type TcpSender<T> = tcp_channel::Sender<T, LittleEndian>;
-
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
-pub enum Packet
+pub struct NetworkConnection<P, W>
+    where W: Write + Clone + Sync + Send + 'static,
+          P: PacketHandler<W> + Sync + Send + 'static
 {
-    KnownNode(String),
-    OnConnected(u16),
-    Block(Block, HashMap<Hash, DataUnit>),
-    BlockRequest(u64),
-    Transfer(Transaction<Transfer>),
-    Page(Transaction<Page>, DataUnit),
-    Ping,
+    pub(crate) port: u16,
+    should_shutdown: bool,
+    packet_handler: P,
+    pub logger: Logger<W>,
+
+    message_sender: Option<Sender<Message>>,
+    pub(crate) connection_manager: Option<Arc<Mutex<ConnectionManager<W>>>>,
+    node_listner_thread: Option<JoinHandle<()>>,
+    message_handler_thread: Option<JoinHandle<()>>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub enum Message
-{
-    Packet(String, Packet),
-    Shutdown,
-}
-
-fn start_packet_reciver<W>(server_ip: String, mut recv: TcpReceiver<Packet>, 
-                           message_sender: Sender<Message>, mut logger: Logger<W>) -> JoinHandle<()>
-    where W: Write + Sync + Send + 'static
-{
-    std::thread::spawn(move || loop
-    {
-        match recv.recv()
-        {
-            Ok(packet) =>
-            {
-                match message_sender.send(Message::Packet(server_ip.clone(), packet)) 
-                {
-                    Ok(_) => {},
-                    Err(err) => 
-                    {
-                        logger.log(LoggerLevel::Error, 
-                            &format!("message_sender.send(packet): {}", err));
-                        break;
-                    },
-                }
-            },
-
-            Err(tcp_channel::RecvError::IoError(e)) 
-                if e.kind() == std::io::ErrorKind::UnexpectedEof ||
-                   e.kind() == std::io::ErrorKind::ConnectionReset =>
-            {
-                // The stream has closed
-                break;
-            },
-            
-            Err(err) =>
-            {
-                logger.log(LoggerLevel::Error, &format!("recv.recv(): {}", err));
-                break;
-            },
-        }
-    })
-}
-
-fn start_node_listner<P, W>(port: u16, network_connection: Arc<Mutex<NetworkConnection<P, W>>>) -> JoinHandle<()>
+fn start_node_listner<P, W>(port: u16, network_connection: Arc<Mutex<NetworkConnection<P, W>>>) 
+        -> JoinHandle<()>
     where P: PacketHandler<W> + Sync + Send + 'static,
           W: Write + Clone + Sync + Send + 'static
 {
@@ -116,120 +60,6 @@ fn start_node_listner<P, W>(port: u16, network_connection: Arc<Mutex<NetworkConn
     })
 }
 
-pub trait PacketHandler<W>
-    where W: Write + Clone + Sync + Send + 'static
-{
-    fn on_packet(&mut self, from: &str, packet: Packet, connection_manager: &mut ConnectionManager<W>) 
-        -> Result<(), Box<dyn Error>>;
-}
-
-fn handle_message_packet<P, W>(from: String, packet: Packet, 
-                               network_connection: &mut NetworkConnection<P, W>)
-    where P: PacketHandler<W> + Sync + Send + 'static,
-          W: Write + Clone + Sync + Send + 'static
-{
-    let port = network_connection.port;
-
-    let handle_packet = |network_connection: &mut NetworkConnection<P, W>, packet, manager_lock|
-    {
-        match network_connection.handler().on_packet(&from, packet, manager_lock)
-        {
-            Ok(_) => {},
-            Err(err) =>
-            {
-                network_connection.logger.log(
-                    LoggerLevel::Error, &format!("Error handling packet: {}", err))
-            },
-        }
-    };
-
-    match &packet
-    {
-        // NOTE: We don't send KnownNode packets to the handler
-        Packet::KnownNode(address) =>
-            network_connection.manager().register_node(&address, Some( &from )),
-
-        Packet::OnConnected(node_port) =>
-        {
-            let ip = from.split(':').nth(0).unwrap();
-            let node_address = format!("{}:{}", ip, node_port);
-            if !network_connection.manager().open_connections.insert(node_address.clone())
-            {
-                network_connection.logger.log(LoggerLevel::Verbose, 
-                    &format!("[{}] Remove duplicate connection {}", port, node_address));
-                network_connection.manager().disconnect_from(&from);
-            }
-            else
-            {
-                network_connection.manager().confirm_connection(&from, node_address.clone());
-                network_connection.manager().register_node(&node_address, Some( &from ));
-
-                let manager = network_connection.connection_manager.clone().unwrap();
-                let mut manager_lock = manager.lock().unwrap();
-                handle_packet(network_connection, packet, &mut manager_lock);
-            }
-        },
-
-        _ => 
-        {
-            let manager = network_connection.connection_manager.clone().unwrap();
-            let mut manager_lock = manager.lock().unwrap();
-            handle_packet(network_connection, packet, &mut manager_lock);
-        },
-    }
-}
-
-fn start_message_handler<P, W>(network_connection: Arc<Mutex<NetworkConnection<P, W>>>, 
-                               message_reciver: Receiver<Message>) -> JoinHandle<()>
-    where P: PacketHandler<W> + Sync + Send + 'static,
-          W: Write + Clone + Sync + Send + 'static
-{
-    std::thread::spawn(move || loop
-    {
-        match message_reciver.recv_timeout(Duration::from_millis(100))
-        {
-            Ok(Message::Packet(from, packet)) =>
-            {
-                let mut network_connection_lock = network_connection.lock().unwrap();
-                let port = network_connection_lock.port;
-                network_connection_lock.logger.log(LoggerLevel::Verbose, 
-                    &format!("[{}] Got packet {:?}", port, packet));
-                network_connection_lock.logger.log(LoggerLevel::Verbose, &format!("[{}] Got packet", port));
-
-                handle_message_packet(from, packet, &mut network_connection_lock);
-                network_connection_lock.logger.log(LoggerLevel::Verbose, &format!("[{}] Handled packet", port));
-            },
-
-            Ok(Message::Shutdown) =>
-            {
-                let mut network_connection_lock = network_connection.lock().unwrap();
-                let port = network_connection_lock.port;
-                let logger = &mut network_connection_lock.logger;
-                logger.log(LoggerLevel::Info, 
-                    &format!("[{}] Shut down message handler", port));
-                break;
-            },
-
-            Err(RecvTimeoutError::Timeout) =>
-            {
-                let mut network_connection_lock = network_connection.lock().unwrap();
-                let connection_manager = &mut network_connection_lock.manager();
-                connection_manager.connect_to_known_nodes();
-            },
-
-            // TODO: Handle this
-            Err(err) =>
-            {
-                let mut network_connection_lock = network_connection.lock().unwrap();
-                let logger = &mut network_connection_lock.logger;
-                logger.log(LoggerLevel::Error, 
-                    &format!("message_reciver.recv(): {}", err));
-                panic!()
-            },
-        }
-    })
-}
-
 fn start_network_connection<P, W>(network_connection: Arc<Mutex<NetworkConnection<P, W>>>)
     where P: PacketHandler<W> + Sync + Send + 'static,
           W: Write + Clone + Sync + Send + 'static
@@ -246,240 +76,6 @@ fn start_network_connection<P, W>(network_connection: Arc<Mutex<NetworkConnectio
     // Start thread to handle incoming packets
     network_connection_lock.message_handler_thread = Some(start_message_handler( 
         network_connection.clone(), message_reciver));
-}
-
-struct Connection
-{
-    stream: TcpStream,
-    reciver_thread: Option<JoinHandle<()>>,
-    sender: TcpSender<Packet>,
-    public_address: Option<String>,
-}
-
-impl Connection
-{
-
-    pub fn new<W>(port: u16, address: &str, stream: TcpStream, 
-                  message_sender: Sender<Message>, logger: Logger<W>) -> std::io::Result<Self>
-        where W: Write + Sync + Send + 'static
-    {
-        let reciver = ReceiverBuilder::new()
-            .with_type::<Packet>()
-            .with_endianness::<LittleEndian>()
-            .build(BufReader::new(stream.try_clone()?));
-        let reciver_thread = start_packet_reciver(address.to_owned(), reciver, message_sender, logger);
-
-        let mut sender = SenderBuilder::new()
-            .with_type::<Packet>()
-            .with_endianness::<LittleEndian>()
-            .build(BufWriter::new(stream.try_clone()?));
-        if sender.send(&Packet::OnConnected(port)).is_err() {
-            return Err(std::io::Error::from(std::io::ErrorKind::NotConnected));
-        }
-        sender.flush()?;
-
-        Ok(Self
-        {
-            stream,
-            reciver_thread: Some( reciver_thread ),
-            sender,
-            public_address: None,
-        })
-    }
-
-}
-
-impl Drop for Connection
-{
-
-    fn drop(&mut self)
-    {
-        let _ = self.stream.shutdown(std::net::Shutdown::Both);
-        self.reciver_thread
-            .take().unwrap()
-            .join().expect("Join server connection");
-    }
-
-}
-
-pub struct ConnectionManager<W>
-    where W: Write + Clone + Sync + Send + 'static
-{
-    port: u16,
-    message_sender: Sender<Message>,
-    known_nodes: HashSet<String>,
-    open_connections: HashSet<String>,
-    connections: HashMap<String, Connection>,
-    logger: Logger<W>
-}
-
-impl<W> ConnectionManager<W>
-    where W: Write + Clone + Sync + Send + 'static
-{
-
-    pub fn new(port: u16, message_sender: Sender<Message>, logger: Logger<W>) -> Arc<Mutex<Self>>
-    {
-        Arc::from(Mutex::from(Self
-        {
-            port,
-            message_sender,
-            known_nodes: HashSet::new(),
-            open_connections: HashSet::new(),
-            connections: HashMap::new(),
-            logger,
-        }))
-    }
-
-    fn add_client(&mut self, address: String, stream: TcpStream)
-    {
-        self.logger.log(LoggerLevel::Info, 
-            &format!("[{}] Connected to {}", self.port, address));
-
-        match Connection::new(self.port, &address, stream, self.message_sender.clone(), self.logger.clone())
-        {
-            Ok(connection) => {
-                self.connections.insert(address, connection);
-            },
-
-            _ => {},
-        };
-    }
-
-    fn confirm_connection(&mut self, address: &str, public_address: String)
-    {
-        let connection = &mut self.connections.get_mut(address).unwrap();
-        connection.public_address = Some( public_address );
-    }
-
-    pub fn register_node(&mut self, address: &str, from: Option<&str>)
-    {
-        if self.known_nodes.insert(address.to_owned())
-        {
-            self.logger.log(LoggerLevel::Verbose, 
-                &format!("[{}] Regestered new node {}", self.port, address));
-            
-            if from.is_some() {
-                self.send_to(Packet::KnownNode(address.to_owned()), |addr| addr != from.unwrap());
-            }
-        }
-    }
-
-    fn connect(&mut self, address: &str)
-    {
-        // TODO: Test we're not connecting to our self properly
-        if address == &format!("127.0.0.1:{}", self.port) {
-            return;
-        }
-
-        // Make sure we're not already connected
-        if self.open_connections.contains(address)
-        {
-            self.logger.log(LoggerLevel::Warning,
-                &format!("[{}] Already to connected to {}", self.port, address));
-            return;
-        }
-
-        let stream_or_error = TcpStream::connect(address);
-        if stream_or_error.is_err() 
-        {
-            self.logger.log(LoggerLevel::Verbose,
-                &format!("[{}] Unable to connect to {}", self.port, address));
-            return;
-        }
-
-        let stream = stream_or_error.unwrap();
-        self.add_client(address.to_owned(), stream);
-    }
-
-    pub fn connect_to_known_nodes(&mut self)
-    {
-        // TODO: Limit the number of connections we make
-
-        for address in self.known_nodes.clone() 
-        {
-            if !self.open_connections.contains(&address) {
-                self.connect(&address);
-            }
-        }
-    }
-
-    pub fn send(&mut self, packet: Packet)
-    {
-        self.send_to(packet, |_| true);
-    }
-
-    pub fn send_to<F>(&mut self, packet: Packet, predicate: F)
-        where F: Fn(&str) -> bool
-    {
-        let mut disconnected = Vec::<String>::new();
-        for (address, connection) in &mut self.connections
-        {
-            if connection.public_address.is_none() {
-                continue;
-            }
-
-            self.logger.log(LoggerLevel::Verbose, 
-                &format!("[{}] Sending {:?} to {}", self.port, packet, address));
-
-            if predicate(address)
-            {
-                if connection.sender.send(&packet).is_err() 
-                    || connection.sender.flush().is_err()
-                {
-                    disconnected.push(address.clone());
-                }
-            }
-        }
-
-        // Remove any 
-        for address in disconnected {
-            self.disconnect_from(&address);
-        }
-    }
-
-    pub fn disconnect_from(&mut self, address: &str)
-    {
-        match self.connections.remove(address)
-        {
-            Some(connection) => 
-                match &connection.public_address
-                {
-                    Some(address) => self.open_connections.remove(address),
-                    None => false,
-                },
-
-            None => false,
-        };
-    }
-
-}
-
-impl<W> Drop for ConnectionManager<W>
-    where W: Write + Clone + Sync + Send + 'static
-{
-
-    fn drop(&mut self)
-    {
-        self.logger.log(LoggerLevel::Info, 
-            &format!("[{}] Shutting down {} connection(s)", self.port, self.connections.len()));
-        self.connections.clear();
-    }
-
-}
-
-pub struct NetworkConnection<P, W>
-    where W: Write + Clone + Sync + Send + 'static,
-          P: PacketHandler<W> + Sync + Send + 'static
-{
-    port: u16,
-    should_shutdown: bool,
-    packet_handler: P,
-    pub logger: Logger<W>,
-
-    message_sender: Option<Sender<Message>>,
-    connection_manager: Option<Arc<Mutex<ConnectionManager<W>>>>,
-    node_listner_thread: Option<JoinHandle<()>>,
-    message_handler_thread: Option<JoinHandle<()>>,
 }
 
 impl<P, W> NetworkConnection<P, W>
@@ -592,7 +188,10 @@ mod tests
 {
 
     use super::*;
+    use super::super::packet_handler::Packet;
     use libhyperchain::logger::StdLoggerOutput;
+
+    use std::error::Error;
 
     struct TestPacketHandler
     {
@@ -686,3 +285,4 @@ mod tests
     }
 
 }
+

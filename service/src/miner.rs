@@ -1,4 +1,5 @@
-use crate::node::network::{NetworkConnection, Packet};
+use crate::node::network::NetworkConnection;
+use crate::node::packet_handler::Packet;
 use crate::node::Node;
 use crate::block_builder;
 

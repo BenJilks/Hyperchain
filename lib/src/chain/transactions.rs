@@ -70,6 +70,9 @@ impl BlockChain
     pub fn get_page_updates(&mut self, address: &Hash) 
         -> Vec<Transaction<Page>>
     {
+        // FIXME: Extremely slow, need to use metadata to 
+        //        optimise this!
+
         let mut updates = Vec::new();
         for block_id in (0..self.blocks.next_top()).rev()
         {
@@ -98,6 +101,9 @@ impl BlockChain
     pub fn find_transaction_in_chain(&mut self, transaction_id: &Hash) 
         -> Option<(TransactionVariant, Block)>
     {
+        // FIXME: Extremely slow, need to use metadata to 
+        //        optimise this!
+
         for block_id in 0..self.blocks.next_top() 
         {
             let block = self.block(block_id).unwrap();
@@ -116,4 +122,61 @@ impl BlockChain
         None
     }
 
+    pub fn get_transaction_history(&mut self, address: &Hash) 
+        -> Vec<(TransactionVariant, Option<Block>)>
+    {
+        // FIXME: Extremely slow, need to use metadata to 
+        //        optimise this!
+
+        let mut transactions = Vec::<(TransactionVariant, Option<Block>)>::new();
+        self.walk(&mut |block|
+        {
+            for transfer in &block.transfers 
+            {
+                if &transfer.header.to == address ||
+                    &transfer.get_from_address() == address
+                {
+                    transactions.push((
+                        TransactionVariant::Transfer(transfer.clone()), 
+                        Some(block.clone())));
+                }
+            }
+
+            for page in &block.pages
+            {
+                if &page.get_from_address() == address
+                {
+                    transactions.push((
+                        TransactionVariant::Page(page.clone()), 
+                        Some(block.clone())));
+                }
+            }
+        });
+
+        for transfer in &self.transfer_queue 
+        {
+            if &transfer.header.to == address ||
+                &transfer.get_from_address() == address
+            {
+                transactions.push((
+                    TransactionVariant::Transfer(transfer.clone()), 
+                    None));
+            }
+        }
+
+        for page in &self.page_queue
+        {
+            if &page.get_from_address() == address
+            {
+                transactions.push((
+                    TransactionVariant::Page(page.clone()), 
+                    None));
+            }
+        }
+
+        transactions.reverse();
+        transactions
+    }
+
 }
+
