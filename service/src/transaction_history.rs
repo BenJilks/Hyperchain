@@ -1,10 +1,10 @@
-use crate::node::network::NetworkConnection;
-use crate::node::Node;
+use crate::network::NetworkConnection;
+use crate::node::packet_handler::NodePacketHandler;
 
 use libhyperchain::service::command::Response;
 use libhyperchain::config::HASH_LEN;
 
-pub fn transaction_history(connection: &mut NetworkConnection<Node>,
+pub fn transaction_history(connection: &mut NetworkConnection<NodePacketHandler>,
                            address_vec: Vec<u8>) -> Response
 {
     let address_or_none = slice_as_array!(&address_vec, [u8; HASH_LEN]);
@@ -12,8 +12,10 @@ pub fn transaction_history(connection: &mut NetworkConnection<Node>,
         return Response::Failed;
     }
 
-    let chain = connection.handler().chain();
+    let mut node = connection.handler().node();
+    let chain = node.chain();
     let address = address_or_none.unwrap();
     let transactions = chain.get_transaction_history(address);
     Response::TransactionHistory(transactions)
 }
+

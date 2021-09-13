@@ -1,13 +1,15 @@
-use crate::node::network::NetworkConnection;
-use crate::node::Node;
+use crate::network::NetworkConnection;
+use crate::node::packet_handler::NodePacketHandler;
 
 use libhyperchain::service::command::Response;
 use libhyperchain::block::Block;
 
-pub fn blocks(connection: &mut NetworkConnection<Node>,
+pub fn blocks(connection: &mut NetworkConnection<NodePacketHandler>,
               from: u64, to: u64) -> Response
 {
-    let chain = connection.handler().chain();
+    let mut node = connection.handler().node();
+    let chain = node.chain();
+
     let mut blocks = Vec::<Block>::new();
     for block_id in from..=to
     {
@@ -20,3 +22,4 @@ pub fn blocks(connection: &mut NetworkConnection<Node>,
 
     Response::Blocks(blocks)
 }
+

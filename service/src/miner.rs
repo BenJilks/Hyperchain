@@ -1,6 +1,6 @@
-use crate::node::network::NetworkConnection;
-use crate::node::packet_handler::Packet;
-use crate::node::Node;
+use crate::network::NetworkConnection;
+use crate::network::packet::Packet;
+use crate::node::packet_handler::NodePacketHandler;
 use crate::block_builder;
 
 use libhyperchain::block::Block;
@@ -8,12 +8,11 @@ use libhyperchain::block::validate::BlockValidationResult;
 use libhyperchain::block;
 use libhyperchain::chain::BlockChainAddResult;
 use libhyperchain::wallet::private_wallet::PrivateWallet;
-use std::sync::{Arc, Mutex};
 use std::path::PathBuf;
 use std::thread::JoinHandle;
 use std::error::Error;
 
-pub fn mine_block_unless_found(network_connection: &Arc<Mutex<NetworkConnection<Node>>>, 
+pub fn mine_block_unless_found(connection: &NetworkConnection<NodePacketHandler>, 
                                mut block: Block) 
     -> Result<Block, Box<dyn Error>>
 {
@@ -27,12 +26,12 @@ pub fn mine_block_unless_found(network_connection: &Arc<Mutex<NetworkConnection<
             // Delay for testing
             std::thread::sleep(std::time::Duration::from_millis(10));
 
-            let mut network_connection_lock = network_connection.lock().unwrap();
-            if network_connection_lock.should_shutdown() {
+            if connection.should_shutdown() {
                 break;
             }
 
-            let chain = &mut network_connection_lock.handler().chain();
+            let mut node = connection.handler().node();
+            let chain = node.chain();
             if chain.block(block.block_id).is_some() {
                 break;
             }
@@ -42,26 +41,28 @@ pub fn mine_block_unless_found(network_connection: &Arc<Mutex<NetworkConnection<
     Ok(block)
 }
 
-fn mine_next_block(network_connection: &Arc<Mutex<NetworkConnection<Node>>>,
+fn mine_next_block(connection: &mut NetworkConnection<NodePacketHandler>,
                    wallet: &PrivateWallet) -> Result<(), Box<dyn Error>>
 {
     let mut block;
     {
         // Create the next block
-        let mut network_connection_lock = network_connection.lock().unwrap();
-        let chain = &mut network_connection_lock.handler().chain();
+        let mut node = connection.handler().node();
+        let chain = &mut node.chain();
         block = block_builder::build(chain, wallet)?;
     }
 
     // Do the mining work
-    block = mine_block_unless_found(network_connection, block)?;
+    block = mine_block_unless_found(connection, block)?;
     if block.validate_pow()? != BlockValidationResult::Ok {
         return Ok(());
     }
 
     // Add it to the chain if it's still the top
-    let mut network_connection_lock = network_connection.lock().unwrap();
-    let chain = &mut network_connection_lock.handler().chain();
+    let handler = connection.handler().clone();
+    let mut node = handler.node();
+    let chain = &mut node.chain();
+
     let top = chain.top();
     if top.is_none() || top.unwrap().block_id + 1 == block.block_id 
     {
@@ -73,8 +74,8 @@ fn mine_next_block(network_connection: &Arc<Mutex<NetworkConnection<Node>>>,
                     block.block_id, 
                     block::target::difficulty(&block.target));
 
-                let data = network_connection_lock.handler().data_store().for_page_updates(&block.pages)?;
-                network_connection_lock.manager().send(Packet::Block(block, data));
+                let data = node.data_store().for_page_updates(&block.pages)?;
+                connection.manager().send(Packet::Block(block, data))?;
             },
 
             _ => {},
@@ -84,7 +85,7 @@ fn mine_next_block(network_connection: &Arc<Mutex<NetworkConnection<Node>>>,
     Ok(())
 }
 
-pub fn start_miner_thread(network_connection: Arc<Mutex<NetworkConnection<Node>>>) 
+pub fn start_miner_thread(mut connection: NetworkConnection<NodePacketHandler>) 
     -> JoinHandle<()>
 {
     // Create chain a wallet
@@ -92,9 +93,10 @@ pub fn start_miner_thread(network_connection: Arc<Mutex<NetworkConnection<Node>>
 
     std::thread::spawn(move || loop 
     {
-        mine_next_block(&network_connection, &wallet).unwrap();
-        if network_connection.lock().unwrap().should_shutdown() {
+        mine_next_block(&mut connection, &wallet).unwrap();
+        if connection.should_shutdown() {
             break;
         }
     })
 }
+

@@ -1,19 +1,21 @@
-use crate::node::network::NetworkConnection;
-use crate::node::Node;
+use crate::network::NetworkConnection;
+use crate::node::packet_handler::NodePacketHandler;
 
 use libhyperchain::service::command::Response;
 use libhyperchain::config::HASH_LEN;
 
-pub fn transaction_info(connection: &mut NetworkConnection<Node>,
-                        transaction_id: Vec<u8>) -> Response
+pub fn transaction_info(connection: &mut NetworkConnection<NodePacketHandler>,
+                        transaction_id: Vec<u8>) 
+    -> Response
 {
     let transaction_id_hash_or_none = slice_as_array!(&transaction_id, [u8; HASH_LEN]);
     if transaction_id_hash_or_none.is_none() {
         return Response::Failed;
     }
 
+    let mut node = connection.handler().node();
     let transaction_id_hash = transaction_id_hash_or_none.unwrap();
-    let chain = connection.handler().chain();
+    let chain = node.chain();
 
     // Search pending
     let transaction_in_queue = chain.find_transaction_in_queue(&transaction_id_hash);
@@ -31,3 +33,4 @@ pub fn transaction_info(connection: &mut NetworkConnection<Node>,
 
     Response::Failed
 }
+

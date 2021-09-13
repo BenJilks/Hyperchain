@@ -1,6 +1,6 @@
-use crate::node::network::NetworkConnection;
-use crate::node::packet_handler::Packet;
-use crate::node::Node;
+use crate::network::NetworkConnection;
+use crate::network::packet::Packet;
+use crate::node::packet_handler::NodePacketHandler;
 
 use libhyperchain::service::command::Response;
 use libhyperchain::wallet::private_wallet::PrivateWallet;
@@ -9,7 +9,8 @@ use libhyperchain::transaction::page::Page;
 use libhyperchain::data_store::DataUnit;
 use libhyperchain::data_store::page::CreatePageData;
 
-fn add_page(connection: &mut NetworkConnection<Node>, from: Vec<u8>, data_unit: &DataUnit)
+fn add_page(connection: &mut NetworkConnection<NodePacketHandler>,
+            from: Vec<u8>, data_unit: &DataUnit)
     -> Option<(Transaction<Page>, Vec<u8>)>
 {
     let from_wallet_or_error = PrivateWallet::deserialize(from);
@@ -17,7 +18,8 @@ fn add_page(connection: &mut NetworkConnection<Node>, from: Vec<u8>, data_unit: 
         return None;
     }
     
-    let chain = &mut connection.handler().chain();
+    let mut node = connection.handler().node();
+    let chain = &mut node.chain();
     let from_wallet = from_wallet_or_error.unwrap();
     let page_or_error = chain.new_page(&from_wallet, &data_unit, 1.0);
     if page_or_error.is_err() || page_or_error.as_ref().unwrap().is_none() {
@@ -31,8 +33,8 @@ fn add_page(connection: &mut NetworkConnection<Node>, from: Vec<u8>, data_unit: 
     Some((page, page_id))
 }
 
-pub fn update_page(connection: &mut NetworkConnection<Node>,
-                   from: Vec<u8>, name: String, data: Vec<u8>) 
+pub fn update_page(connection: &mut NetworkConnection<NodePacketHandler>,
+                   from: Vec<u8>, name: String, data: Vec<u8>)
     -> Response
 {
     let data_unit = DataUnit::CreatePage(CreatePageData::new(name, data));
@@ -42,7 +44,8 @@ pub fn update_page(connection: &mut NetworkConnection<Node>,
     }
 
     let (page, page_id) = page_or_none.unwrap();
-    connection.handler().data_store().store(&page_id, &data_unit).unwrap();
-    connection.manager().send(Packet::Page(page, data_unit));
+    connection.handler().node().data_store().store(&page_id, &data_unit).unwrap();
+    connection.manager().send(Packet::Page(page, data_unit)).unwrap();
     Response::Sent(page_id)
 }
+

@@ -1,9 +1,6 @@
-pub mod network;
 pub mod packet_handler;
-mod connection;
-mod manager;
-use packet_handler::{PacketHandler, Packet};
-use manager::ConnectionManager;
+use crate::network::packet::Packet;
+use crate::network::client_manager::ClientManager;
 
 use libhyperchain::chain::{BlockChain, BlockChainAddResult};
 use libhyperchain::chain::branch::BlockChainCanMergeResult;
@@ -13,18 +10,14 @@ use libhyperchain::transaction::Transaction;
 use libhyperchain::transaction::transfer::Transfer;
 use libhyperchain::transaction::page::Page;
 use libhyperchain::config::{Hash, HASH_LEN};
-use tcp_channel::LittleEndian;
 use std::path::PathBuf;
-use std::error::Error;
 use std::collections::HashMap;
-
-type TcpReceiver<T> = tcp_channel::Receiver<T, LittleEndian>;
-type TcpSender<T> = tcp_channel::Sender<T, LittleEndian>;
+use std::sync::{Arc, Mutex};
+use std::error::Error;
 
 pub struct Node
 {
     port: u16,
-    
     chain: BlockChain,
     data_store: DataStore,
     branches: HashMap<String, Vec<(Block, HashMap<Hash, DataUnit>)>>,
@@ -57,19 +50,18 @@ fn is_block_data_valid(block: &Block, data: &HashMap<Hash, DataUnit>)
 impl Node
 {
 
-    pub fn new(port: u16, path: PathBuf) -> Result<Self, Box<dyn Error>>
+    pub fn new(port: u16, path: PathBuf) -> Result<Arc<Mutex<Self>>, Box<dyn Error>>
     {
         let chain = BlockChain::open(&path.join("blockchain"))?;
         let data_store = DataStore::open(&path.join("data"))?;
 
-        Ok(Self
+        Ok(Arc::from(Mutex::from(Self
         {
             port,
-
             chain,
             data_store,
-            branches: HashMap::new(),
-        })
+            branches: HashMap::new()
+        })))
     }
 
     pub fn chain(&mut self) -> &mut BlockChain
@@ -82,7 +74,9 @@ impl Node
         &mut self.data_store
     }
 
-    fn is_valid_next_entry_in_branch(branch: &Vec<(Block, HashMap<Hash, DataUnit>)>, block: &Block) -> bool
+    fn is_valid_next_entry_in_branch(branch: &Vec<(Block, HashMap<Hash, DataUnit>)>, 
+                                     block: &Block) 
+        -> bool
     {
         if branch.is_empty() {
             return true;
@@ -128,7 +122,7 @@ impl Node
         Ok(())
     }
 
-    fn handle_block(&mut self, connection_manager: &mut ConnectionManager, from: &str, 
+    fn handle_block(&mut self, manager: &mut ClientManager, from: &str, 
                     block: Block, data: HashMap<Hash, DataUnit>) 
         -> Result<(), Box<dyn Error>>
     {
@@ -154,7 +148,7 @@ impl Node
                 }
 
                 // Relay this block to the rest of the network
-                connection_manager.send(Packet::Block(block.clone(), data));
+                manager.send(Packet::Block(block.clone(), data))?;
             },
 
             BlockChainAddResult::Invalid(_) | BlockChainAddResult::MoreNeeded => 
@@ -167,7 +161,7 @@ impl Node
                 
                 // Request the next block. If there's no more, complete the branch
                 if block_id > 0 {
-                    connection_manager.send_to(Packet::BlockRequest(block_id - 1), |x| x == from);
+                    manager.send_to(Packet::BlockRequest(block_id - 1), |x| x == from)?;
                 } else {
                     self.complete_branch(from)?;
                 }
@@ -183,7 +177,7 @@ impl Node
         Ok(())
     }
 
-    fn handle_block_request(&mut self, connection_manager: &mut ConnectionManager, 
+    fn handle_block_request(&mut self, manager: &mut ClientManager, 
                             from: &str, id: u64)
         -> Result<(), Box<dyn Error>>
     {
@@ -194,30 +188,33 @@ impl Node
         {
             let block = block_or_none.unwrap();
             let data = self.data_store.for_page_updates(&block.pages)?;
-            connection_manager.send_to(Packet::Block(block.clone(), data), |x| x == from);
+            manager.send_to(Packet::Block(block.clone(), data), |x| x == from)?;
         }
 
         Ok(())
     }
 
-    fn handle_transfer(&mut self, connection_manager: &mut ConnectionManager, from: &str,
+    fn handle_transfer(&mut self, manager: &mut ClientManager, from: &str,
                        transfer: Transaction<Transfer>)
+        -> Result<(), Box<dyn Error>>
     {
         info!("Got transfer {:?}", transfer);
 
         if self.chain.push_transfer_queue(transfer.clone())
         {
-            connection_manager.send_to(
+            manager.send_to(
                 Packet::Transfer(transfer), 
-                |x| x != from);
+                |x| x != from)?;
         }
         else
         {
             warn!("Invalid transfer");
         }
+
+        Ok(())
     }
 
-    fn handle_page(&mut self, connection_manager: &mut ConnectionManager, from: &str,
+    fn handle_page(&mut self, manager: &mut ClientManager, from: &str,
                    page: Transaction<Page>, data: DataUnit)
         -> Result<(), Box<dyn Error>>
     {
@@ -229,58 +226,13 @@ impl Node
             let id = page.hash()?;
             self.data_store.store(&id, &data)?;
 
-            connection_manager.send_to(
+            manager.send_to(
                 Packet::Page(page, data),
-                |x| x != from);
+                |x| x != from)?;
         }
         else
         {
             warn!("Invalid page");
-        }
-
-        Ok(())
-    }
-
-}
-
-impl PacketHandler for Node
-{
-
-    fn on_packet(&mut self, from: &str, packet: Packet, connection_manager: &mut ConnectionManager)
-        -> Result<(), Box<dyn Error>>
-    {
-        match packet
-        {
-            Packet::KnownNode(_) => {},
-
-            Packet::OnConnected(_) => 
-            {
-                match self.chain.top()
-                {
-                    Some(top) =>
-                    {
-                        let data = self.data_store.for_page_updates(&top.pages)?;
-                        connection_manager.send_to(Packet::Block(top.clone(), data),
-                            |addr| addr == from);
-                    },
-                    None => {},
-                }
-            },
-
-            Packet::Block(block, data) => 
-                self.handle_block(connection_manager, from, block, data)?,
-
-            Packet::BlockRequest(id) =>
-                self.handle_block_request(connection_manager, from, id)?,
-
-            Packet::Transfer(transfer) =>
-                self.handle_transfer(connection_manager, from, transfer),
-
-            Packet::Page(page, data) =>
-                self.handle_page(connection_manager, from, page, data)?,
-            
-            Packet::Ping => 
-                info!("Ping!"),
         }
 
         Ok(())
@@ -293,24 +245,23 @@ mod tests
 {
 
     use super::*;
-    use network::NetworkConnection;
+    use super::packet_handler::NodePacketHandler;
+    use crate::network::NetworkConnection;
     use libhyperchain::wallet::private_wallet::PrivateWallet;
     use libhyperchain::block::Block;
     use libhyperchain::miner;
 
     use std::time::Duration;
     use std::path::PathBuf;
-    use std::sync::{Arc, Mutex};
 
-    fn wait_for_block(connection: &Arc<Mutex<NetworkConnection<Node>>>, block_id: u64) 
+    fn wait_for_block(connection: &NetworkConnection<NodePacketHandler>, block_id: u64) 
         -> Block
     {
         loop
         {
             {
-                let mut connection_lock = connection.lock().unwrap();
-                let chain = connection_lock.handler().chain();
-                let block_or_none = chain.block(block_id);
+                let mut node = connection.handler().node();
+                let block_or_none = node.chain().block(block_id);
                 if block_or_none.is_some() {
                     return block_or_none.unwrap().clone();
                 }
@@ -320,26 +271,31 @@ mod tests
         }
     }
 
-    fn create_node(port: u16) -> Arc<Mutex<NetworkConnection<Node>>>
+    fn create_node(port: u16) -> NetworkConnection<NodePacketHandler>
     {
         let time = libhyperchain::block::current_timestamp();
         let path = std::env::temp_dir().join(format!("{}{}", time, port.to_string()));
         let node = Node::new(port, path).unwrap();
-        let network_connection = NetworkConnection::new(port, node);
+        let handler = NodePacketHandler::new(node);
+        let network_connection = NetworkConnection::open(port, handler).unwrap();
         network_connection
     }
 
-    fn mine_block(connection: &Arc<Mutex<NetworkConnection<Node>>>, 
+    fn mine_block(connection: &mut NetworkConnection<NodePacketHandler>,
                   wallet: &PrivateWallet) -> Block
     {
-        let mut connection_lock = connection.lock().unwrap();
-        let chain = &mut connection_lock.handler().chain();
-        let block = miner::mine_block(Block::new(chain, wallet)
-            .expect("Create block"));
+        let block = 
+        {
+            let mut node = connection.handler().node();
+            let chain = &mut node.chain();
+            let block = miner::mine_block(Block::new(chain, wallet)
+                .expect("Create block"));
 
-        chain.add(&block).unwrap();
-        connection_lock.manager().send(Packet::Block(block.clone(), HashMap::new()));
+            chain.add(&block).unwrap();
+            block
+        };
 
+        connection.manager().send(Packet::Block(block.clone(), HashMap::new())).unwrap();
         block
     }
 
@@ -357,10 +313,9 @@ mod tests
 
         let mut connection_b = create_node(8031);
         {
-            let mut connection_b_lock = connection_b.lock().unwrap();
-            connection_b_lock.handler().chain().add(&block_a).unwrap();
-            connection_b_lock.handler().chain().add(&block_b).unwrap();
-            connection_b_lock.handler().chain().add(&block_c).unwrap();
+            connection_b.handler().node().chain().add(&block_a).unwrap();
+            connection_b.handler().node().chain().add(&block_b).unwrap();
+            connection_b.handler().node().chain().add(&block_c).unwrap();
         }
         mine_block(&mut connection_b, &wallet);
         mine_block(&mut connection_b, &wallet);
@@ -368,7 +323,7 @@ mod tests
         mine_block(&mut connection_b, &wallet);
         let block_h_b = mine_block(&mut connection_b, &wallet);
 
-        connection_b.lock().unwrap().manager().register_node("127.0.0.1:8030", None);
+        connection_b.manager().register_node("127.0.0.1:8030");
         let block_h_a = wait_for_block(&connection_a, 7);
         assert_eq!(block_h_a, block_h_b);
     }
@@ -388,7 +343,7 @@ mod tests
         mine_block(&mut connection_b, &wallet);
         let block_d_on_b = mine_block(&mut connection_b, &wallet);
         
-        connection_b.lock().unwrap().manager().register_node("127.0.0.1:8020", None);
+        connection_b.manager().register_node("127.0.0.1:8020");
         let block_d_on_a = wait_for_block(&connection_a, 3);
         assert_eq!(block_d_on_a, block_d_on_b);
     }
@@ -400,7 +355,7 @@ mod tests
 
         let mut connection_a = create_node(8010);
         let mut connection_b = create_node(8011);
-        connection_b.lock().unwrap().manager().register_node("127.0.0.1:8010", None);
+        connection_b.manager().register_node("127.0.0.1:8010");
 
         // Transfer block a -> b
         let block_a_on_a = mine_block(&mut connection_a, &wallet);
@@ -426,7 +381,7 @@ mod tests
         mine_block(&mut connection_c, &wallet);
         mine_block(&mut connection_c, &wallet);
         mine_block(&mut connection_c, &wallet);
-        connection_c.lock().unwrap().manager().register_node("127.0.0.1:8010", None);
+        connection_c.manager().register_node("127.0.0.1:8010");
         let block_e_on_c = wait_for_block(&connection_c, 4);
         assert_eq!(block_e_on_c, block_e_on_a);
 
@@ -439,9 +394,10 @@ mod tests
         mine_block(&mut connection_d, &wallet);
         let block_f_on_d = mine_block(&mut connection_d, &wallet);
 
-        connection_d.lock().unwrap().manager().register_node("127.0.0.1:8010", None);
+        connection_d.manager().register_node("127.0.0.1:8010");
         let block_f_on_a = wait_for_block(&connection_a, 5);
         assert_eq!(block_f_on_a, block_f_on_d);
     }
 
 }
+

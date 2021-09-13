@@ -1,5 +1,6 @@
 extern crate libhyperchain;
 extern crate clap;
+extern crate rand;
 extern crate pretty_env_logger;
 
 #[macro_use]
@@ -9,6 +10,7 @@ extern crate slice_as_array;
 extern crate log;
 
 mod node;
+mod network;
 mod block_builder;
 mod miner;
 mod send;
@@ -18,6 +20,7 @@ mod transaction_info;
 mod transaction_history;
 mod page;
 mod blocks;
+
 use miner::start_miner_thread;
 use send::send;
 use update_page::update_page;
@@ -27,8 +30,9 @@ use transaction_info::transaction_info;
 use page::page_updates;
 use page::page_data;
 use blocks::blocks;
-use crate::node::network::NetworkConnection;
+use crate::network::NetworkConnection;
 use crate::node::Node;
+use crate::node::packet_handler::NodePacketHandler;
 
 use libhyperchain::service::server;
 use libhyperchain::service::command::{Command, Response};
@@ -64,12 +68,13 @@ fn main() -> Result<(), Box<dyn Error>>
 
     // Create and open node
     let node = Node::new(port, PathBuf::from("hyperchain"))?;
+    let packet_handler = NodePacketHandler::new(node);
 
     let miner_thread;
     {
         // Register a common node to connect to
-        let network_connection = NetworkConnection::new(port, node);
-        network_connection.lock().unwrap().manager().register_node("192.168.0.27:8001", None);
+        let mut network_connection = NetworkConnection::open(port, packet_handler)?;
+        network_connection.manager().register_node("192.168.0.27:8001");
 
         // Start miner thread
         miner_thread = start_miner_thread(network_connection.clone());
@@ -80,7 +85,7 @@ fn main() -> Result<(), Box<dyn Error>>
         }
 
         // Start local server
-        let connection = network_connection.clone();
+        let mut connection = network_connection.clone();
         server::start(move |command|
         {
             match command
@@ -89,34 +94,33 @@ fn main() -> Result<(), Box<dyn Error>>
                     Response::Exit,
 
                 Command::Balance(address) => 
-                    balance(&mut connection.lock().unwrap(), address),
+                    balance(&mut connection, address),
 
                 Command::Send(from, to, amount, fee) =>
-                    send(&mut connection.lock().unwrap(), from, to, amount, fee),
+                    send(&mut connection, from, to, amount, fee),
 
                 Command::UpdatePage(from, name, data) =>
-                    update_page(&mut connection.lock().unwrap(), from, name, data),
+                    update_page(&mut connection, from, name, data),
 
                 Command::TransactionInfo(id) =>
-                    transaction_info(&mut connection.lock().unwrap(), id),
+                    transaction_info(&mut connection, id),
                 
                 Command::TransactionHistory(address) =>
-                    transaction_history(&mut connection.lock().unwrap(), address),
+                    transaction_history(&mut connection, address),
                 
                 Command::PageUpdates(address) =>
-                    page_updates(&mut connection.lock().unwrap(), address),
+                    page_updates(&mut connection, address),
 
                 Command::PageData(transaction_id) =>
-                    page_data(&mut connection.lock().unwrap(), transaction_id),
+                    page_data(&mut connection, transaction_id),
                 
                 Command::Blocks(from, to) =>
-                    blocks(&mut connection.lock().unwrap(), from, to),
+                    blocks(&mut connection, from, to),
             }
         })?;
-
-        NetworkConnection::shutdown(&network_connection);
     }
 
     miner_thread.join().unwrap();
     Ok(())
 }
+

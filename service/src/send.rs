@@ -1,12 +1,13 @@
-use crate::node::network::NetworkConnection;
-use crate::node::packet_handler::Packet;
-use crate::node::Node;
+use crate::network::NetworkConnection;
+use crate::network::packet::Packet;
+use crate::node::packet_handler::NodePacketHandler;
 
 use libhyperchain::service::command::Response;
 use libhyperchain::wallet::private_wallet::PrivateWallet;
 
-pub fn send(connection: &mut NetworkConnection<Node>,
-               from: Vec<u8>, to: Vec<u8>, amount: f32, fee: f32) -> Response
+pub fn send(connection: &mut NetworkConnection<NodePacketHandler>,
+            from: Vec<u8>, to: Vec<u8>, amount: f32, fee: f32) 
+    -> Response
 {
     let transfer;
     let transfer_id;
@@ -20,7 +21,8 @@ pub fn send(connection: &mut NetworkConnection<Node>,
         let from_wallet = from_wallet_or_error.unwrap();
         let to_address = slice_as_array!(&to, [u8; 32]).unwrap();
 
-        let chain = &mut connection.handler().chain();
+        let mut node = connection.handler().node();
+        let chain = &mut node.chain();
         let transfer_or_error = chain.new_transfer(&from_wallet, *to_address, amount, fee);
         if transfer_or_error.is_err() || transfer_or_error.as_ref().unwrap().is_none() {
             return Response::Failed;
@@ -31,6 +33,7 @@ pub fn send(connection: &mut NetworkConnection<Node>,
         assert_eq!(chain.push_transfer_queue(transfer.clone()), true);
     }
 
-    connection.manager().send(Packet::Transfer(transfer));
+    connection.manager().send(Packet::Transfer(transfer)).unwrap();
     Response::Sent(transfer_id)
 }
+
