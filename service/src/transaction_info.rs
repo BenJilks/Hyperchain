@@ -3,11 +3,9 @@ use crate::node::Node;
 
 use libhyperchain::service::command::Response;
 use libhyperchain::config::HASH_LEN;
-use std::io::Write;
 
-pub fn transaction_info<W>(connection: &mut NetworkConnection<Node<W>, W>, 
-               transaction_id: Vec<u8>) -> Response
-    where W: Write + Clone + Sync + Send + 'static
+pub fn transaction_info(connection: &mut NetworkConnection<Node>,
+                        transaction_id: Vec<u8>) -> Response
 {
     let transaction_id_hash_or_none = slice_as_array!(&transaction_id, [u8; HASH_LEN]);
     if transaction_id_hash_or_none.is_none() {

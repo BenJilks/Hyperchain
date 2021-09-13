@@ -1,13 +1,13 @@
 extern crate libhyperchain;
 extern crate clap;
 extern crate base_62;
+extern crate pretty_env_logger;
 
 use libhyperchain::service::command::{Command, Response};
 use libhyperchain::service::client::Client;
 use libhyperchain::wallet::Wallet;
 use libhyperchain::wallet::private_wallet::PrivateWallet;
 use libhyperchain::transaction::TransactionVariant;
-use libhyperchain::logger::{Logger, LoggerLevel, StdLoggerOutput};
 use clap::{App, Arg, SubCommand, ArgMatches};
 use std::path::PathBuf;
 use std::fs::File;
@@ -16,10 +16,8 @@ use std::error::Error;
 
 fn balance(mut client: Client, options: &ArgMatches) -> Result<(), Box<dyn Error>>
 {
-    let mut logger = Logger::new(StdLoggerOutput::new(), LoggerLevel::Info);
     let wallet_path = options.value_of("wallet").unwrap();
-
-    let wallet_or_error = PrivateWallet::read_from_file(&PathBuf::from(wallet_path), &mut logger);
+    let wallet_or_error = PrivateWallet::read_from_file(&PathBuf::from(wallet_path));
     if wallet_or_error.is_err() 
     {
         println!("Error: Unable to open wallet");
@@ -41,10 +39,8 @@ fn balance(mut client: Client, options: &ArgMatches) -> Result<(), Box<dyn Error
 
 fn send(mut client: Client, options: &ArgMatches) -> Result<(), Box<dyn Error>>
 {
-    let mut logger = Logger::new(StdLoggerOutput::new(), LoggerLevel::Info);
     let from_path = options.value_of("from").unwrap();
-
-    let from_or_error = PrivateWallet::read_from_file(&PathBuf::from(from_path), &mut logger);
+    let from_or_error = PrivateWallet::read_from_file(&PathBuf::from(from_path));
     if from_or_error.is_err() 
     {
         println!("Error: Unable to open wallet");
@@ -66,10 +62,8 @@ fn send(mut client: Client, options: &ArgMatches) -> Result<(), Box<dyn Error>>
 
 fn update_page(mut client: Client, options: &ArgMatches) -> Result<(), Box<dyn Error>>
 {
-    let mut logger = Logger::new(StdLoggerOutput::new(), LoggerLevel::Info);
     let from_path = options.value_of("from").unwrap();
-
-    let from_or_error = PrivateWallet::read_from_file(&PathBuf::from(from_path), &mut logger);
+    let from_or_error = PrivateWallet::read_from_file(&PathBuf::from(from_path));
     if from_or_error.is_err() 
     {
         println!("Error: Unable to open wallet");
@@ -156,6 +150,8 @@ fn shutdown(mut client: Client) -> Result<(), Box<dyn Error>>
 
 fn main() -> Result<(), Box<dyn Error>>
 {
+    pretty_env_logger::init();
+
     let matches = App::new("Hyperchain Cli")
         .version("0.1.0")
         .author("Ben Jilks <benjyjilks@gmail.com>")

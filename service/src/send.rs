@@ -4,11 +4,9 @@ use crate::node::Node;
 
 use libhyperchain::service::command::Response;
 use libhyperchain::wallet::private_wallet::PrivateWallet;
-use std::io::Write;
 
-pub fn send<W>(connection: &mut NetworkConnection<Node<W>, W>, 
+pub fn send(connection: &mut NetworkConnection<Node>,
                from: Vec<u8>, to: Vec<u8>, amount: f32, fee: f32) -> Response
-    where W: Write + Clone + Send + Sync + 'static
 {
     let transfer;
     let transfer_id;

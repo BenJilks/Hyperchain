@@ -8,16 +8,14 @@ use libhyperchain::block::validate::BlockValidationResult;
 use libhyperchain::block;
 use libhyperchain::chain::BlockChainAddResult;
 use libhyperchain::wallet::private_wallet::PrivateWallet;
-use libhyperchain::logger::Logger;
 use std::sync::{Arc, Mutex};
-use std::io::Write;
 use std::path::PathBuf;
 use std::thread::JoinHandle;
 use std::error::Error;
 
-pub fn mine_block_unless_found<W>(network_connection: &Arc<Mutex<NetworkConnection<Node<W>, W>>>, 
-                                  mut block: Block) -> Result<Block, Box<dyn Error>>
-    where W: Write + Clone + Sync + Send + 'static
+pub fn mine_block_unless_found(network_connection: &Arc<Mutex<NetworkConnection<Node>>>, 
+                               mut block: Block) 
+    -> Result<Block, Box<dyn Error>>
 {
     while block.validate_pow()? != BlockValidationResult::Ok
     { 
@@ -44,9 +42,8 @@ pub fn mine_block_unless_found<W>(network_connection: &Arc<Mutex<NetworkConnecti
     Ok(block)
 }
 
-fn mine_next_block<W>(network_connection: &Arc<Mutex<NetworkConnection<Node<W>, W>>>,
-                      wallet: &PrivateWallet) -> Result<(), Box<dyn Error>>
-    where W: Write + Clone + Sync + Send + 'static
+fn mine_next_block(network_connection: &Arc<Mutex<NetworkConnection<Node>>>,
+                   wallet: &PrivateWallet) -> Result<(), Box<dyn Error>>
 {
     let mut block;
     {
@@ -64,12 +61,11 @@ fn mine_next_block<W>(network_connection: &Arc<Mutex<NetworkConnection<Node<W>, 
 
     // Add it to the chain if it's still the top
     let mut network_connection_lock = network_connection.lock().unwrap();
-    let mut logger = network_connection_lock.logger.clone();
     let chain = &mut network_connection_lock.handler().chain();
     let top = chain.top();
     if top.is_none() || top.unwrap().block_id + 1 == block.block_id 
     {
-        match chain.add(&block, &mut logger)?
+        match chain.add(&block)?
         {
             BlockChainAddResult::Ok =>
             {
@@ -88,12 +84,11 @@ fn mine_next_block<W>(network_connection: &Arc<Mutex<NetworkConnection<Node<W>, 
     Ok(())
 }
 
-pub fn start_miner_thread<W>(network_connection: Arc<Mutex<NetworkConnection<Node<W>, W>>>,
-                             mut logger: Logger<W>) -> JoinHandle<()>
-    where W: Write + Clone + Sync + Send + 'static
+pub fn start_miner_thread(network_connection: Arc<Mutex<NetworkConnection<Node>>>) 
+    -> JoinHandle<()>
 {
     // Create chain a wallet
-    let wallet = PrivateWallet::read_from_file(&PathBuf::from("test.wallet"), &mut logger).unwrap();
+    let wallet = PrivateWallet::read_from_file(&PathBuf::from("test.wallet")).unwrap();
 
     std::thread::spawn(move || loop 
     {

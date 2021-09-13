@@ -1,6 +1,5 @@
 use super::Wallet;
 use super::public_wallet::PublicWallet;
-use crate::logger::{Logger, LoggerLevel};
 use crate::config::PUB_KEY_LEN;
 
 use rsa::{RSAPrivateKey, PaddingScheme, PrivateKeyEncoding, PublicKeyParts};
@@ -67,12 +66,12 @@ impl PrivateWallet
         Ok(())
     }
 
-    pub fn read_from_file<W: Write>(path: &PathBuf, logger: &mut Logger<W>) -> std::io::Result<Self>
+    pub fn read_from_file(path: &PathBuf) -> std::io::Result<Self>
     {
         let mut file = File::open(path)?;
         let mut buffer = Vec::<u8>::new();
         file.read_to_end(&mut buffer)?;
-        logger.log(LoggerLevel::Info, &format!("Opened wallet '{:?}'", path));
+        info!("Opened wallet '{:?}'", path);
 
         let key = RSAPrivateKey::from_pkcs8(&buffer).unwrap();
         Ok(Self

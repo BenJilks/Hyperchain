@@ -5,7 +5,6 @@ mod manager;
 use packet_handler::{PacketHandler, Packet};
 use manager::ConnectionManager;
 
-use libhyperchain::logger::{Logger, LoggerLevel};
 use libhyperchain::chain::{BlockChain, BlockChainAddResult};
 use libhyperchain::chain::branch::BlockChainCanMergeResult;
 use libhyperchain::block::Block;
@@ -15,7 +14,6 @@ use libhyperchain::transaction::transfer::Transfer;
 use libhyperchain::transaction::page::Page;
 use libhyperchain::config::{Hash, HASH_LEN};
 use tcp_channel::LittleEndian;
-use std::io::Write;
 use std::path::PathBuf;
 use std::error::Error;
 use std::collections::HashMap;
@@ -23,11 +21,9 @@ use std::collections::HashMap;
 type TcpReceiver<T> = tcp_channel::Receiver<T, LittleEndian>;
 type TcpSender<T> = tcp_channel::Sender<T, LittleEndian>;
 
-pub struct Node<W>
-    where W: Write + Clone + Sync + Send + 'static
+pub struct Node
 {
     port: u16,
-    logger: Logger<W>,
     
     chain: BlockChain,
     data_store: DataStore,
@@ -58,19 +54,17 @@ fn is_block_data_valid(block: &Block, data: &HashMap<Hash, DataUnit>)
     Ok(true)
 }
 
-impl<W> Node<W>
-    where W: Write + Clone + Sync + Send + 'static
+impl Node
 {
 
-    pub fn new(port: u16, path: PathBuf, mut logger: Logger<W>) -> Result<Self, Box<dyn Error>>
+    pub fn new(port: u16, path: PathBuf) -> Result<Self, Box<dyn Error>>
     {
-        let chain = BlockChain::open(&path.join("blockchain"), &mut logger)?;
+        let chain = BlockChain::open(&path.join("blockchain"))?;
         let data_store = DataStore::open(&path.join("data"))?;
 
         Ok(Self
         {
             port,
-            logger,
 
             chain,
             data_store,
@@ -122,20 +116,19 @@ impl<W> Node<W>
         let branch_blocks = branch.iter().map(|(x, _)| x.clone()).collect::<Vec<_>>();
         if self.chain.can_merge_branch(&branch_blocks)? == BlockChainCanMergeResult::Ok
         {
-            self.logger.log(LoggerLevel::Info, &format!("[{}] Merge longer branch", self.port));
-
+            info!("[{}] Merge longer branch", self.port);
             for (_, data) in &branch 
             {
                 for (id, unit) in data {
                     self.data_store.store(id, unit)?;
                 }
             }
-            self.chain.merge_branch(branch_blocks, &mut self.logger);
+            self.chain.merge_branch(branch_blocks);
         }
         Ok(())
     }
 
-    fn handle_block(&mut self, connection_manager: &mut ConnectionManager<W>, from: &str, 
+    fn handle_block(&mut self, connection_manager: &mut ConnectionManager, from: &str, 
                     block: Block, data: HashMap<Hash, DataUnit>) 
         -> Result<(), Box<dyn Error>>
     {
@@ -145,16 +138,15 @@ impl<W> Node<W>
         // Reject block if data is not valid
         if !is_block_data_valid(&block, &data)?
         {
-            self.logger.log(LoggerLevel::Warning, 
-                &format!("[{}] Invalid block data for {}", self.port, block.block_id));
+            warn!("[{}] Invalid block data for {}", self.port, block.block_id);
             return Ok(());
         }
 
-        match self.chain.add(&block, &mut self.logger)?
+        match self.chain.add(&block)?
         {
             BlockChainAddResult::Ok =>
             {
-                self.logger.log(LoggerLevel::Info, &format!("[{}] Added block {}", self.port, block.block_id));
+                info!("[{}] Added block {}", self.port, block.block_id);
 
                 // Store the blocks data
                 for (id, unit) in &data {
@@ -167,7 +159,7 @@ impl<W> Node<W>
 
             BlockChainAddResult::Invalid(_) | BlockChainAddResult::MoreNeeded => 
             {
-                self.logger.log(LoggerLevel::Info, &format!("[{}] Invalid block {}", self.port, block.block_id));
+                info!("[{}] Invalid block {}", self.port, block.block_id);
 
                 // Add block to this nodes branch
                 let block_id = block.block_id;
@@ -183,7 +175,7 @@ impl<W> Node<W>
 
             BlockChainAddResult::Duplicate => 
             {
-                self.logger.log(LoggerLevel::Verbose, &format!("[{}] Duplicate block {}", self.port, block.block_id));
+                debug!("[{}] Duplicate block {}", self.port, block.block_id);
                 self.complete_branch(from)?;
             },
         }
@@ -191,12 +183,11 @@ impl<W> Node<W>
         Ok(())
     }
 
-    fn handle_block_request(&mut self, connection_manager: &mut ConnectionManager<W>, from: &str, 
-                            id: u64)
+    fn handle_block_request(&mut self, connection_manager: &mut ConnectionManager, 
+                            from: &str, id: u64)
         -> Result<(), Box<dyn Error>>
     {
-        self.logger.log(LoggerLevel::Info, 
-            &format!("Got request for block {}", id));
+        info!("Got request for block {}", id);
 
         let block_or_none = self.chain.block(id);
         if block_or_none.is_some() 
@@ -209,12 +200,11 @@ impl<W> Node<W>
         Ok(())
     }
 
-    fn handle_transfer(&mut self, connection_manager: &mut ConnectionManager<W>, from: &str,
+    fn handle_transfer(&mut self, connection_manager: &mut ConnectionManager, from: &str,
                        transfer: Transaction<Transfer>)
     {
-        self.logger.log(LoggerLevel::Info, 
-            &format!("Got transfer {:?}", transfer));
-        
+        info!("Got transfer {:?}", transfer);
+
         if self.chain.push_transfer_queue(transfer.clone())
         {
             connection_manager.send_to(
@@ -223,17 +213,15 @@ impl<W> Node<W>
         }
         else
         {
-            self.logger.log(LoggerLevel::Warning,
-                &format!("Invalid transfer"));
+            warn!("Invalid transfer");
         }
     }
 
-    fn handle_page(&mut self, connection_manager: &mut ConnectionManager<W>, from: &str,
+    fn handle_page(&mut self, connection_manager: &mut ConnectionManager, from: &str,
                    page: Transaction<Page>, data: DataUnit)
         -> Result<(), Box<dyn Error>>
     {
-        self.logger.log(LoggerLevel::Info, 
-            &format!("Got page {:?}", page));
+        info!("Got page {:?}", page);
         
         if page.header.is_data_valid(&data)?
             && self.chain.push_page_queue(page.clone())
@@ -247,8 +235,7 @@ impl<W> Node<W>
         }
         else
         {
-            self.logger.log(LoggerLevel::Warning,
-                &format!("Invalid page"));
+            warn!("Invalid page");
         }
 
         Ok(())
@@ -256,11 +243,10 @@ impl<W> Node<W>
 
 }
 
-impl<W> PacketHandler<W> for Node<W>
-    where W: Write + Clone + Sync + Send + 'static
+impl PacketHandler for Node
 {
 
-    fn on_packet(&mut self, from: &str, packet: Packet, connection_manager: &mut ConnectionManager<W>)
+    fn on_packet(&mut self, from: &str, packet: Packet, connection_manager: &mut ConnectionManager)
         -> Result<(), Box<dyn Error>>
     {
         match packet
@@ -294,7 +280,7 @@ impl<W> PacketHandler<W> for Node<W>
                 self.handle_page(connection_manager, from, page, data)?,
             
             Packet::Ping => 
-                self.logger.log(LoggerLevel::Info, "Ping!"),
+                info!("Ping!"),
         }
 
         Ok(())
@@ -308,7 +294,6 @@ mod tests
 
     use super::*;
     use network::NetworkConnection;
-    use libhyperchain::logger::{Logger, LoggerLevel, StdLoggerOutput};
     use libhyperchain::wallet::private_wallet::PrivateWallet;
     use libhyperchain::block::Block;
     use libhyperchain::miner;
@@ -317,8 +302,8 @@ mod tests
     use std::path::PathBuf;
     use std::sync::{Arc, Mutex};
 
-    fn wait_for_block<W>(connection: &Arc<Mutex<NetworkConnection<Node<W>, W>>>, block_id: u64) -> Block
-        where W: Write + Clone + Sync + Send + 'static
+    fn wait_for_block(connection: &Arc<Mutex<NetworkConnection<Node>>>, block_id: u64) 
+        -> Block
     {
         loop
         {
@@ -335,26 +320,24 @@ mod tests
         }
     }
 
-    fn create_node<W>(port: u16, logger: Logger<W>) -> Arc<Mutex<NetworkConnection<Node<W>, W>>>
-        where W: Write + Clone + Sync + Send + 'static
+    fn create_node(port: u16) -> Arc<Mutex<NetworkConnection<Node>>>
     {
         let time = libhyperchain::block::current_timestamp();
         let path = std::env::temp_dir().join(format!("{}{}", time, port.to_string()));
-        let node = Node::new(port, path, logger.clone()).unwrap();
-        let network_connection = NetworkConnection::new(port, node, logger);
+        let node = Node::new(port, path).unwrap();
+        let network_connection = NetworkConnection::new(port, node);
         network_connection
     }
 
-    fn mine_block<W>(connection: &Arc<Mutex<NetworkConnection<Node<W>, W>>>, 
-                     wallet: &PrivateWallet, logger: &mut Logger<W>) -> Block
-        where W: Write + Clone + Sync + Send + 'static
+    fn mine_block(connection: &Arc<Mutex<NetworkConnection<Node>>>, 
+                  wallet: &PrivateWallet) -> Block
     {
         let mut connection_lock = connection.lock().unwrap();
         let chain = &mut connection_lock.handler().chain();
         let block = miner::mine_block(Block::new(chain, wallet)
             .expect("Create block"));
 
-        chain.add(&block, logger).unwrap();
+        chain.add(&block).unwrap();
         connection_lock.manager().send(Packet::Block(block.clone(), HashMap::new()));
 
         block
@@ -363,28 +346,27 @@ mod tests
     #[test]
     fn test_node_branched_chain()
     {
-        let mut logger = Logger::new(StdLoggerOutput::new(), LoggerLevel::Error);
-        let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet"), &mut logger).unwrap();
+        let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet")).unwrap();
 
-        let mut connection_a = create_node(8030, logger.clone());
-        let block_a = mine_block(&mut connection_a, &wallet, &mut logger);
-        let block_b = mine_block(&mut connection_a, &wallet, &mut logger);
-        let block_c = mine_block(&mut connection_a, &wallet, &mut logger);
-        mine_block(&mut connection_a, &wallet, &mut logger);
-        mine_block(&mut connection_a, &wallet, &mut logger);
+        let mut connection_a = create_node(8030);
+        let block_a = mine_block(&mut connection_a, &wallet);
+        let block_b = mine_block(&mut connection_a, &wallet);
+        let block_c = mine_block(&mut connection_a, &wallet);
+        mine_block(&mut connection_a, &wallet);
+        mine_block(&mut connection_a, &wallet);
 
-        let mut connection_b = create_node(8031, logger.clone());
+        let mut connection_b = create_node(8031);
         {
             let mut connection_b_lock = connection_b.lock().unwrap();
-            connection_b_lock.handler().chain().add(&block_a, &mut logger).unwrap();
-            connection_b_lock.handler().chain().add(&block_b, &mut logger).unwrap();
-            connection_b_lock.handler().chain().add(&block_c, &mut logger).unwrap();
+            connection_b_lock.handler().chain().add(&block_a).unwrap();
+            connection_b_lock.handler().chain().add(&block_b).unwrap();
+            connection_b_lock.handler().chain().add(&block_c).unwrap();
         }
-        mine_block(&mut connection_b, &wallet, &mut logger);
-        mine_block(&mut connection_b, &wallet, &mut logger);
-        mine_block(&mut connection_b, &wallet, &mut logger);
-        mine_block(&mut connection_b, &wallet, &mut logger);
-        let block_h_b = mine_block(&mut connection_b, &wallet, &mut logger);
+        mine_block(&mut connection_b, &wallet);
+        mine_block(&mut connection_b, &wallet);
+        mine_block(&mut connection_b, &wallet);
+        mine_block(&mut connection_b, &wallet);
+        let block_h_b = mine_block(&mut connection_b, &wallet);
 
         connection_b.lock().unwrap().manager().register_node("127.0.0.1:8030", None);
         let block_h_a = wait_for_block(&connection_a, 7);
@@ -394,18 +376,17 @@ mod tests
     #[test]
     fn test_node_join_with_longer_chain()
     {
-        let mut logger = Logger::new(StdLoggerOutput::new(), LoggerLevel::Error);
-        let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet"), &mut logger).unwrap();
+        let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet")).unwrap();
 
-        let mut connection_a = create_node(8020, logger.clone());
-        mine_block(&mut connection_a, &wallet, &mut logger);
-        mine_block(&mut connection_a, &wallet, &mut logger);
+        let mut connection_a = create_node(8020);
+        mine_block(&mut connection_a, &wallet);
+        mine_block(&mut connection_a, &wallet);
 
-        let mut connection_b = create_node(8021, logger.clone());
-        mine_block(&mut connection_b, &wallet, &mut logger);
-        mine_block(&mut connection_b, &wallet, &mut logger);
-        mine_block(&mut connection_b, &wallet, &mut logger);
-        let block_d_on_b = mine_block(&mut connection_b, &wallet, &mut logger);
+        let mut connection_b = create_node(8021);
+        mine_block(&mut connection_b, &wallet);
+        mine_block(&mut connection_b, &wallet);
+        mine_block(&mut connection_b, &wallet);
+        let block_d_on_b = mine_block(&mut connection_b, &wallet);
         
         connection_b.lock().unwrap().manager().register_node("127.0.0.1:8020", None);
         let block_d_on_a = wait_for_block(&connection_a, 3);
@@ -415,23 +396,22 @@ mod tests
     #[test]
     fn test_node()
     {
-        let mut logger = Logger::new(StdLoggerOutput::new(), LoggerLevel::Error);
-        let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet"), &mut logger).unwrap();
+        let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet")).unwrap();
 
-        let mut connection_a = create_node(8010, logger.clone());
-        let mut connection_b = create_node(8011, logger.clone());
+        let mut connection_a = create_node(8010);
+        let mut connection_b = create_node(8011);
         connection_b.lock().unwrap().manager().register_node("127.0.0.1:8010", None);
 
         // Transfer block a -> b
-        let block_a_on_a = mine_block(&mut connection_a, &wallet, &mut logger);
+        let block_a_on_a = mine_block(&mut connection_a, &wallet);
         let block_a_on_b = wait_for_block(&connection_b, 0);
         assert_eq!(block_a_on_a, block_a_on_b);
 
         // Transfer 3 blocks b -> a
-        let block_b_on_b = mine_block(&mut connection_b, &wallet, &mut logger);
-        let block_c_on_b = mine_block(&mut connection_b, &wallet, &mut logger);
-        let block_d_on_b = mine_block(&mut connection_b, &wallet, &mut logger);
-        let block_e_on_b = mine_block(&mut connection_b, &wallet, &mut logger);
+        let block_b_on_b = mine_block(&mut connection_b, &wallet);
+        let block_c_on_b = mine_block(&mut connection_b, &wallet);
+        let block_d_on_b = mine_block(&mut connection_b, &wallet);
+        let block_e_on_b = mine_block(&mut connection_b, &wallet);
         let block_b_on_a = wait_for_block(&connection_a, 1);
         let block_c_on_a = wait_for_block(&connection_a, 2);
         let block_d_on_a = wait_for_block(&connection_a, 3);
@@ -442,22 +422,22 @@ mod tests
         assert_eq!(block_e_on_b, block_e_on_a);
 
         // New node joins with a different, shorter chain
-        let mut connection_c = create_node(8012, logger.clone());
-        mine_block(&mut connection_c, &wallet, &mut logger);
-        mine_block(&mut connection_c, &wallet, &mut logger);
-        mine_block(&mut connection_c, &wallet, &mut logger);
+        let mut connection_c = create_node(8012);
+        mine_block(&mut connection_c, &wallet);
+        mine_block(&mut connection_c, &wallet);
+        mine_block(&mut connection_c, &wallet);
         connection_c.lock().unwrap().manager().register_node("127.0.0.1:8010", None);
         let block_e_on_c = wait_for_block(&connection_c, 4);
         assert_eq!(block_e_on_c, block_e_on_a);
 
         // New node joins with a different, longer chain
-        let mut connection_d = create_node(8013, logger.clone());
-        mine_block(&mut connection_d, &wallet, &mut logger);
-        mine_block(&mut connection_d, &wallet, &mut logger);
-        mine_block(&mut connection_d, &wallet, &mut logger);
-        mine_block(&mut connection_d, &wallet, &mut logger);
-        mine_block(&mut connection_d, &wallet, &mut logger);
-        let block_f_on_d = mine_block(&mut connection_d, &wallet, &mut logger);
+        let mut connection_d = create_node(8013);
+        mine_block(&mut connection_d, &wallet);
+        mine_block(&mut connection_d, &wallet);
+        mine_block(&mut connection_d, &wallet);
+        mine_block(&mut connection_d, &wallet);
+        mine_block(&mut connection_d, &wallet);
+        let block_f_on_d = mine_block(&mut connection_d, &wallet);
 
         connection_d.lock().unwrap().manager().register_node("127.0.0.1:8010", None);
         let block_f_on_a = wait_for_block(&connection_a, 5);

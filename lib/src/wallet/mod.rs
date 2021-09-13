@@ -55,7 +55,6 @@ mod tests
 
     use super::*;
     use super::private_wallet::PrivateWallet;
-    use crate::logger::{Logger, LoggerLevel};
     use crate::block::Block;
     use crate::transaction::Transaction;
     use crate::transaction::transfer::Transfer;
@@ -66,22 +65,21 @@ mod tests
     #[test]
     fn test_wallet()
     {
-        let mut logger = Logger::new(std::io::stdout(), LoggerLevel::Error);
-        let mut chain = BlockChain::open_temp(&mut logger);
-        let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet"), &mut logger).unwrap();
-        let other = PrivateWallet::read_from_file(&PathBuf::from("other.wallet"), &mut logger).unwrap();
+        let mut chain = BlockChain::open_temp();
+        let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet")).unwrap();
+        let other = PrivateWallet::read_from_file(&PathBuf::from("other.wallet")).unwrap();
 
         let block_a = miner::mine_block(Block::new(&mut chain, &wallet).expect("Create block"));
-        chain.add(&block_a, &mut logger).unwrap();
+        chain.add(&block_a).unwrap();
 
         let block_b = miner::mine_block(Block::new(&mut chain, &other).expect("Create block"));
-        chain.add(&block_b, &mut logger).unwrap();
+        chain.add(&block_b).unwrap();
         
         let mut block_c = Block::new(&mut chain, &wallet).expect("Create block");
         block_c.add_transfer(Transaction::new(&wallet, Transfer::new(1, other.get_address(), 4.6, 0.2)));
         block_c.add_transfer(Transaction::new(&other, Transfer::new(1, wallet.get_address(), 1.4, 0.2)));
         block_c = miner::mine_block(block_c);
-        chain.add(&block_c, &mut logger).unwrap();
+        chain.add(&block_c).unwrap();
 
         let wallet_status = wallet.get_status(&mut chain);
         assert_eq!(wallet_status.balance, block_a.calculate_reward() + block_c.calculate_reward() - 4.6 - 0.2 + 1.4 + 0.2 + 0.2);

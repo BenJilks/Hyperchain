@@ -3,11 +3,9 @@ use crate::node::Node;
 
 use libhyperchain::service::command::Response;
 use libhyperchain::block::Block;
-use std::io::Write;
 
-pub fn blocks<W>(connection: &mut NetworkConnection<Node<W>, W>, 
-                 from: u64, to: u64) -> Response
-    where W: Write + Clone + Send + Sync + 'static
+pub fn blocks(connection: &mut NetworkConnection<Node>,
+              from: u64, to: u64) -> Response
 {
     let chain = connection.handler().chain();
     let mut blocks = Vec::<Block>::new();

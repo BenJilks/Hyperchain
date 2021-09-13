@@ -8,11 +8,9 @@ use libhyperchain::transaction::Transaction;
 use libhyperchain::transaction::page::Page;
 use libhyperchain::data_store::DataUnit;
 use libhyperchain::data_store::page::CreatePageData;
-use std::io::Write;
 
-fn add_page<W>(connection: &mut NetworkConnection<Node<W>, W>, from: Vec<u8>, data_unit: &DataUnit) 
-        -> Option<(Transaction<Page>, Vec<u8>)>
-    where W: Write + Clone + Send + Sync + 'static
+fn add_page(connection: &mut NetworkConnection<Node>, from: Vec<u8>, data_unit: &DataUnit)
+    -> Option<(Transaction<Page>, Vec<u8>)>
 {
     let from_wallet_or_error = PrivateWallet::deserialize(from);
     if from_wallet_or_error.is_err() {
@@ -33,9 +31,9 @@ fn add_page<W>(connection: &mut NetworkConnection<Node<W>, W>, from: Vec<u8>, da
     Some((page, page_id))
 }
 
-pub fn update_page<W>(connection: &mut NetworkConnection<Node<W>, W>, 
-                      from: Vec<u8>, name: String, data: Vec<u8>) -> Response
-    where W: Write + Clone + Send + Sync + 'static
+pub fn update_page(connection: &mut NetworkConnection<Node>,
+                   from: Vec<u8>, name: String, data: Vec<u8>) 
+    -> Response
 {
     let data_unit = DataUnit::CreatePage(CreatePageData::new(name, data));
     let page_or_none = add_page(connection, from, &data_unit);

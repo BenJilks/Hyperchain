@@ -3,6 +3,7 @@ extern crate actix_files;
 extern crate handlebars;
 extern crate serde;
 extern crate base_62;
+extern crate pretty_env_logger;
 
 #[macro_use]
 extern crate serde_json;
@@ -37,6 +38,8 @@ impl<'a> AppData<'a>
 #[actix_web::main]
 async fn main() -> Result<(), Box<dyn Error>>
 {
+    pretty_env_logger::init();
+    
     let mut handlebars = Handlebars::new();
     handlebars.register_templates_directory(".html", "./static/templates")?;
     

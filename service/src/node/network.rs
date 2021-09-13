@@ -2,32 +2,27 @@ use super::packet_handler::{PacketHandler, Message};
 use super::packet_handler::start_message_handler;
 use super::manager::ConnectionManager;
 
-use libhyperchain::logger::{LoggerLevel, Logger};
-use std::io::Write;
 use std::net::{TcpStream, TcpListener};
 use std::thread::JoinHandle;
 use std::sync::mpsc::{channel, Sender, Receiver};
 use std::sync::{Mutex, MutexGuard, Arc};
 
-pub struct NetworkConnection<P, W>
-    where W: Write + Clone + Sync + Send + 'static,
-          P: PacketHandler<W> + Sync + Send + 'static
+pub struct NetworkConnection<P>
+    where P: PacketHandler + Sync + Send + 'static
 {
     pub(crate) port: u16,
     should_shutdown: bool,
     packet_handler: P,
-    pub logger: Logger<W>,
 
     message_sender: Option<Sender<Message>>,
-    pub(crate) connection_manager: Option<Arc<Mutex<ConnectionManager<W>>>>,
+    pub(crate) connection_manager: Option<Arc<Mutex<ConnectionManager>>>,
     node_listner_thread: Option<JoinHandle<()>>,
     message_handler_thread: Option<JoinHandle<()>>,
 }
 
-fn start_node_listner<P, W>(port: u16, network_connection: Arc<Mutex<NetworkConnection<P, W>>>) 
+fn start_node_listner<P>(port: u16, network_connection: Arc<Mutex<NetworkConnection<P>>>) 
         -> JoinHandle<()>
-    where P: PacketHandler<W> + Sync + Send + 'static,
-          W: Write + Clone + Sync + Send + 'static
+    where P: PacketHandler + Sync + Send + 'static
 {
     let listener = TcpListener::bind(format!("0.0.0.0:{}", port)).unwrap();
     std::thread::spawn(move || loop
@@ -38,8 +33,7 @@ fn start_node_listner<P, W>(port: u16, network_connection: Arc<Mutex<NetworkConn
             {
                 let mut network_connection_lock = network_connection.lock().unwrap();
                 let address = format!("{}:{}", socket.ip(), socket.port());
-                network_connection_lock.logger.log(LoggerLevel::Info, 
-                    &format!("[{}] Got connection request from {}", port, address));
+                info!("[{}] Got connection request from {}", port, address);
 
                 if network_connection_lock.should_shutdown() {
                     break;
@@ -50,19 +44,15 @@ fn start_node_listner<P, W>(port: u16, network_connection: Arc<Mutex<NetworkConn
 
             Err(_) => 
             {
-                let mut network_connection_lock = network_connection.lock().unwrap();
-                network_connection_lock.logger.log(LoggerLevel::Info, 
-                    &format!("[{}] Shutdown node listner", port));
-
+                info!("[{}] Shutdown node listner", port);
                 break;
             },
         }
     })
 }
 
-fn start_network_connection<P, W>(network_connection: Arc<Mutex<NetworkConnection<P, W>>>)
-    where P: PacketHandler<W> + Sync + Send + 'static,
-          W: Write + Clone + Sync + Send + 'static
+fn start_network_connection<P>(network_connection: Arc<Mutex<NetworkConnection<P>>>)
+    where P: PacketHandler + Sync + Send + 'static
 {
     let mut network_connection_lock = network_connection.lock().unwrap();
 
@@ -78,19 +68,17 @@ fn start_network_connection<P, W>(network_connection: Arc<Mutex<NetworkConnectio
         network_connection.clone(), message_reciver));
 }
 
-impl<P, W> NetworkConnection<P, W>
-    where W: Write + Clone + Sync + Send + 'static,
-          P: PacketHandler<W> + Sync + Send + 'static
+impl<P> NetworkConnection<P>
+    where P: PacketHandler + Sync + Send + 'static
 {
 
-    pub fn new(port: u16, packet_handler: P, logger: Logger<W>) -> Arc<Mutex<Self>>
+    pub fn new(port: u16, packet_handler: P) -> Arc<Mutex<Self>>
     {
         let network_connecton = Arc::from(Mutex::from(Self
         {
             port,
             should_shutdown: false,
             packet_handler,
-            logger,
 
             message_sender: None,
             connection_manager: None,
@@ -105,9 +93,7 @@ impl<P, W> NetworkConnection<P, W>
     fn signal_stop_threads(&mut self) -> Vec<JoinHandle<()>>
     {
         let mut threads_to_wait_for = Vec::<JoinHandle<()>>::new();
-
-        self.logger.log(LoggerLevel::Info, 
-            &format!("[{}] Shutting down network connection", self.port));
+        info!("[{}] Shutting down network connection", self.port);
 
         // Shutdown node listner
         if self.node_listner_thread.is_some()
@@ -150,12 +136,12 @@ impl<P, W> NetworkConnection<P, W>
         let (message_sender, message_reciver) = channel::<Message>();
         self.message_sender = Some( message_sender.clone() );
         self.connection_manager = Some( ConnectionManager::new(self.port, 
-            message_sender, self.logger.clone()) );
+            message_sender) );
 
         message_reciver
     }
 
-    pub fn manager(&mut self) -> MutexGuard<ConnectionManager<W>>
+    pub fn manager(&mut self) -> MutexGuard<ConnectionManager>
     {
         self.connection_manager
             .as_mut().unwrap()
@@ -169,9 +155,8 @@ impl<P, W> NetworkConnection<P, W>
 
 }
 
-impl<P, W> Drop for NetworkConnection<P, W>
-    where W: Write + Clone + Sync + Send + 'static,
-          P: PacketHandler<W> + Sync + Send + 'static
+impl<P> Drop for NetworkConnection<P>
+    where P: PacketHandler + Sync + Send + 'static
 {
 
     fn drop(&mut self)
@@ -189,7 +174,6 @@ mod tests
 
     use super::*;
     use super::super::packet_handler::Packet;
-    use libhyperchain::logger::StdLoggerOutput;
 
     use std::error::Error;
 
@@ -198,11 +182,10 @@ mod tests
         test_sender: Mutex<Sender<Packet>>,
     }
 
-    impl<W> PacketHandler<W> for TestPacketHandler
-        where W: Write + Clone + Sync + Send + 'static
+    impl PacketHandler for TestPacketHandler
     {
 
-        fn on_packet(&mut self, _: &str, packet: Packet, _: &mut ConnectionManager<W>) 
+        fn on_packet(&mut self, _: &str, packet: Packet, _: &mut ConnectionManager)
             -> Result<(), Box<dyn Error>>
         {
             let _ = self.test_sender.lock().unwrap().send(packet);
@@ -211,12 +194,11 @@ mod tests
 
     }
 
-    fn create_connection<W>(port: u16, logger: Logger<W>) -> (Arc<Mutex<NetworkConnection<TestPacketHandler, W>>>, Receiver<Packet>)
-        where W: Write + Clone + Sync + Send + 'static
+    fn create_connection(port: u16) -> (Arc<Mutex<NetworkConnection<TestPacketHandler>>>, Receiver<Packet>)
     {
         let (send, recv) = channel();
         let packet_handler = TestPacketHandler { test_sender: Mutex::from(send) };
-        let connection = NetworkConnection::new(port, packet_handler, logger);
+        let connection = NetworkConnection::new(port, packet_handler);
 
         (connection, recv)
     }
@@ -224,10 +206,9 @@ mod tests
     #[test]
     fn test_network_disconnect()
     {
-        let logger = Logger::new(StdLoggerOutput::new(), LoggerLevel::Error);
-        let (connection_a, recv_a) = create_connection(8080, logger.clone());
+        let (connection_a, recv_a) = create_connection(8080);
         {
-            let (connection_b, _recv_b) = create_connection(8081, logger.clone());
+            let (connection_b, _recv_b) = create_connection(8081);
             connection_b.lock().unwrap().manager().register_node("127.0.0.1:8080", None);
             println!("{:?}", recv_a.recv());
         }
@@ -238,11 +219,9 @@ mod tests
     #[test]
     fn test_network()
     {
-        let logger = Logger::new(StdLoggerOutput::new(), LoggerLevel::Error);
-
-        let (connection_a, recv_a) = create_connection(8000, logger.clone());
-        let (connection_b, recv_b) = create_connection(8001, logger.clone());
-        let (connection_c, recv_c) = create_connection(8002, logger.clone());
+        let (connection_a, recv_a) = create_connection(8000);
+        let (connection_b, recv_b) = create_connection(8001);
+        let (connection_c, recv_c) = create_connection(8002);
         connection_b.lock().unwrap().manager().register_node("127.0.0.1:8000", None);
         connection_c.lock().unwrap().manager().register_node("127.0.0.1:8000", None);
 
@@ -271,7 +250,7 @@ mod tests
         assert_eq!(recv_c.recv().expect("Got packet"), Packet::Ping);
         assert_eq!(recv_c.recv().expect("Got packet"), Packet::Ping);
 
-        let (connection_d, recv_d) = create_connection(8003, logger.clone());
+        let (connection_d, recv_d) = create_connection(8003);
         connection_d.lock().unwrap().manager().register_node("127.0.0.1:8000", None);
         recv_on_connect_packets(&recv_a, &[8003]);
         recv_on_connect_packets(&recv_b, &[8003]);
@@ -285,4 +264,3 @@ mod tests
     }
 
 }
-

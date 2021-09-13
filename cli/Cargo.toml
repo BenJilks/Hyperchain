@@ -9,3 +9,4 @@ edition = "2018"
 libhyperchain = { path = "../lib" }
 clap = "2.33.3"
 base-62 = { git = "https://github.com/kryptco/base62.rs" }
+pretty_env_logger = "0.4.0"

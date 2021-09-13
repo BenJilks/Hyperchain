@@ -78,7 +78,6 @@ mod tests
     use super::super::Transaction;
     use crate::block::Block;
     use crate::chain::BlockChain;
-    use crate::logger::{Logger, LoggerLevel};
     use crate::wallet::Wallet;
     use crate::wallet::private_wallet::PrivateWallet;
     use crate::miner;
@@ -88,13 +87,12 @@ mod tests
     #[test]
     fn test_transfer()
     {
-        let mut logger = Logger::new(std::io::stdout(), LoggerLevel::Error);
-        let mut chain = BlockChain::open_temp(&mut logger);
-        let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet"), &mut logger).unwrap();
-        let other = PrivateWallet::read_from_file(&PathBuf::from("other.wallet"), &mut logger).unwrap();
+        let mut chain = BlockChain::open_temp();
+        let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet")).unwrap();
+        let other = PrivateWallet::read_from_file(&PathBuf::from("other.wallet")).unwrap();
 
         let block = miner::mine_block(Block::new(&mut chain, &wallet).expect("Create block"));
-        chain.add(&block, &mut logger).unwrap();
+        chain.add(&block).unwrap();
 
         {
             let transfer = Transaction::new(&wallet, Transfer::new(0, other.get_address(), 2.4, 0.2));

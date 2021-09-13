@@ -1,7 +1,6 @@
 use super::network::NetworkConnection;
 use super::manager::ConnectionManager;
 
-use libhyperchain::logger::LoggerLevel;
 use libhyperchain::block::Block;
 use libhyperchain::transaction::Transaction;
 use libhyperchain::transaction::transfer::Transfer;
@@ -10,7 +9,6 @@ use libhyperchain::data_store::DataUnit;
 use libhyperchain::config::Hash;
 
 use serde::{Serialize, Deserialize};
-use std::io::Write;
 use std::thread::JoinHandle;
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::sync::{Mutex, Arc};
@@ -37,28 +35,25 @@ pub enum Message
     Shutdown,
 }
 
-pub trait PacketHandler<W>
-    where W: Write + Clone + Sync + Send + 'static
+pub trait PacketHandler
 {
-    fn on_packet(&mut self, from: &str, packet: Packet, connection_manager: &mut ConnectionManager<W>) 
+    fn on_packet(&mut self, from: &str, packet: Packet, connection_manager: &mut ConnectionManager)
         -> Result<(), Box<dyn Error>>;
 }
 
-fn handle_message_packet<P, W>(from: String, packet: Packet, 
-                               network_connection: &mut NetworkConnection<P, W>)
-    where P: PacketHandler<W> + Sync + Send + 'static,
-          W: Write + Clone + Sync + Send + 'static
+fn handle_message_packet<P>(from: String, packet: Packet, 
+                               network_connection: &mut NetworkConnection<P>)
+    where P: PacketHandler + Sync + Send + 'static
 {
     let port = network_connection.port;
-    let handle_packet = |network_connection: &mut NetworkConnection<P, W>, packet, manager_lock|
+    let handle_packet = |network_connection: &mut NetworkConnection<P>, packet, manager_lock|
     {
         match network_connection.handler().on_packet(&from, packet, manager_lock)
         {
             Ok(_) => {},
             Err(err) =>
             {
-                network_connection.logger.log(
-                    LoggerLevel::Error, &format!("Error handling packet: {}", err))
+                error!("Error handling packet: {}", err);
             },
         }
     };
@@ -75,8 +70,7 @@ fn handle_message_packet<P, W>(from: String, packet: Packet,
             let node_address = format!("{}:{}", ip, node_port);
             if !network_connection.manager().open_connections.insert(node_address.clone())
             {
-                network_connection.logger.log(LoggerLevel::Verbose, 
-                    &format!("[{}] Remove duplicate connection {}", port, node_address));
+                debug!("[{}] Remove duplicate connection {}", port, node_address);
                 network_connection.manager().disconnect_from(&from);
             }
             else
@@ -99,10 +93,9 @@ fn handle_message_packet<P, W>(from: String, packet: Packet,
     }
 }
 
-pub fn start_message_handler<P, W>(network_connection: Arc<Mutex<NetworkConnection<P, W>>>, 
+pub fn start_message_handler<P>(network_connection: Arc<Mutex<NetworkConnection<P>>>, 
                                    message_reciver: Receiver<Message>) -> JoinHandle<()>
-    where P: PacketHandler<W> + Sync + Send + 'static,
-          W: Write + Clone + Sync + Send + 'static
+    where P: PacketHandler + Sync + Send + 'static
 {
     std::thread::spawn(move || loop
     {
@@ -112,21 +105,17 @@ pub fn start_message_handler<P, W>(network_connection: Arc<Mutex<NetworkConnecti
             {
                 let mut network_connection_lock = network_connection.lock().unwrap();
                 let port = network_connection_lock.port;
-                network_connection_lock.logger.log(LoggerLevel::Verbose, 
-                    &format!("[{}] Got packet {:?}", port, packet));
-                network_connection_lock.logger.log(LoggerLevel::Verbose, &format!("[{}] Got packet", port));
+                debug!("[{}] Got packet {:?}", port, packet);
 
                 handle_message_packet(from, packet, &mut network_connection_lock);
-                network_connection_lock.logger.log(LoggerLevel::Verbose, &format!("[{}] Handled packet", port));
+                debug!("[{}] Handled packet", port);
             },
 
             Ok(Message::Shutdown) =>
             {
-                let mut network_connection_lock = network_connection.lock().unwrap();
+                let network_connection_lock = network_connection.lock().unwrap();
                 let port = network_connection_lock.port;
-                let logger = &mut network_connection_lock.logger;
-                logger.log(LoggerLevel::Info, 
-                    &format!("[{}] Shut down message handler", port));
+                info!("[{}] Shut down message handler", port);
                 break;
             },
 
@@ -140,13 +129,9 @@ pub fn start_message_handler<P, W>(network_connection: Arc<Mutex<NetworkConnecti
             // TODO: Handle this
             Err(err) =>
             {
-                let mut network_connection_lock = network_connection.lock().unwrap();
-                let logger = &mut network_connection_lock.logger;
-                logger.log(LoggerLevel::Error, 
-                    &format!("message_reciver.recv(): {}", err));
+                error!("message_reciver.recv(): {}", err);
                 panic!()
             },
         }
     })
 }
-

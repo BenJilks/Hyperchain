@@ -1,11 +1,10 @@
 use super::packet_handler::{Packet, Message};
 use super::{TcpSender, TcpReceiver};
 
-use libhyperchain::logger::{LoggerLevel, Logger};
 use tcp_channel::{ReceiverBuilder, ChannelRecv};
 use tcp_channel::{SenderBuilder, ChannelSend};
 use tcp_channel::LittleEndian;
-use std::io::{Write, BufReader, BufWriter};
+use std::io::{BufReader, BufWriter};
 use std::net::TcpStream;
 use std::thread::JoinHandle;
 use std::sync::mpsc::Sender;
@@ -21,15 +20,15 @@ pub struct Connection
 impl Connection
 {
 
-    pub fn new<W>(port: u16, address: &str, stream: TcpStream, 
-                  message_sender: Sender<Message>, logger: Logger<W>) -> std::io::Result<Self>
-        where W: Write + Sync + Send + 'static
+    pub fn new(port: u16, address: &str, stream: TcpStream, 
+               message_sender: Sender<Message>) 
+        -> std::io::Result<Self>
     {
         let reciver = ReceiverBuilder::new()
             .with_type::<Packet>()
             .with_endianness::<LittleEndian>()
             .build(BufReader::new(stream.try_clone()?));
-        let reciver_thread = start_packet_reciver(address.to_owned(), reciver, message_sender, logger);
+        let reciver_thread = start_packet_reciver(address.to_owned(), reciver, message_sender);
 
         let mut sender = SenderBuilder::new()
             .with_type::<Packet>()
@@ -64,10 +63,9 @@ impl Drop for Connection
 
 }
 
-pub fn start_packet_reciver<W>(server_ip: String, mut recv: TcpReceiver<Packet>, 
-                               message_sender: Sender<Message>, mut logger: Logger<W>) 
-        -> JoinHandle<()>
-    where W: Write + Sync + Send + 'static
+pub fn start_packet_reciver(server_ip: String, mut recv: TcpReceiver<Packet>, 
+                            message_sender: Sender<Message>)
+    -> JoinHandle<()>
 {
     std::thread::spawn(move || loop
     {
@@ -80,8 +78,7 @@ pub fn start_packet_reciver<W>(server_ip: String, mut recv: TcpReceiver<Packet>,
                     Ok(_) => {},
                     Err(err) => 
                     {
-                        logger.log(LoggerLevel::Error, 
-                            &format!("message_sender.send(packet): {}", err));
+                        error!("message_sender.send(packet): {}", err);
                         break;
                     },
                 }
@@ -97,10 +94,9 @@ pub fn start_packet_reciver<W>(server_ip: String, mut recv: TcpReceiver<Packet>,
             
             Err(err) =>
             {
-                logger.log(LoggerLevel::Error, &format!("recv.recv(): {}", err));
+                error!("recv.recv(): {}", err);
                 break;
             },
         }
     })
 }
-

@@ -1,31 +1,26 @@
 use super::packet_handler::{Packet, Message};
 use super::connection::Connection;
 
-use libhyperchain::logger::{LoggerLevel, Logger};
 use tcp_channel::ChannelSend;
-use std::io::Write;
 use std::net::{TcpStream, SocketAddr};
 use std::sync::mpsc::Sender;
 use std::sync::{Mutex, Arc};
 use std::collections::{HashSet, HashMap};
 use std::time::Duration;
 
-pub struct ConnectionManager<W>
-    where W: Write + Clone + Sync + Send + 'static
+pub struct ConnectionManager
 {
     pub(crate) port: u16,
     message_sender: Sender<Message>,
     known_nodes: HashSet<String>,
     pub(crate) open_connections: HashSet<String>,
     connections: HashMap<String, Connection>,
-    logger: Logger<W>
 }
 
-impl<W> ConnectionManager<W>
-    where W: Write + Clone + Sync + Send + 'static
+impl ConnectionManager
 {
 
-    pub fn new(port: u16, message_sender: Sender<Message>, logger: Logger<W>) -> Arc<Mutex<Self>>
+    pub fn new(port: u16, message_sender: Sender<Message>) -> Arc<Mutex<Self>>
     {
         Arc::from(Mutex::from(Self
         {
@@ -34,16 +29,14 @@ impl<W> ConnectionManager<W>
             known_nodes: HashSet::new(),
             open_connections: HashSet::new(),
             connections: HashMap::new(),
-            logger,
         }))
     }
 
     pub(crate) fn add_client(&mut self, address: String, stream: TcpStream)
     {
-        self.logger.log(LoggerLevel::Info, 
-            &format!("[{}] Connected to {}", self.port, address));
+        info!("[{}] Connected to {}", self.port, address);
 
-        match Connection::new(self.port, &address, stream, self.message_sender.clone(), self.logger.clone())
+        match Connection::new(self.port, &address, stream, self.message_sender.clone())
         {
             Ok(connection) => {
                 self.connections.insert(address, connection);
@@ -63,9 +56,7 @@ impl<W> ConnectionManager<W>
     {
         if self.known_nodes.insert(address.to_owned())
         {
-            self.logger.log(LoggerLevel::Verbose, 
-                &format!("[{}] Regestered new node {}", self.port, address));
-            
+            debug!("[{}] Regestered new node {}", self.port, address);
             if from.is_some() {
                 self.send_to(Packet::KnownNode(address.to_owned()), |addr| addr != from.unwrap());
             }
@@ -82,8 +73,7 @@ impl<W> ConnectionManager<W>
         // Make sure we're not already connected
         if self.open_connections.contains(address)
         {
-            self.logger.log(LoggerLevel::Warning,
-                &format!("[{}] Already to connected to {}", self.port, address));
+            warn!("[{}] Already to connected to {}", self.port, address);
             return;
         }
 
@@ -96,15 +86,10 @@ impl<W> ConnectionManager<W>
             &socket_address.unwrap(), Duration::from_millis(100))
         {
             Ok(stream) =>
-            {
-                self.add_client(address.to_owned(), stream);
-            },
+                self.add_client(address.to_owned(), stream),
 
             Err(_) =>
-            {
-                self.logger.log(LoggerLevel::Verbose,
-                    &format!("[{}] Unable to connect to {}", self.port, address));
-            },
+                debug!("[{}] Unable to connect to {}", self.port, address),
         }
     }
 
@@ -135,9 +120,7 @@ impl<W> ConnectionManager<W>
                 continue;
             }
 
-            self.logger.log(LoggerLevel::Verbose, 
-                &format!("[{}] Sending {:?} to {}", self.port, packet, address));
-
+            debug!("[{}] Sending {:?} to {}", self.port, packet, address);
             if predicate(address)
             {
                 if connection.sender.send(&packet).is_err() 
@@ -171,16 +154,13 @@ impl<W> ConnectionManager<W>
 
 }
 
-impl<W> Drop for ConnectionManager<W>
-    where W: Write + Clone + Sync + Send + 'static
+impl Drop for ConnectionManager
 {
 
     fn drop(&mut self)
     {
-        self.logger.log(LoggerLevel::Info, 
-            &format!("[{}] Shutting down {} connection(s)", self.port, self.connections.len()));
+        info!("[{}] Shutting down {} connection(s)", self.port, self.connections.len());
         self.connections.clear();
     }
 
 }
-

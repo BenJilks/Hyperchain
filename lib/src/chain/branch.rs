@@ -1,12 +1,10 @@
 use super::{BlockChain, BLOCK_SAMPLE_SIZE};
 use super::{BlockValidationResult, BlockChainAddResult};
 use crate::block::Block;
-use crate::logger::Logger;
 use crate::wallet::WalletStatus;
 use crate::config::Hash;
 
 use std::error::Error;
-use std::io::Write;
 use std::collections::HashMap;
 
 #[derive(Debug, PartialEq)]
@@ -136,8 +134,7 @@ impl BlockChain
         }
     }
 
-    pub fn merge_branch<W>(&mut self, branch: Vec<Block>, logger: &mut Logger<W>)
-        where W: Write
+    pub fn merge_branch(&mut self, branch: Vec<Block>)
     {
         assert_eq!(self.can_merge_branch(&branch).unwrap(), BlockChainCanMergeResult::Ok);
 
@@ -146,7 +143,7 @@ impl BlockChain
         self.blocks.truncate(bottom.block_id);
 
         for block in branch {
-            assert_eq!(self.add(&block, logger).unwrap(), BlockChainAddResult::Ok);
+            assert_eq!(self.add(&block).unwrap(), BlockChainAddResult::Ok);
         }
     }
 

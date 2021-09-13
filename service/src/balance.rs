@@ -3,11 +3,9 @@ use crate::node::Node;
 
 use libhyperchain::service::command::Response;
 use libhyperchain::config::HASH_LEN;
-use std::io::Write;
 
-pub fn balance<W>(network_connection: &mut NetworkConnection<Node<W>, W>, 
-                  address_vec: Vec<u8>) -> Response
-    where W: Write + Clone + Send + Sync + 'static
+pub fn balance(network_connection: &mut NetworkConnection<Node>,
+               address_vec: Vec<u8>) -> Response
 {
     let chain = network_connection.handler().chain();
     let address = slice_as_array!(&address_vec, [u8; HASH_LEN]);

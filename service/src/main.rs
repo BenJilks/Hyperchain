@@ -1,8 +1,12 @@
 extern crate libhyperchain;
 extern crate clap;
+extern crate pretty_env_logger;
 
 #[macro_use]
 extern crate slice_as_array;
+
+#[macro_use]
+extern crate log;
 
 mod node;
 mod block_builder;
@@ -26,7 +30,6 @@ use blocks::blocks;
 use crate::node::network::NetworkConnection;
 use crate::node::Node;
 
-use libhyperchain::logger::{Logger, LoggerLevel, StdLoggerOutput};
 use libhyperchain::service::server;
 use libhyperchain::service::command::{Command, Response};
 use clap::{App, Arg};
@@ -35,6 +38,8 @@ use std::path::PathBuf;
 
 fn main() -> Result<(), Box<dyn Error>>
 {
+    pretty_env_logger::init();
+
     let matches = App::new("Hyperchain Cli")
         .version("0.1.0")
         .author("Ben Jilks <benjyjilks@gmail.com>")
@@ -54,21 +59,20 @@ fn main() -> Result<(), Box<dyn Error>>
         .get_matches();
 
     // Crate logger and read port from command line
-    let logger = Logger::new(StdLoggerOutput::new(), LoggerLevel::Info);
     let port = matches.value_of("port").unwrap_or("8001").parse::<u16>().unwrap();
     let disable_local_server = matches.is_present("local-server");
 
     // Create and open node
-    let node = Node::new(port, PathBuf::from("hyperchain"), logger.clone())?;
+    let node = Node::new(port, PathBuf::from("hyperchain"))?;
 
     let miner_thread;
     {
         // Register a common node to connect to
-        let network_connection = NetworkConnection::new(port, node, logger.clone());
+        let network_connection = NetworkConnection::new(port, node);
         network_connection.lock().unwrap().manager().register_node("192.168.0.27:8001", None);
 
         // Start miner thread
-        miner_thread = start_miner_thread(network_connection.clone(), logger.clone());
+        miner_thread = start_miner_thread(network_connection.clone());
         if disable_local_server
         {
             miner_thread.join().unwrap();

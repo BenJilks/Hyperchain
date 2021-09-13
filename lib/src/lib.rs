@@ -6,6 +6,9 @@ extern crate base_62;
 extern crate rsa;
 extern crate rand;
 
+#[macro_use]
+extern crate log;
+
 #[macro_use] 
 extern crate slice_as_array;
 
@@ -23,5 +26,4 @@ pub mod block;
 pub mod transaction;
 pub mod chain;
 pub mod data_store;
-pub mod logger;
 pub mod miner;

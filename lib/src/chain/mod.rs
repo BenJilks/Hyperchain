@@ -7,14 +7,12 @@ use storage::Storage;
 use metadata::BlockMetadata;
 use crate::block::Block;
 use crate::block::validate::BlockValidationResult;
-use crate::logger::{Logger, LoggerLevel};
 use crate::transaction::Transaction;
 use crate::transaction::transfer::Transfer;
 use crate::transaction::page::Page;
 use crate::config::BLOCK_SAMPLE_SIZE;
 
 use std::collections::VecDeque;
-use std::io::Write;
 use std::error::Error;
 use std::path::PathBuf;
 
@@ -39,10 +37,10 @@ pub enum BlockChainAddResult
 impl BlockChain
 {
 
-    pub fn open(path: &PathBuf, logger: &mut Logger<impl Write>) 
+    pub fn open(path: &PathBuf) 
         -> Result<Self, Box<dyn Error>>
     {
-        logger.log(LoggerLevel::Info, &format!("Open chain in {:?}", path));
+        info!("Open chain in {:?}", path);
         Ok(BlockChain
         {
             metadata: Storage::new(&path.join("metadata"))?,
@@ -73,9 +71,8 @@ impl BlockChain
         }
     }
 
-    pub fn add<W>(&mut self, block: &Block, logger: &mut Logger<W>) 
-            -> Result<BlockChainAddResult, Box<dyn Error>>
-        where W: Write
+    pub fn add(&mut self, block: &Block) 
+        -> Result<BlockChainAddResult, Box<dyn Error>>
     {
         if block.block_id < self.blocks.next_top() as u64
         {
@@ -96,9 +93,8 @@ impl BlockChain
             BlockValidationResult::Ok => {},
             BlockValidationResult::Balance(address) =>
             {
-                logger.log(LoggerLevel::Warning, 
-                    &format!("Got invalid block, as {} has insufficient balance",
-                        base_62::encode(&address)));
+                warn!("Got invalid block, as {} has insufficient balance",
+                    base_62::encode(&address));
 
                 // NOTE: Purge any pending transfers coming from this address
                 self.transfer_queue
@@ -155,10 +151,10 @@ mod tests
 
     impl BlockChain
     {
-        pub fn open_temp(logger: &mut Logger<impl Write>) -> Self
+        pub fn open_temp() -> Self
         {
             let path = std::env::temp_dir().join(rand::random::<u32>().to_string());
-            Self::open(&path, logger).unwrap()
+            Self::open(&path).unwrap()
         }
     }
 
@@ -173,33 +169,32 @@ mod tests
     #[test]
     fn test_block_chain()
     {
-        let mut logger = Logger::new(std::io::stdout(), LoggerLevel::Error);
-        let mut chain_a = BlockChain::open_temp(&mut logger);
-        let mut chain_b = BlockChain::open_temp(&mut logger);
-        let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet"), &mut logger).unwrap();
+        let mut chain_a = BlockChain::open_temp();
+        let mut chain_b = BlockChain::open_temp();
+        let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet")).unwrap();
         
         let block_a = miner::mine_block(Block::new(&mut chain_a, &wallet).unwrap());
-        assert_eq!(chain_a.add(&block_a, &mut logger).unwrap(), BlockChainAddResult::Ok);
-        assert_eq!(chain_b.add(&block_a, &mut logger).unwrap(), BlockChainAddResult::Ok);
+        assert_eq!(chain_a.add(&block_a).unwrap(), BlockChainAddResult::Ok);
+        assert_eq!(chain_b.add(&block_a).unwrap(), BlockChainAddResult::Ok);
 
         let block_b = miner::mine_block(Block::new(&mut chain_a, &wallet).unwrap());
-        assert_eq!(chain_a.add(&block_b, &mut logger).unwrap(), BlockChainAddResult::Ok);
-        assert_eq!(chain_b.add(&block_b, &mut logger).unwrap(), BlockChainAddResult::Ok);
+        assert_eq!(chain_a.add(&block_b).unwrap(), BlockChainAddResult::Ok);
+        assert_eq!(chain_b.add(&block_b).unwrap(), BlockChainAddResult::Ok);
 
         let block_c_a = miner::mine_block(Block::new(&mut chain_a, &wallet).unwrap());
         let block_c_b = miner::mine_block(Block::new(&mut chain_b, &wallet).unwrap());
-        assert_eq!(chain_a.add(&block_c_a, &mut logger).unwrap(), BlockChainAddResult::Ok);
-        assert_eq!(chain_b.add(&block_c_b, &mut logger).unwrap(), BlockChainAddResult::Ok);
-        assert_eq!(chain_a.add(&block_b, &mut logger).unwrap(), BlockChainAddResult::Duplicate);
+        assert_eq!(chain_a.add(&block_c_a).unwrap(), BlockChainAddResult::Ok);
+        assert_eq!(chain_b.add(&block_c_b).unwrap(), BlockChainAddResult::Ok);
+        assert_eq!(chain_a.add(&block_b).unwrap(), BlockChainAddResult::Duplicate);
 
         let block_d_b = miner::mine_block(Block::new(&mut chain_b, &wallet).unwrap());
-        assert_eq!(chain_b.add(&block_d_b, &mut logger).unwrap(), BlockChainAddResult::Ok);
+        assert_eq!(chain_b.add(&block_d_b).unwrap(), BlockChainAddResult::Ok);
 
         let block_e_b = miner::mine_block(Block::new(&mut chain_b, &wallet).unwrap());
-        assert_eq!(chain_b.add(&block_e_b, &mut logger).unwrap(), BlockChainAddResult::Ok);
+        assert_eq!(chain_b.add(&block_e_b).unwrap(), BlockChainAddResult::Ok);
 
-        assert_eq!(chain_a.add(&block_e_b, &mut logger).unwrap(), BlockChainAddResult::MoreNeeded);
-        assert_ne!(chain_a.add(&block_d_b, &mut logger).unwrap(), BlockChainAddResult::Ok);
+        assert_eq!(chain_a.add(&block_e_b).unwrap(), BlockChainAddResult::MoreNeeded);
+        assert_ne!(chain_a.add(&block_d_b).unwrap(), BlockChainAddResult::Ok);
 
         let mut branch = Vec::<Block>::new();
         branch.push(block_c_b);
@@ -209,7 +204,7 @@ mod tests
         branch.push(block_e_b);
         assert_eq!(chain_a.can_merge_branch(&branch).unwrap(), BlockChainCanMergeResult::Ok);
 
-        chain_a.merge_branch(branch, &mut logger);
+        chain_a.merge_branch(branch);
         assert_eq!(chain_a.top().unwrap().block_id, 4);
    }
 
