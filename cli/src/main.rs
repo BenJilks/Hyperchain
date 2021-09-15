@@ -236,9 +236,15 @@ fn main() -> Result<(), Box<dyn Error>>
             .about("Shutdown service"))
         
         .get_matches();
+    
+    match matches.subcommand_name()
+    {
+        Some("new-wallet") => return new_wallet(matches.subcommand().1.unwrap()),
+        Some(&_) | None => {},
+    }
 
     let client_or_error = Client::new();
-    if client_or_error.is_err() 
+    if client_or_error.is_err()
     {
         println!("Error: Could not connect to service");
         return Ok(());
@@ -251,10 +257,10 @@ fn main() -> Result<(), Box<dyn Error>>
         Some("send") => send(client, matches.subcommand().1.unwrap())?,
         Some("update-page") => update_page(client, matches.subcommand().1.unwrap())?,
         Some("transaction-info") => transaction_info(client, matches.subcommand().1.unwrap())?,
-        Some("new-wallet") => new_wallet(matches.subcommand().1.unwrap())?,
         Some("shutdown") => shutdown(client)?,
         Some(&_) | None => println!("Error: Must specify an action"),
     }
 
     Ok(())
 }
+
