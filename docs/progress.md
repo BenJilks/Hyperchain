@@ -9,13 +9,23 @@
     - ~~Page creation~~
 - ~~Data store~~
     - ~~Store everything~~
-- Transaction queue
+- ~~Transaction queue~~
     - ~~Submit to queue~~
-    - Sync queue with everyone
+
+(TODO: Some more unit tests)
 
 ---------------------
 
 ## v0.2
+- Better transactions
+    - Use hash trees
+    - Multiple inputs and outputs
+- Transaction queue
+    - Order by fee
+
+---------------------
+
+## v0.3
 - Data Store
     - Distributed storage
     - Request any data
@@ -25,7 +35,7 @@
 
 ---------------------
 
-## v0.3
+## v0.4
 - Proof of storage
     - Work storing data into mining
     - Hybrid with POW
@@ -36,7 +46,7 @@
 
 ---------------------
 
-## v0.4 - v0.8
+## v0.5 - v0.8
 // TODO
 
 ---------------------
@@ -50,3 +60,4 @@
 ## v1.0
 - Fixes from release
 - Final, stable chain!
+
