@@ -19,6 +19,7 @@ struct NetworkConnectionData
     shutdown_signal: Arc<Mutex<bool>>,
     server_thread: Option<JoinHandle<()>>,
     node_discovery_thread: Option<JoinHandle<()>>,
+    manager: ClientManager,
 }
 
 #[derive(Clone)]
@@ -53,7 +54,8 @@ impl<H> NetworkConnection<H>
                 port,
                 shutdown_signal: shutdown_signal.clone(),
                 server_thread: Some(server),
-                node_discovery_thread: Some(node_discovery)
+                node_discovery_thread: Some(node_discovery),
+                manager: manager.clone(),
             })),
 
             shutdown_signal,
@@ -87,6 +89,7 @@ impl Drop for NetworkConnectionData
         info!("[{}] Shutting down connection", self.port);
 
         *self.shutdown_signal.lock().unwrap() = true;
+        self.manager.shutdown();
         let _ = TcpStream::connect(format!("127.0.0.1:{}", self.port));
 
         let server = self.server_thread.take().unwrap();
@@ -138,20 +141,33 @@ mod tests
     #[test]
     fn test_network_disconnect()
     {
-        let (mut connection_a, recv_a) = create_connection(8080);
+        let _ = pretty_env_logger::try_init();
+
+        let (mut connection_a, recv_a) = create_connection(8180);
         {
-            let (mut connection_b, _recv_b) = create_connection(8081);
-            connection_b.manager().register_node("127.0.0.1:8080");
-            println!("{:?}", recv_a.recv());
+            let (mut connection_b, recv_b) = create_connection(8181);
+            connection_b.manager().register_node("127.0.0.1:8180");
+            assert_eq!(recv_a.recv().unwrap(), Packet::OnConnected);
+            assert_eq!(recv_b.recv().unwrap(), Packet::OnConnected);
+
+            connection_a.manager().send(Packet::Ping).unwrap();
+            assert_eq!(recv_b.recv().unwrap(), Packet::Ping);
+
+            // NOTE: Disconnects here
         }
 
+        let (_connection_b, recv_b) = create_connection(8181);
+        assert_eq!(recv_a.recv().unwrap(), Packet::OnConnected);
+        assert_eq!(recv_b.recv().unwrap(), Packet::OnConnected);
+
         connection_a.manager().send(Packet::Ping).unwrap();
+        assert_eq!(recv_b.recv().unwrap(), Packet::Ping);
     }
 
     #[test]
     fn test_network()
     {
-        pretty_env_logger::init();
+        let _ = pretty_env_logger::try_init();
 
         let (mut connection_a, recv_a) = create_connection(8000);
         let (mut connection_b, recv_b) = create_connection(8001);
@@ -161,11 +177,13 @@ mod tests
 
         let recv_on_connect_command = |recv: &Receiver<Packet>, count: usize|
         {
-            for _ in 0..count
+            let mut connection_count = 0;
+            while connection_count < count
             {
                 match recv.recv_timeout(std::time::Duration::from_secs(10))
                 {
-                    Ok(Packet::OnConnected) => {},
+                    Ok(Packet::OnConnected) => connection_count += 1,
+                    Ok(Packet::Ping) => {},
                     _ => panic!(),
                 }
             }

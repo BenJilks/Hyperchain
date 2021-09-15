@@ -1,4 +1,4 @@
-use super::packet::PacketHandler;
+use super::packet::{Packet, PacketHandler};
 use super::client_manager::ClientManager;
 
 use std::net::TcpStream;
@@ -20,6 +20,21 @@ fn try_connect_to_node<H>(address: String, packet_handler: &H,
     Ok(())
 }
 
+fn connect_to_new_nodes<H>(packet_handler: &H, 
+                           manager: &mut ClientManager)
+    where H: PacketHandler + Clone + Send + Sync + 'static
+{
+    let not_connected_nodes = manager.get_not_connected_nodes();
+    for address in not_connected_nodes {
+        let _ = try_connect_to_node(address, packet_handler, manager);
+    }
+}
+
+fn ping_old_nodes(manager: &mut ClientManager)
+{
+    let _ = manager.send(Packet::Ping);
+}
+
 pub fn start_node_discovery_thread<H>(packet_handler: H, 
                                       mut manager: ClientManager)
     -> JoinHandle<()>
@@ -33,12 +48,10 @@ pub fn start_node_discovery_thread<H>(packet_handler: H,
             break;
         }
 
-        let not_connected_nodes = manager.get_not_connected_nodes();
-        for address in not_connected_nodes {
-            let _ = try_connect_to_node(address, &packet_handler, &mut manager);
-        }
+        connect_to_new_nodes(&packet_handler, &mut manager);
+        ping_old_nodes(&mut manager);
 
-        std::thread::sleep(Duration::from_millis(100));
+        std::thread::sleep(Duration::from_millis(1000));
     })
 }
 

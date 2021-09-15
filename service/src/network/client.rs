@@ -90,7 +90,11 @@ pub fn client_handler_thread<H>(packet_handler: H, mut manager: ClientManager,
                 },
 
                 // FIXME: Handler errors
-                Err(_) => break,
+                Err(_) => 
+                {
+                    manager.register_disconnect(&address);
+                    break;
+                },
             }
         }
     }))

@@ -3,7 +3,6 @@ use super::packet::{Message, MessageSender};
 use super::client::client_handler_thread;
 
 use tcp_channel::ChannelSend;
-use std::thread::JoinHandle;
 use std::net::TcpStream;
 use std::sync::{Arc, Mutex};
 use std::collections::HashSet;
@@ -18,7 +17,6 @@ struct ClientSender
 struct ClientReceiver
 {
     stream: TcpStream,
-    thread: JoinHandle<()>,
 }
 
 struct ConnectionData
@@ -107,7 +105,7 @@ impl ClientManager
         -> Result<(), Box<dyn Error>>
         where H: PacketHandler + Clone + Sync + Send + 'static
     {
-        let thread = client_handler_thread(
+        client_handler_thread(
             packet_handler,
             self.clone(),
             stream.try_clone().unwrap(), ip)?;
@@ -116,7 +114,6 @@ impl ClientManager
         data.client_receivers.push(ClientReceiver
         {
             stream,
-            thread,
         });
 
         Ok(())
@@ -148,49 +145,73 @@ impl ClientManager
         Ok(())
     }
 
-    pub fn send_message_to<F>(&self, message: Message, mut predicate: F)
+    pub fn register_disconnect(&mut self, address: &str)
+    {
+        info!("[{}] Client {} disconnected", self.port, address);
+
+        let mut data = self.data.lock().unwrap();
+        data.connected_nodes.remove(address);
+        data.client_senders.retain(|x| x.address != address);
+    }
+
+    pub fn send_message_to<F>(&mut self, message: Message, mut predicate: F)
         -> Result<(), Box<dyn Error>>
         where F: FnMut(&str) -> bool
     {
-        let mut data = self.data.lock().unwrap();
-        for connection in &mut data.client_senders
+        let mut disconnected_clients = Vec::new();
         {
-            if predicate(&connection.address)
+            let mut data = self.data.lock().unwrap();
+            for connection in &mut data.client_senders
             {
-                connection.sender.send(&message)?;
-                connection.sender.flush()?;
+                if predicate(&connection.address)
+                {
+                    let send_result = connection.sender.send(&message);
+                    let flush_result = connection.sender.flush();
+                    if send_result.is_err() || flush_result.is_err() {
+                        disconnected_clients.push(connection.address.clone());
+                    }
+                }
             }
         }
 
+        for address in disconnected_clients {
+            self.register_disconnect(&address);
+        }
         Ok(())
     }
 
-    pub fn send_to<F>(&self, packet: Packet, predicate: F)
+    pub fn send_to<F>(&mut self, packet: Packet, predicate: F)
         -> Result<(), Box<dyn Error>>
         where F: FnMut(&str) -> bool
     {
         self.send_message_to(Message::Packet(packet), predicate)
     }
 
-    pub fn send(&self, packet: Packet)
+    pub fn send(&mut self, packet: Packet)
         -> Result<(), Box<dyn Error>>
     {
         self.send_to(packet, |_| true)
     }
 
+    pub fn shutdown(&mut self)
+    {
+        self.data.lock().unwrap().shutdown(self.port);
+    }
+
 }
 
-impl Drop for ConnectionData
+impl ConnectionData
 {
 
-    fn drop(&mut self)
+    fn shutdown(&mut self, port: u16)
     {
+        info!("[{}] Closing {} open client(s)", port, self.client_senders.len());
         for _ in 0..self.client_receivers.len()
         {
             let receiver = self.client_receivers.remove(0);
             let _ = receiver.stream.shutdown(std::net::Shutdown::Both);
-            let _ = receiver.thread.join();
         }
     }
 
 }
+
