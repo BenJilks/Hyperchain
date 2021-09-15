@@ -26,6 +26,15 @@
 ---------------------
 
 ## v0.3
+- Better networking
+    - Limit number of clients
+    - Measure strongest connection
+    - Pick best nodes
+    - Store known nodes
+
+---------------------
+
+## v0.4
 - Data Store
     - Distributed storage
     - Request any data
@@ -35,7 +44,7 @@
 
 ---------------------
 
-## v0.4
+## v0.5
 - Proof of storage
     - Work storing data into mining
     - Hybrid with POW
@@ -46,7 +55,7 @@
 
 ---------------------
 
-## v0.5 - v0.8
+## v0.6 - v0.8
 // TODO
 
 ---------------------
