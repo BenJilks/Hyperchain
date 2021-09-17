@@ -180,3 +180,64 @@ impl BlockChain
 
 }
 
+#[cfg(test)]
+mod tests
+{
+
+    use super::*;
+    use super::super::BlockChainAddResult;
+    use crate::wallet::Wallet;
+    use crate::wallet::private_wallet::PrivateWallet;
+    use crate::data_store::DataUnit;
+    use crate::data_store::page::CreatePageData;
+    use crate::miner;
+    use crate::config::HASH_LEN;
+
+    use std::path::PathBuf;
+
+    #[test]
+    fn test_chain_transaction()
+    {
+        let _ = pretty_env_logger::try_init();
+
+        let mut chain = BlockChain::open_temp();
+        let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet")).unwrap();
+        let other = PrivateWallet::read_from_file(&PathBuf::from("other.wallet")).unwrap();
+
+        let block_a = miner::mine_block(Block::new(&mut chain, &wallet).unwrap());
+        assert_eq!(chain.add(&block_a).unwrap(), BlockChainAddResult::Ok);
+
+        let transaction = chain.new_transfer(&wallet, other.get_address(), 2.0, 0.0).unwrap().unwrap();
+        assert_eq!(chain.push_transfer_queue(transaction.clone()), true);
+
+        let page_data = CreatePageData::new("index.html".to_owned(), Vec::new());
+        let page = chain.new_page(&wallet, &DataUnit::CreatePage(page_data), 0.0).unwrap().unwrap();
+        assert_eq!(chain.push_page_queue(page.clone()), true);
+
+        let mut block_b = Block::new(&mut chain, &wallet).unwrap();
+        block_b.add_transfer(transaction.clone());
+        block_b.add_page(page.clone());
+        block_b = miner::mine_block(block_b);
+        assert_eq!(chain.add(&block_b).unwrap(), BlockChainAddResult::Ok);
+
+        assert_eq!(chain.get_page_updates(&wallet.get_address()), 
+                   [page.clone()]);
+
+        let transaction_id_vec = transaction.hash().unwrap();
+        let transaction_id = slice_as_array!(&transaction_id_vec, [u8; HASH_LEN]).unwrap();
+        assert_eq!(chain.find_transaction_in_chain(transaction_id), 
+                   Some((TransactionVariant::Transfer(transaction.clone()), block_b.clone())));
+
+        let other_transaction = chain.new_transfer(&wallet, other.get_address(), 2.0, 0.0).unwrap().unwrap();
+        assert_eq!(chain.push_transfer_queue(other_transaction.clone()), true);
+
+        assert_eq!(chain.get_transaction_history(&wallet.get_address()), 
+                   [
+                       (TransactionVariant::Transfer(other_transaction), None),
+                       (TransactionVariant::Page(page), Some(block_b.clone())),
+                       (TransactionVariant::Transfer(transaction), Some(block_b.clone())),
+                   ]);
+    }
+
+}
+

@@ -101,3 +101,40 @@ impl DataStore
     }
 
 }
+
+#[cfg(test)]
+mod tests
+{
+
+    use super::*;
+
+    impl DataStore
+    {
+        pub fn open_temp() -> Self
+        {
+            let path = std::env::temp_dir().join(rand::random::<u32>().to_string());
+            Self::open(&path).unwrap()
+        }
+    }
+
+    impl Drop for DataStore
+    {
+        fn drop(&mut self)
+        {
+            let _ = std::fs::remove_dir_all(&self.path);
+        }
+    }
+
+    #[test]
+    fn test_data_store()
+    {
+        let data_store = DataStore::open_temp();
+        let test_unit = DataUnit::CreatePage(
+            CreatePageData::new("index.html".to_owned(), Vec::new()));
+
+        data_store.store(&[0, 1, 2], &test_unit).unwrap();
+        assert_eq!(data_store.get(&[0, 1, 2]).unwrap(), test_unit);
+    }
+
+}
+

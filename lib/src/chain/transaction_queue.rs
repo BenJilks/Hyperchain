@@ -67,36 +67,6 @@ impl BlockChain
         }
     }
 
-    fn is_transaction_valid<H>(&mut self, transaction: &Transaction<H>) -> bool
-        where H: TransactionHeader + Serialize
-    {
-        // NOTE: We validate before adding, as everything in the transaction 
-        //       queue is assumed to be valid.
-
-        let address = transaction.get_from_address();
-        let status = self.get_wallet_status_after_queue(&address);
-        transaction.update_wallet_status(&address, status, false).is_some()
-    }
-
-    pub fn remove_from_transaction_queue(&mut self, block: &Block)
-    {
-        for transfer in &block.transfers
-        {
-            let index = self.transfer_queue.iter().position(|x| x == transfer);
-            if index.is_some() {
-                self.transfer_queue.remove(index.unwrap());
-            }
-        }
-
-        for page in &block.pages
-        {
-            let index = self.page_queue.iter().position(|x| x == page);
-            if index.is_some() {
-                self.page_queue.remove(index.unwrap());
-            }
-        }
-    }
-
     pub fn new_transfer(&mut self, from: &PrivateWallet, to: Hash, amount: f32, fee: f32)
         -> Result<Option<Transaction<Transfer>>, Box<dyn Error>>
     {
@@ -109,6 +79,27 @@ impl BlockChain
     {
         let status = self.get_wallet_status_after_queue(&from.get_address());
         self.new_transaction(from, Page::new_from_data(status.max_id + 1, data, fee)?)
+    }
+
+    fn is_transaction_valid<H>(&mut self, transaction: &Transaction<H>) -> bool
+        where H: TransactionHeader + Serialize
+    {
+        // NOTE: We validate before adding, as everything in the transaction 
+        //       queue is assumed to be valid.
+
+        let address = transaction.get_from_address();
+        let status = self.get_wallet_status_after_queue(&address);
+
+        let new_status = transaction.update_wallet_status(&address, status, false);
+        if new_status.is_none() {
+            return false;
+        }
+
+        if new_status.unwrap().balance < 0.0 {
+            return false;
+        }
+
+        return true;
     }
 
     pub fn push_transfer_queue(&mut self, transaction: Transaction<Transfer>) -> bool
@@ -141,6 +132,25 @@ impl BlockChain
         self.page_queue.range(0..real_count).collect()
     }
 
+    pub fn remove_from_transaction_queue(&mut self, block: &Block)
+    {
+        for transfer in &block.transfers
+        {
+            let index = self.transfer_queue.iter().position(|x| x == transfer);
+            if index.is_some() {
+                self.transfer_queue.remove(index.unwrap());
+            }
+        }
+
+        for page in &block.pages
+        {
+            let index = self.page_queue.iter().position(|x| x == page);
+            if index.is_some() {
+                self.page_queue.remove(index.unwrap());
+            }
+        }
+    }
+
     pub fn find_transaction_in_queue(&self, transaction_id: &Hash) -> Option<TransactionVariant>
     {
         let transfer = search_queue(&self.transfer_queue, transaction_id);
@@ -157,3 +167,53 @@ impl BlockChain
     }
 
 }
+
+#[cfg(test)]
+mod tests
+{
+
+    use super::*;
+    use super::super::BlockChainAddResult;
+    use std::path::PathBuf;
+
+    use crate::miner;
+    use crate::config::HASH_LEN;
+
+    #[test]
+    fn test_transaction_queue()
+    {
+        let _ = pretty_env_logger::try_init();
+
+        let mut chain = BlockChain::open_temp();
+        let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet")).unwrap();
+        let other = PrivateWallet::read_from_file(&PathBuf::from("other.wallet")).unwrap();
+
+        let block_a = miner::mine_block(Block::new(&mut chain, &wallet).unwrap());
+        assert_eq!(chain.add(&block_a).unwrap(), BlockChainAddResult::Ok);
+
+        let transaction_a = chain.new_transfer(&wallet, other.get_address(), 2.0, 1.0).unwrap().unwrap();
+        assert_eq!(chain.push_transfer_queue(transaction_a.clone()), true);
+
+        let transaction_b = chain.new_transfer(&wallet, other.get_address(), 3.0, 1.0).unwrap().unwrap();
+        assert_eq!(chain.push_transfer_queue(transaction_b.clone()), true);
+
+        let transaction_c = chain.new_transfer(&wallet, other.get_address(), 10.0, 1.0).unwrap().unwrap();
+        assert_eq!(chain.push_transfer_queue(transaction_c), false);
+
+        assert_eq!(chain.get_next_transfers_in_queue(10), [&transaction_a, &transaction_b]);
+
+        let transaction_a_id_vec = transaction_a.hash().unwrap();
+        let transaction_a_id = slice_as_array!(&transaction_a_id_vec, [u8; HASH_LEN]);
+        assert_eq!(chain.find_transaction_in_queue(transaction_a_id.unwrap()),
+                   Some(TransactionVariant::Transfer(transaction_a.clone())));
+
+        let mut block_b = Block::new(&mut chain, &wallet).unwrap();
+        block_b.add_transfer(transaction_a);
+        block_b.add_transfer(transaction_b);
+        block_b = miner::mine_block(block_b);
+        assert_eq!(chain.add(&block_b).unwrap(), BlockChainAddResult::Ok);
+        assert_eq!(chain.get_next_transfers_in_queue(10).is_empty(), true);
+    }
+
+}
+

@@ -5,6 +5,7 @@ extern crate bincode;
 extern crate base_62;
 extern crate rsa;
 extern crate rand;
+extern crate pretty_env_logger;
 
 #[macro_use]
 extern crate log;
