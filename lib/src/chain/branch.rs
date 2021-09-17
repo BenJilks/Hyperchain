@@ -32,9 +32,9 @@ impl BlockChain
         let branch_start = branch.first().unwrap();
         let mut block_at = |block_id: u64| -> Option<Block>
         {
-            if block_id >= branch_start.block_id 
+            if block_id >= branch_start.header.block_id 
             {
-                match branch.get((block_id - branch_start.block_id) as usize)
+                match branch.get((block_id - branch_start.header.block_id) as usize)
                 {
                     Some(block) => Some(block.clone()),
                     None => None,
@@ -56,10 +56,10 @@ impl BlockChain
     {
         let bottom = branch.first().unwrap();
         let last_block_id = 
-            if bottom.block_id == 0 {
+            if bottom.header.block_id == 0 {
                 0
             } else {
-                bottom.block_id - 1
+                bottom.header.block_id - 1
             };
 
         let mut last_block_or_none = self.block(last_block_id);
@@ -87,7 +87,7 @@ impl BlockChain
                 let last_block = last_block_or_none.unwrap();
 
                 // FIXME: Validate transactions in this case
-                let (sample_start, sample_end) = self.take_sample_of_branch_at(branch, last_block.block_id);
+                let (sample_start, sample_end) = self.take_sample_of_branch_at(branch, last_block.header.block_id);
                 match block.validate_next(&last_block)?
                 {
                     BlockValidationResult::Ok => {},
@@ -116,13 +116,13 @@ impl BlockChain
 
         // Can't attach to chain
         let bottom = branch.first().unwrap();
-        if bottom.block_id > self.blocks.next_top() as u64 {
+        if bottom.header.block_id > self.blocks.next_top() as u64 {
             return Ok(BlockChainCanMergeResult::Above);
         }
 
         // Not longer then the current branch
         let top = branch.last().unwrap();
-        if top.block_id < self.blocks.next_top() as u64 {
+        if top.header.block_id < self.blocks.next_top() as u64 {
             return Ok(BlockChainCanMergeResult::Short);
         }
 
@@ -139,8 +139,8 @@ impl BlockChain
         assert_eq!(self.can_merge_branch(&branch).unwrap(), BlockChainCanMergeResult::Ok);
 
         let bottom = branch.first().unwrap();
-        self.metadata.truncate(bottom.block_id);
-        self.blocks.truncate(bottom.block_id);
+        self.metadata.truncate(bottom.header.block_id);
+        self.blocks.truncate(bottom.header.block_id);
 
         for block in branch {
             assert_eq!(self.add(&block).unwrap(), BlockChainAddResult::Ok);

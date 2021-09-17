@@ -1,7 +1,9 @@
 pub mod validate;
 pub mod target;
+pub mod builder;
 mod transactions;
 use target::{calculate_target, Target};
+use transactions::merkle_root_for_transactions;
 use crate::transaction::Transaction;
 use crate::transaction::transfer::Transfer;
 use crate::transaction::page::Page;
@@ -13,7 +15,6 @@ use sha2::{Sha256, Digest};
 use serde::{Serialize, Deserialize};
 use std::time::SystemTime;
 use std::error::Error;
-use std::fmt::Display;
 use bincode;
 use slice_as_array;
 
@@ -23,17 +24,23 @@ pub fn current_timestamp() -> u128
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Clone)]
-pub struct Block
+pub struct BlockHeader
 {
     pub prev_hash: Hash,
     pub block_id: u64,
+    pub timestamp: u128,
     pub raward_to: Hash,
+    pub target: Target,
+    pub transaction_merkle_root: Hash,
+    pub pow: u64, // TODO: This should be a correct size
+}
 
+#[derive(Serialize, Deserialize, PartialEq, Clone)]
+pub struct Block
+{
+    pub header: BlockHeader,
     pub pages: Vec<Transaction<Page>>,
     pub transfers: Vec<Transaction<Transfer>>,
-    pub timestamp: u128,
-    pub target: Target,
-    pub pow: u64, // TODO: This should be a correct size
 }
 
 impl std::fmt::Debug for Block
@@ -42,34 +49,11 @@ impl std::fmt::Debug for Block
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
     {
         f.debug_struct("Block")
-            .field("block_id", &self.block_id)
-            .field("timestamp", &self.timestamp)
-            .field("target", &self.target)
-            .field("pow", &self.pow)
+            .field("block_id", &self.header.block_id)
+            .field("timestamp", &self.header.timestamp)
+            .field("target", &self.header.target)
+            .field("pow", &self.header.pow)
             .finish()
-    }
-
-}
-
-#[derive(Debug)]
-pub enum BlockError
-{
-    BlockTooLarge,
-}
-
-impl Error for BlockError 
-{
-}
-
-impl Display for BlockError
-{
-
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result
-    {
-        match self
-        {
-            BlockError::BlockTooLarge => write!(f, "Block is too large"),
-        }
     }
 
 }
@@ -77,20 +61,23 @@ impl Display for BlockError
 impl Block
 {
 
-    pub fn calculate_reward(&self) -> f32
+    pub fn new_blank<W: Wallet>(chain: &mut BlockChain, raward_to: &W)
+        -> Result<Self, Box<dyn Error>>
     {
-        // FIXME: do real reward calc
-        10.0
+        Self::new(chain, raward_to, Vec::new(), Vec::new())
     }
 
-    pub fn new<W: Wallet>(chain: &mut BlockChain, raward_to: &W) -> Result<Self, Box<dyn Error>>
+    pub fn new<W: Wallet>(chain: &mut BlockChain, raward_to: &W, 
+                          transfers: Vec<Transaction<Transfer>>,
+                          pages: Vec<Transaction<Page>>)
+        -> Result<Self, Box<dyn Error>>
     {
         let (sample_start, sample_end) = chain.take_sample();
         let target = calculate_target(sample_start, sample_end);
-        let (prev_block_id, prev_block_hash) = 
+        let (prev_block_id, prev_hash) =
             match chain.top()
             {
-                Some(top) => (Some(top.block_id), top.hash()?),
+                Some(top) => (Some(top.header.block_id), top.hash()?),
                 None => (None, [0u8; HASH_LEN]),
             };
 
@@ -102,39 +89,35 @@ impl Block
             };
 
         let timestamp = current_timestamp();
+        let transaction_merkle_root = merkle_root_for_transactions(&transfers, &pages)?;
         Ok(Block
         {
-            prev_hash: prev_block_hash,
-            block_id: block_id,
-            raward_to: raward_to.get_address(),
+            header: BlockHeader
+            {
+                prev_hash,
+                block_id,
+                timestamp,
+                raward_to: raward_to.get_address(),
+                target,
+                transaction_merkle_root,
+                pow: 0,
+            },
 
-            pages: Vec::new(),
-            transfers: Vec::new(),
-            timestamp: timestamp,
-            target: target,
-            pow: 0,
+            pages,
+            transfers,
         })
     }
 
-    pub fn add_page(&mut self, page: Transaction<Page>)
+    pub fn calculate_reward(&self) -> f32
     {
-        self.pages.push(page);
-    }
-
-    pub fn add_transfer(&mut self, transfer: Transaction<Transfer>)
-    {
-        self.transfers.push(transfer);
-    }
-
-    pub fn as_bytes(&self) -> Result<Vec<u8>, Box<dyn Error>>
-    {
-        Ok(bincode::serialize(self)?)
+        // TODO: do real reward calc
+        10.0
     }
 
     pub fn hash(&self) -> Result<Hash, Box<dyn Error>>
     {
         let mut hasher = Sha256::default();
-        let bytes = self.as_bytes()?;
+        let bytes = bincode::serialize(&self.header)?;
         hasher.update(&bytes);
 
         let hash = hasher.clone().finalize();

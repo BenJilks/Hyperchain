@@ -1,5 +1,6 @@
 use super::{Block, Hash, current_timestamp};
 use super::target::{calculate_target, hash_from_target};
+use super::transactions::merkle_root_for_transactions;
 use crate::transaction::TransactionValidationResult;
 
 use rsa::BigUint;
@@ -14,6 +15,7 @@ pub enum BlockValidationResult
     Timestamp,
     POW,
     Target,
+    MerkleRoot,
     Transaction(TransactionValidationResult),
     Balance(Hash),
 }
@@ -31,6 +33,7 @@ impl std::fmt::Display for BlockValidationResult
             BlockValidationResult::Timestamp => write!(f, "Timestamp not in a valid range"),
             BlockValidationResult::POW => write!(f, "No valid proof or work"),
             BlockValidationResult::Target => write!(f, "Incorrect target value"),
+            BlockValidationResult::MerkleRoot => write!(f, "Incorrect merkle root"),
             BlockValidationResult::Transaction(result) => write!(f, "{}", result),
             BlockValidationResult::Balance(_) => write!(f, "Insufficient balance"),
         }
@@ -44,6 +47,11 @@ impl Block
     fn validate_transactions(&self) 
         -> Result<BlockValidationResult, Box<dyn Error>>
     {
+        let merkle_root = merkle_root_for_transactions(&self.transfers, &self.pages)?;
+        if merkle_root != self.header.transaction_merkle_root {
+            return Ok(BlockValidationResult::MerkleRoot);
+        }
+
         for transfer in &self.transfers
         {
             match transfer.validate_content()?
@@ -59,18 +67,18 @@ impl Block
     pub fn validate_next(&self, prev: &Block) 
         -> Result<BlockValidationResult, Box<dyn Error>>
     {
-        if self.block_id > 0
+        if self.header.block_id > 0
         {
-            if self.block_id != prev.block_id + 1 {
+            if self.header.block_id != prev.header.block_id + 1 {
                 return Ok(BlockValidationResult::NotNextBlock);
             }
 
-            if self.prev_hash != prev.hash()? {
+            if self.header.prev_hash != prev.hash()? {
                 return Ok(BlockValidationResult::PrevHash);
             }
 
             let now = current_timestamp();
-            if self.timestamp < prev.timestamp || self.timestamp > now {
+            if self.header.timestamp < prev.header.timestamp || self.header.timestamp > now {
                 return Ok(BlockValidationResult::Timestamp);
             }
         }
@@ -83,7 +91,7 @@ impl Block
     {
         let hash = self.hash()?;
         let hash_num = BigUint::from_bytes_be(&hash);
-        let target_num = BigUint::from_bytes_be(&hash_from_target(&self.target));
+        let target_num = BigUint::from_bytes_be(&hash_from_target(&self.header.target));
         if hash_num < target_num {
             Ok(BlockValidationResult::Ok)
         } else {
@@ -96,7 +104,7 @@ impl Block
                            end_sample: Option<Block>) 
         -> BlockValidationResult
     {
-        if self.target == calculate_target(start_sample, end_sample) {
+        if self.header.target == calculate_target(start_sample, end_sample) {
             BlockValidationResult::Ok
         } else {
             BlockValidationResult::Target
@@ -134,6 +142,7 @@ mod tests
 {
 
     use super::*;
+    use super::super::builder::BlockBuilder;
     use crate::transaction::Transaction;
     use crate::transaction::transfer::Transfer;
     use crate::chain::BlockChain;
@@ -149,9 +158,11 @@ mod tests
         let other = PrivateWallet::read_from_file(&PathBuf::from("other.wallet")).unwrap();
         let mut chain = BlockChain::open_temp();
 
-        let mut block = Block::new(&mut chain, &wallet).expect("Can create block");
         let transaction = Transaction::new(&wallet, Transfer::new(1, other.get_address(), 4.0, 1.0));
-        block.add_transfer(transaction);
+        let mut block = BlockBuilder::new(&wallet)
+            .add_transfer(transaction)
+            .build(&mut chain)
+            .expect("Can create block");
 
         assert_ne!(block.validate_pow().unwrap(), BlockValidationResult::Ok);
         assert_eq!(block.validate_target(None, None), BlockValidationResult::Ok);

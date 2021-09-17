@@ -56,6 +56,7 @@ mod tests
     use super::*;
     use super::private_wallet::PrivateWallet;
     use crate::block::Block;
+    use crate::block::builder::BlockBuilder;
     use crate::transaction::Transaction;
     use crate::transaction::transfer::Transfer;
     use crate::chain::BlockChain;
@@ -69,16 +70,17 @@ mod tests
         let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet")).unwrap();
         let other = PrivateWallet::read_from_file(&PathBuf::from("other.wallet")).unwrap();
 
-        let block_a = miner::mine_block(Block::new(&mut chain, &wallet).expect("Create block"));
+        let block_a = miner::mine_block(Block::new_blank(&mut chain, &wallet).expect("Create block"));
         chain.add(&block_a).unwrap();
 
-        let block_b = miner::mine_block(Block::new(&mut chain, &other).expect("Create block"));
+        let block_b = miner::mine_block(Block::new_blank(&mut chain, &other).expect("Create block"));
         chain.add(&block_b).unwrap();
         
-        let mut block_c = Block::new(&mut chain, &wallet).expect("Create block");
-        block_c.add_transfer(Transaction::new(&wallet, Transfer::new(1, other.get_address(), 4.6, 0.2)));
-        block_c.add_transfer(Transaction::new(&other, Transfer::new(1, wallet.get_address(), 1.4, 0.2)));
-        block_c = miner::mine_block(block_c);
+        let block_c = miner::mine_block(BlockBuilder::new(&wallet)
+            .add_transfer(Transaction::new(&wallet, Transfer::new(1, other.get_address(), 4.6, 0.2)))
+            .add_transfer(Transaction::new(&other, Transfer::new(1, wallet.get_address(), 1.4, 0.2)))
+            .build(&mut chain)
+            .expect("Create block"));
         chain.add(&block_c).unwrap();
 
         let wallet_status = wallet.get_status(&mut chain);

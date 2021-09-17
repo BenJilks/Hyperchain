@@ -186,6 +186,7 @@ mod tests
 
     use super::*;
     use super::super::BlockChainAddResult;
+    use crate::block::builder::BlockBuilder;
     use crate::wallet::Wallet;
     use crate::wallet::private_wallet::PrivateWallet;
     use crate::data_store::DataUnit;
@@ -204,7 +205,7 @@ mod tests
         let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet")).unwrap();
         let other = PrivateWallet::read_from_file(&PathBuf::from("other.wallet")).unwrap();
 
-        let block_a = miner::mine_block(Block::new(&mut chain, &wallet).unwrap());
+        let block_a = miner::mine_block(Block::new_blank(&mut chain, &wallet).unwrap());
         assert_eq!(chain.add(&block_a).unwrap(), BlockChainAddResult::Ok);
 
         let transaction = chain.new_transfer(&wallet, other.get_address(), 2.0, 0.0).unwrap().unwrap();
@@ -214,10 +215,11 @@ mod tests
         let page = chain.new_page(&wallet, &DataUnit::CreatePage(page_data), 0.0).unwrap().unwrap();
         assert_eq!(chain.push_page_queue(page.clone()), true);
 
-        let mut block_b = Block::new(&mut chain, &wallet).unwrap();
-        block_b.add_transfer(transaction.clone());
-        block_b.add_page(page.clone());
-        block_b = miner::mine_block(block_b);
+        let block_b = miner::mine_block(BlockBuilder::new(&wallet)
+            .add_transfer(transaction.clone())
+            .add_page(page.clone())
+            .build(&mut chain)
+            .unwrap());
         assert_eq!(chain.add(&block_b).unwrap(), BlockChainAddResult::Ok);
 
         assert_eq!(chain.get_page_updates(&wallet.get_address()), 
@@ -240,4 +242,3 @@ mod tests
     }
 
 }
-

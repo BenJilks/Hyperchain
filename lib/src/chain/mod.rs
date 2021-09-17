@@ -54,11 +54,11 @@ impl BlockChain
     pub fn take_sample_at(&mut self, block_id: u64) -> (Option<Block>, Option<Block>)
     {
         let end = self.block(block_id);
-        if end.is_none() || end.as_ref().unwrap().block_id < BLOCK_SAMPLE_SIZE {
+        if end.is_none() || end.as_ref().unwrap().header.block_id < BLOCK_SAMPLE_SIZE {
             return (None, end);
         }
 
-        let start = self.block(end.as_ref().unwrap().block_id - BLOCK_SAMPLE_SIZE);
+        let start = self.block(end.as_ref().unwrap().header.block_id - BLOCK_SAMPLE_SIZE);
         (start, end)
     }
 
@@ -66,7 +66,7 @@ impl BlockChain
     {
         match self.top()
         {
-            Some(top) => self.take_sample_at(top.block_id),
+            Some(top) => self.take_sample_at(top.header.block_id),
             None => (None, None),
         }
     }
@@ -74,9 +74,9 @@ impl BlockChain
     pub fn add(&mut self, block: &Block) 
         -> Result<BlockChainAddResult, Box<dyn Error>>
     {
-        if block.block_id < self.blocks.next_top() as u64
+        if block.header.block_id < self.blocks.next_top() as u64
         {
-            let original = self.block(block.block_id).unwrap();
+            let original = self.block(block.header.block_id).unwrap();
             if block == &original {
                 return Ok(BlockChainAddResult::Duplicate);
             } else {
@@ -84,7 +84,7 @@ impl BlockChain
             }
         }
 
-        if block.block_id > self.blocks.next_top() as u64 {
+        if block.header.block_id > self.blocks.next_top() as u64 {
             return Ok(BlockChainAddResult::MoreNeeded);
         }
 
@@ -108,8 +108,8 @@ impl BlockChain
         }
 
         let metadata = self.metadata_for_block(&block);
-        self.metadata.store(block.block_id, metadata);
-        self.blocks.store(block.block_id, block.clone());
+        self.metadata.store(block.header.block_id, metadata);
+        self.blocks.store(block.header.block_id, block.clone());
         self.remove_from_transaction_queue(block);
         Ok(BlockChainAddResult::Ok)
     }
@@ -169,28 +169,30 @@ mod tests
     #[test]
     fn test_block_chain()
     {
+        let _ = pretty_env_logger::try_init();
+
         let mut chain_a = BlockChain::open_temp();
         let mut chain_b = BlockChain::open_temp();
         let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet")).unwrap();
         
-        let block_a = miner::mine_block(Block::new(&mut chain_a, &wallet).unwrap());
+        let block_a = miner::mine_block(Block::new_blank(&mut chain_a, &wallet).unwrap());
         assert_eq!(chain_a.add(&block_a).unwrap(), BlockChainAddResult::Ok);
         assert_eq!(chain_b.add(&block_a).unwrap(), BlockChainAddResult::Ok);
 
-        let block_b = miner::mine_block(Block::new(&mut chain_a, &wallet).unwrap());
+        let block_b = miner::mine_block(Block::new_blank(&mut chain_a, &wallet).unwrap());
         assert_eq!(chain_a.add(&block_b).unwrap(), BlockChainAddResult::Ok);
         assert_eq!(chain_b.add(&block_b).unwrap(), BlockChainAddResult::Ok);
 
-        let block_c_a = miner::mine_block(Block::new(&mut chain_a, &wallet).unwrap());
-        let block_c_b = miner::mine_block(Block::new(&mut chain_b, &wallet).unwrap());
+        let block_c_a = miner::mine_block(Block::new_blank(&mut chain_a, &wallet).unwrap());
+        let block_c_b = miner::mine_block(Block::new_blank(&mut chain_b, &wallet).unwrap());
         assert_eq!(chain_a.add(&block_c_a).unwrap(), BlockChainAddResult::Ok);
         assert_eq!(chain_b.add(&block_c_b).unwrap(), BlockChainAddResult::Ok);
         assert_eq!(chain_a.add(&block_b).unwrap(), BlockChainAddResult::Duplicate);
 
-        let block_d_b = miner::mine_block(Block::new(&mut chain_b, &wallet).unwrap());
+        let block_d_b = miner::mine_block(Block::new_blank(&mut chain_b, &wallet).unwrap());
         assert_eq!(chain_b.add(&block_d_b).unwrap(), BlockChainAddResult::Ok);
 
-        let block_e_b = miner::mine_block(Block::new(&mut chain_b, &wallet).unwrap());
+        let block_e_b = miner::mine_block(Block::new_blank(&mut chain_b, &wallet).unwrap());
         assert_eq!(chain_b.add(&block_e_b).unwrap(), BlockChainAddResult::Ok);
 
         assert_eq!(chain_a.add(&block_e_b).unwrap(), BlockChainAddResult::MoreNeeded);
@@ -205,7 +207,7 @@ mod tests
         assert_eq!(chain_a.can_merge_branch(&branch).unwrap(), BlockChainCanMergeResult::Ok);
 
         chain_a.merge_branch(branch);
-        assert_eq!(chain_a.top().unwrap().block_id, 4);
+        assert_eq!(chain_a.top().unwrap().header.block_id, 4);
    }
 
 }

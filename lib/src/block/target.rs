@@ -78,14 +78,14 @@ pub fn calculate_target(sample_start_or_none: Option<Block>,
 
     // We're within the sample range, so keep the last target
     let sample_end = sample_end_or_none.unwrap();
-    if sample_end.block_id % BLOCK_SAMPLE_SIZE != 0 {
-        return sample_end.target;
+    if sample_end.header.block_id % BLOCK_SAMPLE_SIZE != 0 {
+        return sample_end.header.target;
     }
 
     // Calculate new target with sample
     let sample_start = sample_start_or_none.unwrap();
-    let sample_time = sample_end.timestamp - sample_start.timestamp;
-    let curr_diff = difficulty(&sample_end.target);
+    let sample_time = sample_end.header.timestamp - sample_start.header.timestamp;
+    let curr_diff = difficulty(&sample_end.header.target);
     let curr_hash_rate = hash_rate(curr_diff, sample_time as u64);
 
     let new_diff = diff_for_hash_rate(curr_hash_rate);

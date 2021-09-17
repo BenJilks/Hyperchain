@@ -176,6 +176,7 @@ mod tests
     use super::super::BlockChainAddResult;
     use std::path::PathBuf;
 
+    use crate::block::builder::BlockBuilder;
     use crate::miner;
     use crate::config::HASH_LEN;
 
@@ -188,7 +189,7 @@ mod tests
         let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet")).unwrap();
         let other = PrivateWallet::read_from_file(&PathBuf::from("other.wallet")).unwrap();
 
-        let block_a = miner::mine_block(Block::new(&mut chain, &wallet).unwrap());
+        let block_a = miner::mine_block(Block::new_blank(&mut chain, &wallet).unwrap());
         assert_eq!(chain.add(&block_a).unwrap(), BlockChainAddResult::Ok);
 
         let transaction_a = chain.new_transfer(&wallet, other.get_address(), 2.0, 1.0).unwrap().unwrap();
@@ -207,13 +208,13 @@ mod tests
         assert_eq!(chain.find_transaction_in_queue(transaction_a_id.unwrap()),
                    Some(TransactionVariant::Transfer(transaction_a.clone())));
 
-        let mut block_b = Block::new(&mut chain, &wallet).unwrap();
-        block_b.add_transfer(transaction_a);
-        block_b.add_transfer(transaction_b);
-        block_b = miner::mine_block(block_b);
+        let block_b = miner::mine_block(BlockBuilder::new(&wallet)
+            .add_transfer(transaction_a)
+            .add_transfer(transaction_b)
+            .build(&mut chain)
+            .unwrap());
         assert_eq!(chain.add(&block_b).unwrap(), BlockChainAddResult::Ok);
         assert_eq!(chain.get_next_transfers_in_queue(10).is_empty(), true);
     }
 
 }
-
