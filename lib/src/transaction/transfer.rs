@@ -91,7 +91,7 @@ mod tests
         let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet")).unwrap();
         let other = PrivateWallet::read_from_file(&PathBuf::from("other.wallet")).unwrap();
 
-        let block = miner::mine_block(Block::new(&mut chain, &wallet).expect("Create block"));
+        let block = miner::mine_block(Block::new_blank(&mut chain, &wallet).expect("Create block"));
         chain.add(&block).unwrap();
 
         {

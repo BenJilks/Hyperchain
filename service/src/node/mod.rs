@@ -132,7 +132,7 @@ impl Node
         // Reject block if data is not valid
         if !is_block_data_valid(&block, &data)?
         {
-            warn!("[{}] Invalid block data for {}", self.port, block.block_id);
+            warn!("[{}] Invalid block data for {}", self.port, block.header.block_id);
             return Ok(());
         }
 
@@ -140,7 +140,7 @@ impl Node
         {
             BlockChainAddResult::Ok =>
             {
-                info!("[{}] Added block {}", self.port, block.block_id);
+                info!("[{}] Added block {}", self.port, block.header.block_id);
 
                 // Store the blocks data
                 for (id, unit) in &data {
@@ -153,10 +153,10 @@ impl Node
 
             BlockChainAddResult::Invalid(_) | BlockChainAddResult::MoreNeeded => 
             {
-                info!("[{}] Invalid block {}", self.port, block.block_id);
+                info!("[{}] Invalid block {}", self.port, block.header.block_id);
 
                 // Add block to this nodes branch
-                let block_id = block.block_id;
+                let block_id = block.header.block_id;
                 self.add_to_branch(from, block, data);
                 
                 // Request the next block. If there's no more, complete the branch
@@ -169,7 +169,7 @@ impl Node
 
             BlockChainAddResult::Duplicate => 
             {
-                debug!("[{}] Duplicate block {}", self.port, block.block_id);
+                debug!("[{}] Duplicate block {}", self.port, block.header.block_id);
                 self.complete_branch(from)?;
             },
         }
@@ -288,7 +288,7 @@ mod tests
         {
             let mut node = connection.handler().node();
             let chain = &mut node.chain();
-            let block = miner::mine_block(Block::new(chain, wallet)
+            let block = miner::mine_block(Block::new_blank(chain, wallet)
                 .expect("Create block"));
 
             chain.add(&block).unwrap();

@@ -18,10 +18,10 @@ pub fn mine_block_unless_found(connection: &NetworkConnection<NodePacketHandler>
 {
     while block.validate_pow()? != BlockValidationResult::Ok
     { 
-        block.pow += 1;
+        block.header.pow += 1;
 
         // Check this block wasn't already mined
-        if block.pow % 100 == 0
+        if block.header.pow % 100 == 0
         {
             // Delay for testing
             std::thread::sleep(std::time::Duration::from_millis(10));
@@ -32,7 +32,7 @@ pub fn mine_block_unless_found(connection: &NetworkConnection<NodePacketHandler>
 
             let mut node = connection.handler().node();
             let chain = node.chain();
-            if chain.block(block.block_id).is_some() {
+            if chain.block(block.header.block_id).is_some() {
                 break;
             }
         }
@@ -64,15 +64,15 @@ fn mine_next_block(connection: &mut NetworkConnection<NodePacketHandler>,
     let chain = &mut node.chain();
 
     let top = chain.top();
-    if top.is_none() || top.unwrap().block_id + 1 == block.block_id 
+    if top.is_none() || top.unwrap().header.block_id + 1 == block.header.block_id 
     {
         match chain.add(&block)?
         {
             BlockChainAddResult::Ok =>
             {
                 println!("Won block {}! With difficulty {}", 
-                    block.block_id, 
-                    block::target::difficulty(&block.target));
+                    block.header.block_id, 
+                    block::target::difficulty(&block.header.target));
 
                 let data = node.data_store().for_page_updates(&block.pages)?;
                 connection.manager().send(Packet::Block(block, data))?;

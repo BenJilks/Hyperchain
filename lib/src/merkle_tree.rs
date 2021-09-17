@@ -25,6 +25,10 @@ fn reduce_nodes(nodes: Vec<Node>) -> Vec<Node>
 pub fn calculate_merkle_root<H>(data: &[H]) -> Hash
     where H: AsRef<[u8]>
 {
+    if data.len() == 0 {
+        return [0u8; HASH_LEN];
+    }
+
     let mut nodes = data
         .iter()
         .map(|x| 
@@ -70,7 +74,8 @@ mod tests
             let merkle_root = calculate_merkle_root(&[&a, &c, &b]);
             assert_ne!(merkle_root, expected_hash);
         }
+
+        assert_eq!(calculate_merkle_root::<Vec<u8>>(&[]), [0u8; HASH_LEN]);
     }
 
 }
-
