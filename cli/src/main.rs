@@ -153,7 +153,7 @@ fn main() -> Result<(), Box<dyn Error>>
     pretty_env_logger::init();
 
     let matches = App::new("Hyperchain Cli")
-        .version("0.1.0")
+        .version("0.2.0")
         .author("Ben Jilks <benjyjilks@gmail.com>")
         .about("Command line interface for the hyperchain service")
 
