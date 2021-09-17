@@ -2,7 +2,7 @@
 # Version Plan
 ---------------------
 
-## v0.1
+## ~~v0.1~~
 - ~~Proof of work chain~~
 - ~~Basic transactions~~
     - ~~Transfers~~
@@ -11,8 +11,6 @@
     - ~~Store everything~~
 - ~~Transaction queue~~
     - ~~Submit to queue~~
-
-(TODO: Some more unit tests)
 
 ---------------------
 
