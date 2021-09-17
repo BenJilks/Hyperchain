@@ -1,6 +1,6 @@
 [package]
 name = "hyperchain-cli"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -10,3 +10,4 @@ libhyperchain = { path = "../lib" }
 clap = "2.33.3"
 base-62 = { git = "https://github.com/kryptco/base62.rs" }
 pretty_env_logger = "0.4.0"
+
