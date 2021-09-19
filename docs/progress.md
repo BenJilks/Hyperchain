@@ -16,7 +16,7 @@
 
 ## v0.2
 - Better transactions
-    - Use hash trees
+    - ~~Use hash trees~~
     - Multiple inputs and outputs
 - Transaction queue
     - Order by fee
