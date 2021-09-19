@@ -27,15 +27,15 @@ pub async fn block_handler(request: HttpRequest) -> impl Responder
         Response::Blocks(blocks) if (blocks.len() == 1) =>
         {
             let block = &blocks[0];
-            let winner = base_62::encode(&block.raward_to);
-            let difficulty = difficulty(&block.target);
+            let winner = base_62::encode(&block.header.raward_to);
+            let difficulty = difficulty(&block.header.target);
 
             let data = json!({
                 "id": block_id,
-                "timestamp": (block.timestamp / 1000) as u64,
+                "timestamp": (block.header.timestamp / 1000) as u64,
                 "winner": winner,
                 "difficulty": difficulty,
-                "pow": block.pow,
+                "pow": block.header.pow,
                 "transactions":
                     block.transactions()
                         .iter()

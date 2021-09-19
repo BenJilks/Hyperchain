@@ -117,7 +117,7 @@ fn transaction_info(mut client: Client, options: &ArgMatches)
             
             match block
             {
-                Some(block) => println!("In block: {}", block.block_id),
+                Some(block) => println!("In block: {}", block.header.block_id),
                 None => println!("In block: Pending"),
             }
         },

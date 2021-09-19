@@ -19,7 +19,7 @@ pub fn data_for_transaction((transaction, block): &(TransactionVariant, Option<B
     let block_id = 
         match block
         {
-            Some(block) => block.block_id.to_string(),
+            Some(block) => block.header.block_id.to_string(),
             None => "Pending".to_owned(),
         };
 
