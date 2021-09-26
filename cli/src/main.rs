@@ -37,12 +37,15 @@ fn balance(mut client: Client, options: &ArgMatches) -> Result<(), Box<dyn Error
     Ok(())
 }
 
-fn parse_inputs(options: &ArgMatches) 
+fn parse_inputs<'a, I>(from_paths: I, amounts: &mut I) 
     -> Result<Option<Vec<(Vec<u8>, f32)>>, Box<dyn Error>>
+    where I: Iterator<Item = &'a str>
 {
     let mut inputs = Vec::new();
-    for from_path in options.values_of("from").unwrap()
+    for from_path in from_paths
     {
+        let amount_str = amounts.nth(0).unwrap();
+
         let from_or_error = PrivateWallet::read_from_file(&PathBuf::from(from_path));
         if from_or_error.is_err() 
         {
@@ -51,35 +54,54 @@ fn parse_inputs(options: &ArgMatches)
         }
 
         let from = from_or_error.unwrap().serialize();
-        let amount = options.value_of("amount").unwrap().parse::<f32>()?;
+        let amount = amount_str.parse::<f32>()?;
         inputs.push((from, amount));
     }
 
     Ok(Some(inputs))
 }
 
+fn parse_outputs<'a, I>(to_addresses: I, amounts: &mut I) 
+    -> Result<Option<Vec<(Vec<u8>, f32)>>, Box<dyn Error>>
+    where I: Iterator<Item = &'a str>
+{
+    let mut outputs = Vec::new();
+    for to_address_str in to_addresses
+    {
+        let amount_str = amounts.nth(0).unwrap();
+        let to = base_62::decode(to_address_str)?;
+        let amount = amount_str.parse::<f32>()?;
+        outputs.push((to, amount));
+    }
+
+    Ok(Some(outputs))
+}
+
 fn send(mut client: Client, options: &ArgMatches) -> Result<(), Box<dyn Error>>
 {
     let from_paths = options.values_of("from").unwrap();
-    let amounts = options.values_of("amount").unwrap();
-    if from_paths.len() != amounts.len() 
+    let to_addresses = options.values_of("to").unwrap();
+    let mut amounts = options.values_of("amount").unwrap();
+    if from_paths.len() + to_addresses.len() != amounts.len()
     {
         println!("Error: Number of from and amounts arguments did not match");
         return Ok(());
     }
 
-    let inputs_or_none = parse_inputs(options)?;
+    let inputs_or_none = parse_inputs(from_paths, &mut amounts)?;
     if inputs_or_none.is_none() {
         return Ok(());
     }
 
-    let inputs = inputs_or_none.unwrap();
-    let total_input_amount = inputs.iter().fold(0.0, |acc, (_, x)| acc + x);
+    let outputs_or_none = parse_outputs(to_addresses, &mut amounts)?;
+    if outputs_or_none.is_none() {
+        return Ok(());
+    }
 
-    let to = base_62::decode(options.value_of("to").unwrap())?;
+    let inputs = inputs_or_none.unwrap();
+    let outputs = outputs_or_none.unwrap();
     let fee = options.value_of("fee").unwrap().parse::<f32>()?;
-    let amount = total_input_amount - fee;
-    match client.send(Command::Send(inputs, to, amount, fee))?
+    match client.send(Command::Send(inputs, outputs, fee))?
     {
         Response::Sent(id) => 
             println!("Success, TxID: {}", base_62::encode(&id)),
@@ -133,7 +155,11 @@ fn transaction_info(mut client: Client, options: &ArgMatches)
                         println!("From: {}", base_62::encode(&input.get_address()));
                         println!("Amount: {}", input.amount);
                     }
-                    println!("To: {}", base_62::encode(&transfer.header.content.to));
+                    for output in &transfer.header.content.outputs
+                    {
+                        println!("To: {}", base_62::encode(&output.to));
+                        println!("Amount: {}", output.amount);
+                    }
                     println!("Fee: {}", transfer.header.content.fee);
                 },
 
@@ -222,6 +248,7 @@ fn main() -> Result<(), Box<dyn Error>>
                 .long("to")
                 .takes_value(true)
                 .required(true)
+                .multiple(true)
                 .help("Address of recipient"))
             .arg(Arg::with_name("fee")
                 .short("e")

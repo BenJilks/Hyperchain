@@ -2,7 +2,7 @@ use super::BlockChain;
 use crate::block::Block;
 use crate::transaction::{Transaction, TransactionVariant};
 use crate::transaction::{TransactionContent, TransactionValidationResult};
-use crate::transaction::transfer::Transfer;
+use crate::transaction::transfer::{Transfer, TransferBuilder};
 use crate::transaction::page::Page;
 use crate::transaction::builder::TransactionBuilder;
 use crate::wallet::{Wallet, WalletStatus};
@@ -90,11 +90,16 @@ impl BlockChain
         max_id + 1
     }
 
-    pub fn new_transfer(&mut self, inputs: Vec<(&PrivateWallet, f32)>, to: Hash, amount: f32, fee: f32)
+    pub fn new_transfer(&mut self, inputs: Vec<(&PrivateWallet, f32)>, outputs: Vec<(Hash, f32)>, fee: f32)
         -> Result<Option<Transaction<Transfer>>, Box<dyn Error>>
     {
         let id = self.next_transaction_id(&inputs);
-        self.new_transaction(inputs, Transfer::new(id, to, amount, fee))
+        let mut transfer_builder = TransferBuilder::new(id, fee);
+        for (to, amount) in outputs {
+            transfer_builder = transfer_builder.add_output(to, amount);
+        }
+
+        self.new_transaction(inputs, transfer_builder.build())
     }
 
     pub fn new_page(&mut self, from: &PrivateWallet, data: &DataUnit, fee: f32)
@@ -219,13 +224,13 @@ mod tests
         let block_a = miner::mine_block(Block::new_blank(&mut chain, &wallet).unwrap());
         assert_eq!(chain.add(&block_a).unwrap(), BlockChainAddResult::Ok);
 
-        let transaction_a = chain.new_transfer(vec![(&wallet, 3.0)], other.get_address(), 2.0, 1.0).unwrap().unwrap();
+        let transaction_a = chain.new_transfer(vec![(&wallet, 3.0)], vec![(other.get_address(), 2.0)], 1.0).unwrap().unwrap();
         assert_eq!(chain.push_transfer_queue(transaction_a.clone()), true);
 
-        let transaction_b = chain.new_transfer(vec![(&wallet, 3.0)], other.get_address(), 2.0, 1.0).unwrap().unwrap();
+        let transaction_b = chain.new_transfer(vec![(&wallet, 3.0)], vec![(other.get_address(), 2.0)], 1.0).unwrap().unwrap();
         assert_eq!(chain.push_transfer_queue(transaction_b.clone()), true);
 
-        let transaction_c = chain.new_transfer(vec![(&wallet, 11.0)], other.get_address(), 10.0, 1.0).unwrap().unwrap();
+        let transaction_c = chain.new_transfer(vec![(&wallet, 11.0)], vec![(other.get_address(), 10.0)], 1.0).unwrap().unwrap();
         assert_eq!(chain.push_transfer_queue(transaction_c), false);
 
         assert_eq!(chain.get_next_transfers_in_queue(10), [&transaction_a, &transaction_b]);
@@ -245,3 +250,4 @@ mod tests
     }
 
 }
+

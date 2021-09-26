@@ -133,11 +133,11 @@ impl BlockChain
         {
             for transfer in &block.transfers 
             {
-                if &transfer.header.content.to == address ||
+                if transfer.header.content.outputs.iter().any(|x| &x.to == address) ||
                     transfer.get_from_addresses().contains(&address)
                 {
                     transactions.push((
-                        TransactionVariant::Transfer(transfer.clone()), 
+                        TransactionVariant::Transfer(transfer.clone()),
                         Some(block.clone())));
                 }
             }
@@ -155,7 +155,7 @@ impl BlockChain
 
         for transfer in &self.transfer_queue 
         {
-            if &transfer.header.content.to == address ||
+            if transfer.header.content.outputs.iter().any(|x| &x.to == address) ||
                 transfer.get_from_addresses().contains(&address)
             {
                 transactions.push((
@@ -208,13 +208,16 @@ mod tests
         let block_a = miner::mine_block(Block::new_blank(&mut chain, &wallet).unwrap());
         assert_eq!(chain.add(&block_a).unwrap(), BlockChainAddResult::Ok);
 
-        let transaction = chain.new_transfer(vec![(&wallet, 2.0)], other.get_address(), 2.0, 0.0).unwrap().unwrap();
+        // Create transfer
+        let transaction = chain.new_transfer(vec![(&wallet, 2.0)], vec![(other.get_address(), 2.0)], 0.0).unwrap().unwrap();
         assert_eq!(chain.push_transfer_queue(transaction.clone()), true);
 
+        // Create page
         let page_data = CreatePageData::new("index.html".to_owned(), Vec::new());
         let page = chain.new_page(&wallet, &DataUnit::CreatePage(page_data), 0.0).unwrap().unwrap();
         assert_eq!(chain.push_page_queue(page.clone()), true);
 
+        // Add transactions to new block
         let block_b = miner::mine_block(BlockBuilder::new(&wallet)
             .add_transfer(transaction.clone())
             .add_page(page.clone())
@@ -222,17 +225,21 @@ mod tests
             .unwrap());
         assert_eq!(chain.add(&block_b).unwrap(), BlockChainAddResult::Ok);
 
+        // Test 'get_page_updates'
         assert_eq!(chain.get_page_updates(&wallet.get_address()), 
                    [page.clone()]);
 
+        // Test 'find_transaction_in_chain'
         let transaction_id_vec = transaction.hash().unwrap();
         let transaction_id = slice_as_array!(&transaction_id_vec, [u8; HASH_LEN]).unwrap();
         assert_eq!(chain.find_transaction_in_chain(transaction_id), 
                    Some((TransactionVariant::Transfer(transaction.clone()), block_b.clone())));
 
-        let other_transaction = chain.new_transfer(vec![(&wallet, 2.0)], other.get_address(), 2.0, 0.0).unwrap().unwrap();
+        // Test 'push_transfer_queue'
+        let other_transaction = chain.new_transfer(vec![(&wallet, 2.0)], vec![(other.get_address(), 2.0)], 0.0).unwrap().unwrap();
         assert_eq!(chain.push_transfer_queue(other_transaction.clone()), true);
 
+        // Test 'get_transaction_history'
         assert_eq!(chain.get_transaction_history(&wallet.get_address()), 
                    [
                        (TransactionVariant::Transfer(other_transaction), None),
@@ -242,3 +249,4 @@ mod tests
     }
 
 }
+

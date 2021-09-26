@@ -1,6 +1,8 @@
 use crate::AppData;
 
 use libhyperchain::transaction::{Transaction, TransactionContent, TransactionVariant};
+use libhyperchain::transaction::transfer::Transfer;
+use libhyperchain::transaction::page::Page;
 use libhyperchain::block::Block;
 use libhyperchain::service::command::{Command, Response};
 use actix_web::{get, web};
@@ -30,6 +32,66 @@ fn inputs_from_transaction<C>(transaction: &Transaction<C>)
         .collect::<Vec<_>>()
 }
 
+fn transfer_data(transfer: &Transaction<Transfer>, block_id: String) 
+    -> serde_json::Value
+{
+    let hash = transfer.hash().unwrap();
+    let id = base_62::encode(&hash);
+
+    let inputs = inputs_from_transaction(&transfer);
+    let outputs = transfer.header.content.outputs
+        .iter()
+        .map(|output|
+        {
+            json!(
+            {
+                "address": base_62::encode(&output.to),
+                "amount": output.amount,
+            })
+        })
+        .collect::<Vec<_>>();
+
+    let total_amount = transfer.header.content.outputs
+        .iter()
+        .fold(0.0, |acc, x| acc + x.amount);
+
+    json!(
+    {
+        "type": "Transfer",
+        "id": id,
+        "inputs": inputs,
+        "outputs": outputs,
+        "total_amount": total_amount,
+        "fee": transfer.header.content.fee,
+        "block": block_id,
+    })
+}
+
+fn page_data(page: &Transaction<Page>, block_id: String) 
+    -> serde_json::Value
+{
+    let hash = page.hash().unwrap();
+    let id = base_62::encode(&hash);
+
+    let inputs = inputs_from_transaction(&page);
+    let outputs = vec![json!(
+    {
+        "address": base_62::encode(&page.header.content.site),
+        "amount": page.header.content.cost(),
+    })];
+
+    json!(
+    {
+        "type": "Page Update",
+        "id": id,
+        "inputs": inputs,
+        "outputs": outputs,
+        "amount": page.header.content.cost(),
+        "fee": page.header.content.fee,
+        "block": block_id,
+    })
+}
+
 pub fn data_for_transaction((transaction, block): &(TransactionVariant, Option<Block>)) 
     -> serde_json::Value
 {
@@ -42,53 +104,8 @@ pub fn data_for_transaction((transaction, block): &(TransactionVariant, Option<B
 
     match transaction
     {
-        TransactionVariant::Transfer(transfer) =>
-        {
-            let hash = transfer.hash().unwrap();
-            let id = base_62::encode(&hash);
-
-            let inputs = inputs_from_transaction(&transfer);
-            let outputs = vec![json!(
-            {
-                "address": base_62::encode(&transfer.header.content.to),
-                "amount": transfer.header.content.amount,
-            })];
-
-            json!(
-            {
-                "type": "Transfer",
-                "id": id,
-                "inputs": inputs,
-                "outputs": outputs,
-                "total_amount": transfer.header.content.amount,
-                "fee": transfer.header.content.fee,
-                "block": block_id,
-            })
-        },
-
-        TransactionVariant::Page(page) =>
-        {
-            let hash = page.hash().unwrap();
-            let id = base_62::encode(&hash);
-
-            let inputs = inputs_from_transaction(&page);
-            let outputs = vec![json!(
-            {
-                "address": base_62::encode(&page.header.content.site),
-                "amount": page.header.content.cost(),
-            })];
-        
-            json!(
-            {
-                "type": "Page Update",
-                "id": id,
-                "inputs": inputs,
-                "outputs": outputs,
-                "amount": page.header.content.cost(),
-                "fee": page.header.content.fee,
-                "block": block_id,
-            })
-        },
+        TransactionVariant::Transfer(transfer) => transfer_data(transfer, block_id),
+        TransactionVariant::Page(page) => page_data(page, block_id),
     }
 }
 

@@ -38,7 +38,9 @@ impl Block
             for address in transaction.get_from_addresses() {
                 addresses_in_use.insert(address);
             }
-            addresses_in_use.insert(transaction.header.content.to);
+            for output in &transaction.header.content.outputs {
+                addresses_in_use.insert(output.to);
+            }
         }
 
         for page in &self.pages 
@@ -95,3 +97,4 @@ impl Block
     }
 
 }
+
