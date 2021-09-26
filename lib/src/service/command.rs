@@ -15,6 +15,7 @@ pub enum Command
     TransactionInfo(Vec<u8>),
     TransactionHistory(Vec<u8>),
     Blocks(u64, u64),
+    TopBlock,
     PageUpdates(Vec<u8>),
     PageData(Vec<u8>),
 }

@@ -29,7 +29,7 @@ use transaction_history::transaction_history;
 use transaction_info::transaction_info;
 use page::page_updates;
 use page::page_data;
-use blocks::blocks;
+use blocks::{blocks, top_block};
 use crate::network::NetworkConnection;
 use crate::node::Node;
 use crate::node::packet_handler::NodePacketHandler;
@@ -116,6 +116,9 @@ fn main() -> Result<(), Box<dyn Error>>
                 
                 Command::Blocks(from, to) =>
                     blocks(&mut connection, from, to),
+
+                Command::TopBlock =>
+                    top_block(&mut connection),
             }
         })?;
     }

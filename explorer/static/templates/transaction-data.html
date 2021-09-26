@@ -14,10 +14,10 @@
     </div>
     <div class="item">
         <text>Block</text>
-        {{ #if block }}
-            <a href="/block?id={{ block }}">{{ block }}</a>
-        {{ else }}
+        {{ #if (eq block "Pending") }}
             <text>Pending...</text>
+        {{ else }}
+            <a href="/block?id={{ block }}">{{ block }}</a>
         {{ /if }}
     </div>
 
