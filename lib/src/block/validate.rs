@@ -143,8 +143,8 @@ mod tests
 
     use super::*;
     use super::super::builder::BlockBuilder;
-    use crate::transaction::Transaction;
     use crate::transaction::transfer::Transfer;
+    use crate::transaction::builder::TransactionBuilder;
     use crate::chain::BlockChain;
     use crate::wallet::{WalletStatus, Wallet};
     use crate::wallet::private_wallet::PrivateWallet;
@@ -158,7 +158,9 @@ mod tests
         let other = PrivateWallet::read_from_file(&PathBuf::from("other.wallet")).unwrap();
         let mut chain = BlockChain::open_temp();
 
-        let transaction = Transaction::new(&wallet, Transfer::new(1, other.get_address(), 4.0, 1.0));
+        let transaction = TransactionBuilder::new(Transfer::new(1, other.get_address(), 4.0, 1.0))
+            .add_input(&wallet, 5.0)
+            .build().unwrap();
         let mut block = BlockBuilder::new(&wallet)
             .add_transfer(transaction)
             .build(&mut chain)

@@ -99,7 +99,7 @@ impl BlockChain
                 // NOTE: Purge any pending transfers coming from this address
                 self.transfer_queue
                     .iter()
-                    .take_while(|x| x.get_from_address() == address)
+                    .take_while(|x| x.get_from_addresses().contains(&address))
                     .count();
 
                 return Ok(BlockChainAddResult::Invalid(BlockValidationResult::Balance(address)));
@@ -211,3 +211,4 @@ mod tests
    }
 
 }
+

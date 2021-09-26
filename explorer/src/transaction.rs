@@ -1,6 +1,6 @@
 use crate::AppData;
 
-use libhyperchain::transaction::TransactionVariant;
+use libhyperchain::transaction::{Transaction, TransactionContent, TransactionVariant};
 use libhyperchain::block::Block;
 use libhyperchain::service::command::{Command, Response};
 use actix_web::{get, web};
@@ -11,6 +11,23 @@ use serde::Deserialize;
 struct TransactionParameters
 {
     id: String,
+}
+
+fn inputs_from_transaction<C>(transaction: &Transaction<C>) 
+    -> Vec<serde_json::Value>
+    where C: TransactionContent
+{
+    transaction.header.inputs
+        .iter()
+        .map(|input| 
+        {
+            json!(
+            {
+                "address": base_62::encode(&input.get_address()),
+                "amount": input.amount,
+            })
+        })
+        .collect::<Vec<_>>()
 }
 
 pub fn data_for_transaction((transaction, block): &(TransactionVariant, Option<Block>)) 
@@ -29,16 +46,22 @@ pub fn data_for_transaction((transaction, block): &(TransactionVariant, Option<B
         {
             let hash = transfer.hash().unwrap();
             let id = base_62::encode(&hash);
-            let from = base_62::encode(&transfer.get_from_address());
-            let to = base_62::encode(&transfer.header.to);
-        
-            json!({
+
+            let inputs = inputs_from_transaction(&transfer);
+            let outputs = vec![json!(
+            {
+                "address": base_62::encode(&transfer.header.content.to),
+                "amount": transfer.header.content.amount,
+            })];
+
+            json!(
+            {
                 "type": "Transfer",
                 "id": id,
-                "from": from,
-                "to": to,
-                "amount": transfer.header.amount,
-                "fee": transfer.header.fee,
+                "inputs": inputs,
+                "outputs": outputs,
+                "total_amount": transfer.header.content.amount,
+                "fee": transfer.header.content.fee,
                 "block": block_id,
             })
         },
@@ -47,14 +70,22 @@ pub fn data_for_transaction((transaction, block): &(TransactionVariant, Option<B
         {
             let hash = page.hash().unwrap();
             let id = base_62::encode(&hash);
-            let from = base_62::encode(&page.get_from_address());
+
+            let inputs = inputs_from_transaction(&page);
+            let outputs = vec![json!(
+            {
+                "address": base_62::encode(&page.header.content.site),
+                "amount": page.header.content.cost(),
+            })];
         
-            json!({
+            json!(
+            {
                 "type": "Page Update",
                 "id": id,
-                "from": from,
-                "amount": page.header.cost(),
-                "fee": page.header.fee,
+                "inputs": inputs,
+                "outputs": outputs,
+                "amount": page.header.content.cost(),
+                "fee": page.header.content.fee,
                 "block": block_id,
             })
         },
@@ -81,3 +112,4 @@ pub async fn transaction_handler(request: HttpRequest) -> impl Responder
         _ => HttpResponse::Ok().body("Transaction not found"),
     }
 }
+

@@ -57,7 +57,7 @@ mod tests
     use super::private_wallet::PrivateWallet;
     use crate::block::Block;
     use crate::block::builder::BlockBuilder;
-    use crate::transaction::Transaction;
+    use crate::transaction::builder::TransactionBuilder;
     use crate::transaction::transfer::Transfer;
     use crate::chain::BlockChain;
     use crate::miner;
@@ -77,8 +77,12 @@ mod tests
         chain.add(&block_b).unwrap();
         
         let block_c = miner::mine_block(BlockBuilder::new(&wallet)
-            .add_transfer(Transaction::new(&wallet, Transfer::new(1, other.get_address(), 4.6, 0.2)))
-            .add_transfer(Transaction::new(&other, Transfer::new(1, wallet.get_address(), 1.4, 0.2)))
+            .add_transfer(TransactionBuilder::new(Transfer::new(1, other.get_address(), 4.6, 0.2))
+                .add_input(&wallet, 4.6 + 0.2)
+                .build().unwrap())
+            .add_transfer(TransactionBuilder::new(Transfer::new(1, wallet.get_address(), 1.4, 0.2))
+                .add_input(&other, 1.4 + 0.2)
+                .build().unwrap())
             .build(&mut chain)
             .expect("Create block"));
         chain.add(&block_c).unwrap();

@@ -18,8 +18,11 @@ use actix_web::{web, App};
 use actix_web::HttpServer;
 use actix_files::Files;
 use handlebars::Handlebars;
-use std::error::Error;
 use std::sync::{Arc, Mutex, MutexGuard};
+use std::path::Path;
+use std::fs::File;
+use std::io::Read;
+use std::error::Error;
 
 struct AppData<'a>
 {
@@ -35,6 +38,17 @@ impl<'a> AppData<'a>
     }
 }
 
+fn register_partial<P>(handlebars: &mut Handlebars, name: &str, file_path: P)
+    -> Result<(), Box<dyn Error>>
+    where P: AsRef<Path>
+{
+    let mut file = File::open(file_path)?;
+    let mut content = String::new();
+    file.read_to_string(&mut content)?;
+    handlebars.register_partial(name, content)?;
+    Ok(())
+}
+
 #[actix_web::main]
 async fn main() -> Result<(), Box<dyn Error>>
 {
@@ -42,6 +56,7 @@ async fn main() -> Result<(), Box<dyn Error>>
     
     let mut handlebars = Handlebars::new();
     handlebars.register_templates_directory(".html", "./static/templates")?;
+    register_partial(&mut handlebars, "transaction-data", "./static/templates/transaction-data.html")?;
     
     let app_data = web::Data::new(AppData
     {
@@ -67,3 +82,4 @@ async fn main() -> Result<(), Box<dyn Error>>
 
     Ok(())
 }
+

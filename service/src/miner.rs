@@ -8,6 +8,7 @@ use libhyperchain::block::validate::BlockValidationResult;
 use libhyperchain::block;
 use libhyperchain::chain::BlockChainAddResult;
 use libhyperchain::wallet::private_wallet::PrivateWallet;
+use libhyperchain::block::target::difficulty;
 use std::path::PathBuf;
 use std::thread::JoinHandle;
 use std::error::Error;
@@ -16,6 +17,10 @@ pub fn mine_block_unless_found(connection: &NetworkConnection<NodePacketHandler>
                                mut block: Block) 
     -> Result<Block, Box<dyn Error>>
 {
+    info!("Started mining block {} with difficulty {}", 
+          block.header.block_id, 
+          difficulty(&block.header.target));
+
     while block.validate_pow()? != BlockValidationResult::Ok
     { 
         block.header.pow += 1;
@@ -32,7 +37,9 @@ pub fn mine_block_unless_found(connection: &NetworkConnection<NodePacketHandler>
 
             let mut node = connection.handler().node();
             let chain = node.chain();
-            if chain.block(block.header.block_id).is_some() {
+            if chain.block(block.header.block_id).is_some() 
+            {
+                info!("Block {} already found, stoped mining", block.header.block_id);
                 break;
             }
         }

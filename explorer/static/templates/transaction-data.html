@@ -1,0 +1,53 @@
+<div class="transaction-data">
+    <h1><a href="/transaction?id={{ id }}">{{ id }}</a></h1>
+    <div class="item">
+        <text>Type</text>
+        <text>{{ type }}</text>
+    </div>
+    <div class="item">
+        <text>Amount</text>
+        <text>{{ total_amount }}mb</text>
+    </div>
+    <div class="item">
+        <text>Fee</text>
+        <text>{{ fee }}mb</text>
+    </div>
+    <div class="item">
+        <text>Block</text>
+        {{ #if block }}
+            <a href="/block?id={{ block }}">{{ block }}</a>
+        {{ else }}
+            <text>Pending...</text>
+        {{ /if }}
+    </div>
+
+    <div id="input-output">
+        <div class="column" id="inputs">
+            <h3>Inputs</h3>
+            <ul class="io-list">
+                {{ #each inputs }}
+                <li>
+                    {{ #with this }}
+                        <a href="/wallet?address={{ address }}" id="address">{{ address }}</a>
+                        <text id="amount">{{ amount }}mb</text>
+                    {{ /with }}
+                </li>
+                {{ /each }}
+            </ul>
+        </div>
+        <div class="column" id="outputs">
+            <h3>Outputs</h3>
+            <ul class="io-list">
+                {{ #each outputs }}
+                <li>
+                    {{ #with this }}
+                        <a href="/wallet?address={{ address }}" id="address">{{ address }}</a>
+                        <text id="amount">{{ amount }}mb</text>
+                    {{ /with }}
+                </li>
+                {{ /each }}
+            </ul>
+        </div>
+    </div>
+</div>
+

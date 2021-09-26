@@ -35,12 +35,17 @@ impl Block
         
         for transaction in &self.transfers
         {
-            addresses_in_use.insert(transaction.get_from_address());
-            addresses_in_use.insert(transaction.header.to);
+            for address in transaction.get_from_addresses() {
+                addresses_in_use.insert(address);
+            }
+            addresses_in_use.insert(transaction.header.content.to);
         }
 
-        for page in &self.pages {
-            addresses_in_use.insert(page.get_from_address());
+        for page in &self.pages 
+        {
+            for address in page.get_from_addresses() {
+                addresses_in_use.insert(address);
+            }
         }
 
         addresses_in_use.into_iter().collect::<Vec<_>>()

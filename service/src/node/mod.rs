@@ -39,7 +39,7 @@ fn is_block_data_valid(block: &Block, data: &HashMap<Hash, DataUnit>)
             return Ok(false);
         }
 
-        if !page.header.is_data_valid(data_unit.unwrap())? {
+        if !page.header.content.is_data_valid(data_unit.unwrap())? {
             return Ok(false);
         }
     }
@@ -220,7 +220,7 @@ impl Node
     {
         info!("Got page {:?}", page);
         
-        if page.header.is_data_valid(&data)?
+        if page.header.content.is_data_valid(&data)?
             && self.chain.push_page_queue(page.clone())
         {
             let id = page.hash()?;

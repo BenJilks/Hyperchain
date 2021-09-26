@@ -1,5 +1,5 @@
 use super::BlockChain;
-use crate::transaction::{Transaction, TransactionHeader, TransactionVariant};
+use crate::transaction::{Transaction, TransactionContent, TransactionVariant};
 use crate::transaction::page::Page;
 use crate::block::Block;
 use crate::wallet::WalletStatus;
@@ -7,9 +7,9 @@ use crate::config::Hash;
 
 use serde::Serialize;
 
-fn find_transaction<H>(transactions: &Vec<Transaction<H>>, transaction_id: &Hash)
-        -> Option<Transaction<H>>
-    where H: TransactionHeader + Serialize + Clone
+fn find_transaction<C>(transactions: &Vec<Transaction<C>>, transaction_id: &Hash)
+        -> Option<Transaction<C>>
+    where C: TransactionContent + Serialize + Clone
 {
     for transaction in transactions
     {
@@ -84,7 +84,7 @@ impl BlockChain
             let block = self.block(block_id).unwrap();
             for page in block.pages.iter().rev() 
             {
-                if &page.get_from_address() == address {
+                if page.get_from_addresses().contains(address) {
                     updates.push(page.clone());
                 }
             }
@@ -133,8 +133,8 @@ impl BlockChain
         {
             for transfer in &block.transfers 
             {
-                if &transfer.header.to == address ||
-                    &transfer.get_from_address() == address
+                if &transfer.header.content.to == address ||
+                    transfer.get_from_addresses().contains(&address)
                 {
                     transactions.push((
                         TransactionVariant::Transfer(transfer.clone()), 
@@ -144,7 +144,7 @@ impl BlockChain
 
             for page in &block.pages
             {
-                if &page.get_from_address() == address
+                if page.get_from_addresses().contains(&address)
                 {
                     transactions.push((
                         TransactionVariant::Page(page.clone()), 
@@ -155,8 +155,8 @@ impl BlockChain
 
         for transfer in &self.transfer_queue 
         {
-            if &transfer.header.to == address ||
-                &transfer.get_from_address() == address
+            if &transfer.header.content.to == address ||
+                transfer.get_from_addresses().contains(&address)
             {
                 transactions.push((
                     TransactionVariant::Transfer(transfer.clone()), 
@@ -166,7 +166,7 @@ impl BlockChain
 
         for page in &self.page_queue
         {
-            if &page.get_from_address() == address
+            if page.get_from_addresses().contains(&address)
             {
                 transactions.push((
                     TransactionVariant::Page(page.clone()), 
@@ -208,7 +208,7 @@ mod tests
         let block_a = miner::mine_block(Block::new_blank(&mut chain, &wallet).unwrap());
         assert_eq!(chain.add(&block_a).unwrap(), BlockChainAddResult::Ok);
 
-        let transaction = chain.new_transfer(&wallet, other.get_address(), 2.0, 0.0).unwrap().unwrap();
+        let transaction = chain.new_transfer(vec![(&wallet, 2.0)], other.get_address(), 2.0, 0.0).unwrap().unwrap();
         assert_eq!(chain.push_transfer_queue(transaction.clone()), true);
 
         let page_data = CreatePageData::new("index.html".to_owned(), Vec::new());
@@ -230,7 +230,7 @@ mod tests
         assert_eq!(chain.find_transaction_in_chain(transaction_id), 
                    Some((TransactionVariant::Transfer(transaction.clone()), block_b.clone())));
 
-        let other_transaction = chain.new_transfer(&wallet, other.get_address(), 2.0, 0.0).unwrap().unwrap();
+        let other_transaction = chain.new_transfer(vec![(&wallet, 2.0)], other.get_address(), 2.0, 0.0).unwrap().unwrap();
         assert_eq!(chain.push_transfer_queue(other_transaction.clone()), true);
 
         assert_eq!(chain.get_transaction_history(&wallet.get_address()), 

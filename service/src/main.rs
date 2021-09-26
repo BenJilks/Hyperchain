@@ -96,8 +96,8 @@ fn main() -> Result<(), Box<dyn Error>>
                 Command::Balance(address) => 
                     balance(&mut connection, address),
 
-                Command::Send(from, to, amount, fee) =>
-                    send(&mut connection, from, to, amount, fee),
+                Command::Send(inputs, to, amount, fee) =>
+                    send(&mut connection, inputs, to, amount, fee),
 
                 Command::UpdatePage(from, name, data) =>
                     update_page(&mut connection, from, name, data),

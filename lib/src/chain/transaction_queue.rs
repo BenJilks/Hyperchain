@@ -1,9 +1,10 @@
 use super::BlockChain;
 use crate::block::Block;
 use crate::transaction::{Transaction, TransactionVariant};
-use crate::transaction::{TransactionHeader, TransactionValidationResult};
+use crate::transaction::{TransactionContent, TransactionValidationResult};
 use crate::transaction::transfer::Transfer;
 use crate::transaction::page::Page;
+use crate::transaction::builder::TransactionBuilder;
 use crate::wallet::{Wallet, WalletStatus};
 use crate::wallet::private_wallet::PrivateWallet;
 use crate::data_store::DataUnit;
@@ -13,9 +14,9 @@ use serde::Serialize;
 use std::error::Error;
 use std::collections::VecDeque;
 
-fn search_queue<H>(queue: &VecDeque<Transaction<H>>, transaction_id: &Hash) 
-        -> Option<Transaction<H>>
-    where H: TransactionHeader + Serialize + Clone
+fn search_queue<C>(queue: &VecDeque<Transaction<C>>, transaction_id: &Hash) 
+        -> Option<Transaction<C>>
+    where C: TransactionContent + Serialize + Clone
 {
     for transaction in queue
     {
@@ -50,53 +51,79 @@ impl BlockChain
         status
     }
 
-    fn new_transaction<H>(&mut self, from: &PrivateWallet, header: H)
-            -> Result<Option<Transaction<H>>, Box<dyn Error>>
-        where H: TransactionHeader + Serialize
+    fn new_transaction<C>(&mut self, inputs: Vec<(&PrivateWallet, f32)>, content: C)
+            -> Result<Option<Transaction<C>>, Box<dyn Error>>
+        where C: TransactionContent + Serialize
     {
-        let transaction = Transaction::new(from, header);
-        if transaction.validate_content()? != TransactionValidationResult::Ok {
+        let mut builder = TransactionBuilder::new(content);
+        for (wallet, amount) in &inputs {
+            builder = builder.add_input(wallet, *amount);
+        }
+
+        let transaction = builder.build()?;
+        if transaction.validate_content()? != TransactionValidationResult::Ok 
+        {
+            debug!("Invalid content");
             return Ok(None);
         }
 
-        let status = self.get_wallet_status_after_queue(&from.get_address());
-        if transaction.update_wallet_status(&from.get_address(), status, false).is_some() {
-            Ok(Some(transaction))
-        } else {
-            Ok(None)
+        for (wallet, _) in inputs
+        {
+            let status = self.get_wallet_status_after_queue(&wallet.get_address());
+            if transaction.update_wallet_status(&wallet.get_address(), status, false).is_none() {
+                return Ok(None);
+            }
         }
+
+        Ok(Some(transaction))
     }
 
-    pub fn new_transfer(&mut self, from: &PrivateWallet, to: Hash, amount: f32, fee: f32)
+    fn next_transaction_id(&mut self, inputs: &Vec<(&PrivateWallet, f32)>) -> u32
+    {
+        let mut max_id = 0;
+        for (wallet, _) in inputs
+        {
+            let status = self.get_wallet_status_after_queue(&wallet.get_address());
+            max_id = std::cmp::max(max_id, status.max_id);
+        }
+
+        max_id + 1
+    }
+
+    pub fn new_transfer(&mut self, inputs: Vec<(&PrivateWallet, f32)>, to: Hash, amount: f32, fee: f32)
         -> Result<Option<Transaction<Transfer>>, Box<dyn Error>>
     {
-        let status = self.get_wallet_status_after_queue(&from.get_address());
-        self.new_transaction(from, Transfer::new(status.max_id + 1, to, amount, fee))
+        let id = self.next_transaction_id(&inputs);
+        self.new_transaction(inputs, Transfer::new(id, to, amount, fee))
     }
 
     pub fn new_page(&mut self, from: &PrivateWallet, data: &DataUnit, fee: f32)
         -> Result<Option<Transaction<Page>>, Box<dyn Error>>
     {
         let status = self.get_wallet_status_after_queue(&from.get_address());
-        self.new_transaction(from, Page::new_from_data(status.max_id + 1, data, fee)?)
+        let page = Page::new_from_data(status.max_id + 1, from.get_address(), data, fee)?;
+        let total_output = page.cost() + fee;
+        self.new_transaction(vec![(from, total_output)], page)
     }
 
-    fn is_transaction_valid<H>(&mut self, transaction: &Transaction<H>) -> bool
-        where H: TransactionHeader + Serialize
+    fn is_transaction_valid<C>(&mut self, transaction: &Transaction<C>) -> bool
+        where C: TransactionContent + Serialize
     {
         // NOTE: We validate before adding, as everything in the transaction 
         //       queue is assumed to be valid.
 
-        let address = transaction.get_from_address();
-        let status = self.get_wallet_status_after_queue(&address);
+        for address in transaction.get_from_addresses()
+        {
+            let status = self.get_wallet_status_after_queue(&address);
 
-        let new_status = transaction.update_wallet_status(&address, status, false);
-        if new_status.is_none() {
-            return false;
-        }
+            let new_status = transaction.update_wallet_status(&address, status, false);
+            if new_status.is_none() {
+                return false;
+            }
 
-        if new_status.unwrap().balance < 0.0 {
-            return false;
+            if new_status.unwrap().balance < 0.0 {
+                return false;
+            }
         }
 
         return true;
@@ -192,13 +219,13 @@ mod tests
         let block_a = miner::mine_block(Block::new_blank(&mut chain, &wallet).unwrap());
         assert_eq!(chain.add(&block_a).unwrap(), BlockChainAddResult::Ok);
 
-        let transaction_a = chain.new_transfer(&wallet, other.get_address(), 2.0, 1.0).unwrap().unwrap();
+        let transaction_a = chain.new_transfer(vec![(&wallet, 3.0)], other.get_address(), 2.0, 1.0).unwrap().unwrap();
         assert_eq!(chain.push_transfer_queue(transaction_a.clone()), true);
 
-        let transaction_b = chain.new_transfer(&wallet, other.get_address(), 3.0, 1.0).unwrap().unwrap();
+        let transaction_b = chain.new_transfer(vec![(&wallet, 3.0)], other.get_address(), 2.0, 1.0).unwrap().unwrap();
         assert_eq!(chain.push_transfer_queue(transaction_b.clone()), true);
 
-        let transaction_c = chain.new_transfer(&wallet, other.get_address(), 10.0, 1.0).unwrap().unwrap();
+        let transaction_c = chain.new_transfer(vec![(&wallet, 11.0)], other.get_address(), 10.0, 1.0).unwrap().unwrap();
         assert_eq!(chain.push_transfer_queue(transaction_c), false);
 
         assert_eq!(chain.get_next_transfers_in_queue(10), [&transaction_a, &transaction_b]);

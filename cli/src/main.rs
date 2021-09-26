@@ -37,21 +37,49 @@ fn balance(mut client: Client, options: &ArgMatches) -> Result<(), Box<dyn Error
     Ok(())
 }
 
+fn parse_inputs(options: &ArgMatches) 
+    -> Result<Option<Vec<(Vec<u8>, f32)>>, Box<dyn Error>>
+{
+    let mut inputs = Vec::new();
+    for from_path in options.values_of("from").unwrap()
+    {
+        let from_or_error = PrivateWallet::read_from_file(&PathBuf::from(from_path));
+        if from_or_error.is_err() 
+        {
+            println!("Error: Unable to open wallet");
+            return Ok(None);
+        }
+
+        let from = from_or_error.unwrap().serialize();
+        let amount = options.value_of("amount").unwrap().parse::<f32>()?;
+        inputs.push((from, amount));
+    }
+
+    Ok(Some(inputs))
+}
+
 fn send(mut client: Client, options: &ArgMatches) -> Result<(), Box<dyn Error>>
 {
-    let from_path = options.value_of("from").unwrap();
-    let from_or_error = PrivateWallet::read_from_file(&PathBuf::from(from_path));
-    if from_or_error.is_err() 
+    let from_paths = options.values_of("from").unwrap();
+    let amounts = options.values_of("amount").unwrap();
+    if from_paths.len() != amounts.len() 
     {
-        println!("Error: Unable to open wallet");
+        println!("Error: Number of from and amounts arguments did not match");
         return Ok(());
     }
 
-    let from = from_or_error.unwrap();
+    let inputs_or_none = parse_inputs(options)?;
+    if inputs_or_none.is_none() {
+        return Ok(());
+    }
+
+    let inputs = inputs_or_none.unwrap();
+    let total_input_amount = inputs.iter().fold(0.0, |acc, (_, x)| acc + x);
+
     let to = base_62::decode(options.value_of("to").unwrap())?;
-    let amount = options.value_of("amount").unwrap().parse::<f32>()?;
     let fee = options.value_of("fee").unwrap().parse::<f32>()?;
-    match client.send(Command::Send(from.serialize(), to, amount, fee))?
+    let amount = total_input_amount - fee;
+    match client.send(Command::Send(inputs, to, amount, fee))?
     {
         Response::Sent(id) => 
             println!("Success, TxID: {}", base_62::encode(&id)),
@@ -100,18 +128,25 @@ fn transaction_info(mut client: Client, options: &ArgMatches)
                 TransactionVariant::Transfer(transfer) =>
                 {
                     println!("Transfer:");
-                    println!("From: {}", base_62::encode(&transfer.get_from_address()));
-                    println!("To: {}", base_62::encode(&transfer.header.to));
-                    println!("Amount: {}", transfer.header.amount);
-                    println!("Fee: {}", transfer.header.fee);
+                    for input in &transfer.header.inputs 
+                    {
+                        println!("From: {}", base_62::encode(&input.get_address()));
+                        println!("Amount: {}", input.amount);
+                    }
+                    println!("To: {}", base_62::encode(&transfer.header.content.to));
+                    println!("Fee: {}", transfer.header.content.fee);
                 },
 
                 TransactionVariant::Page(page) =>
                 {
                     println!("Page:");
-                    println!("From: {}", base_62::encode(&page.get_from_address()));
-                    println!("Length: {} bytes", page.header.data_length);
-                    println!("Fee: {}", page.header.fee);
+                    for input in &page.header.inputs 
+                    {
+                        println!("From: {}", base_62::encode(&input.get_address()));
+                        println!("Amount: {}", input.amount);
+                    }
+                    println!("Length: {} bytes", page.header.content.data_length);
+                    println!("Fee: {}", page.header.content.fee);
                 },
             }
             
@@ -173,25 +208,27 @@ fn main() -> Result<(), Box<dyn Error>>
                 .long("from")
                 .takes_value(true)
                 .required(true)
+                .multiple(true)
                 .help("Path to from wallet file"))
+            .arg(Arg::with_name("amount")
+                .short("a")
+                .long("amount")
+                .takes_value(true)
+                .required(true)
+                .multiple(true)
+                .help("Amount to send"))
             .arg(Arg::with_name("to")
                 .short("t")
                 .long("to")
                 .takes_value(true)
                 .required(true)
                 .help("Address of recipient"))
-            .arg(Arg::with_name("amount")
-                    .short("a")
-                    .long("amount")
-                    .takes_value(true)
-                    .required(true)
-                    .help("Amount to send"))
             .arg(Arg::with_name("fee")
-                    .short("e")
-                    .long("fee")
-                    .takes_value(true)
-                    .required(true)
-                    .help("Transaction fee")))
+                .short("e")
+                .long("fee")
+                .takes_value(true)
+                .required(true)
+                .help("Transaction fee")))
         
         .subcommand(SubCommand::with_name("update-page")
             .about("Update your page")

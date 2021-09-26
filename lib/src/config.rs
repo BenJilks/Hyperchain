@@ -1,5 +1,6 @@
 
-pub const BLOCK_TIME: u64 = 10 * 60 * 1000; // 10 minute blocks
+pub const BLOCK_TIME: u64 = 10 * 1000; // 10 second blocks
+// pub const BLOCK_TIME: u64 = 10 * 60 * 1000; // 10 minute blocks
 pub const BLOCK_SAMPLE_SIZE: u64 = 100;
 pub const PAGE_CHUNK_SIZE: usize = 1000 * 1000; // 1MB
 

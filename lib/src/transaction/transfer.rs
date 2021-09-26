@@ -1,4 +1,4 @@
-use super::{TransactionHeader, TransactionValidationResult};
+use super::{Input, TransactionContent, TransactionValidationResult};
 use crate::wallet::WalletStatus;
 use crate::config::Hash;
 
@@ -32,25 +32,32 @@ impl Transfer
 
 }
 
-impl TransactionHeader for Transfer
+impl TransactionContent for Transfer
 {
 
-    fn validate(&self) -> Result<TransactionValidationResult, Box<dyn Error>>
+    fn validate(&self, inputs: &Vec<Input>) 
+        -> Result<TransactionValidationResult, Box<dyn Error>>
     {
-        if self.amount < 0.0 || self.fee < 0.0 {
-            Ok(TransactionValidationResult::Negative)
-        } else {
-            Ok(TransactionValidationResult::Ok)
+        let total_input = inputs.iter().fold(0.0, |acc, x| acc + x.amount);
+        let total_output = self.amount + self.fee;
+        if total_input != total_output {
+            return Ok(TransactionValidationResult::Negative);
         }
+
+        if self.amount < 0.0 || self.fee < 0.0 {
+            return Ok(TransactionValidationResult::Negative);
+        }
+        
+        Ok(TransactionValidationResult::Ok)
     }
 
     fn update_wallet_status(&self, address: &Hash, mut status: WalletStatus,
-                            is_from_address: bool, is_block_winner: bool)
+                            from_amount: f32, is_block_winner: bool)
         -> Option<WalletStatus>
     {
-        if is_from_address
+        if from_amount > 0.0
         {
-            status.balance -= self.amount + self.fee;
+            status.balance -= from_amount;
             if self.id <= status.max_id {
                 return None;
             }
@@ -75,7 +82,7 @@ mod tests
 {
 
     use super::*;
-    use super::super::Transaction;
+    use super::super::builder::TransactionBuilder;
     use crate::block::Block;
     use crate::chain::BlockChain;
     use crate::wallet::Wallet;
@@ -87,6 +94,8 @@ mod tests
     #[test]
     fn test_transfer()
     {
+        let _ = pretty_env_logger::try_init();
+
         let mut chain = BlockChain::open_temp();
         let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet")).unwrap();
         let other = PrivateWallet::read_from_file(&PathBuf::from("other.wallet")).unwrap();
@@ -95,20 +104,43 @@ mod tests
         chain.add(&block).unwrap();
 
         {
-            let transfer = Transaction::new(&wallet, Transfer::new(0, other.get_address(), 2.4, 0.2));
+            let transfer = TransactionBuilder::new(Transfer::new(0, other.get_address(), 2.4, 0.2))
+                .add_input(&wallet, 2.4 + 0.2)
+                .build().unwrap();
             transfer.hash().expect("Hash header");
             assert_eq!(transfer.validate_content().unwrap(), TransactionValidationResult::Ok);
         }
 
         {
-            let transfer = Transaction::new(&wallet, Transfer::new(1, other.get_address(), -1.6, 0.0));
+            let transfer = TransactionBuilder::new(Transfer::new(1, other.get_address(), -1.6, 0.0))
+                .add_input(&wallet, -1.6)
+                .build().unwrap();
             assert_ne!(transfer.validate_content().unwrap(), TransactionValidationResult::Ok);
         }
 
         {
-            let transfer = Transaction::new(&wallet, Transfer::new(2, other.get_address(), 0.0, -0.0001));
+            let transfer = TransactionBuilder::new(Transfer::new(2, other.get_address(), 0.0, -0.0001))
+                .add_input(&wallet, -0.0001)
+                .build().unwrap();
+            assert_ne!(transfer.validate_content().unwrap(), TransactionValidationResult::Ok);
+        }
+
+        {
+            let transfer = TransactionBuilder::new(Transfer::new(2, other.get_address(), 10.0, 1.0))
+                .add_input(&wallet, 5.0)
+                .add_input(&other, 6.0)
+                .build().unwrap();
+            assert_eq!(transfer.validate_content().unwrap(), TransactionValidationResult::Ok);
+        }
+
+        {
+            let transfer = TransactionBuilder::new(Transfer::new(2, other.get_address(), 10.0, 1.0))
+                .add_input(&wallet, 5.0)
+                .add_input(&other, 5.0)
+                .build().unwrap();
             assert_ne!(transfer.validate_content().unwrap(), TransactionValidationResult::Ok);
         }
     }
 
 }
+

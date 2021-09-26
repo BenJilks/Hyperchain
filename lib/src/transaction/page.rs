@@ -1,4 +1,4 @@
-use super::{TransactionHeader, TransactionValidationResult};
+use super::{Input, TransactionContent, TransactionValidationResult};
 use crate::wallet::WalletStatus;
 use crate::data_store::DataUnit;
 use crate::config::{Hash, PAGE_CHUNK_SIZE};
@@ -10,6 +10,8 @@ use std::error::Error;
 pub struct Page
 {
     pub id: u32,
+    pub site: Hash,
+
     pub data_hashes: Vec<Hash>,
     pub data_length: u32,
     pub fee: f32,
@@ -18,24 +20,30 @@ pub struct Page
 impl Page
 {
 
-    pub fn new(id: u32, data_hashes: Vec<Hash>, data_length: u32, fee: f32) -> Self
+    pub fn new(id: u32, site: Hash, 
+               data_hashes: Vec<Hash>, data_length: u32, 
+               fee: f32) -> Self
     {
         Page
         {
             id,
+            site,
+
             data_hashes,
             data_length,
             fee,
         }
     }
 
-    pub fn new_from_data(id: u32, data: &DataUnit, fee: f32) -> Result<Self, Box<dyn Error>>
+    pub fn new_from_data(id: u32, site: Hash, data: &DataUnit, fee: f32) -> Result<Self, Box<dyn Error>>
     {
         let data_hashes = data.get_hashes()?;
         let data_length = data.len()?;
         Ok(Page
         {
             id,
+            site,
+
             data_hashes,
             data_length,
             fee,
@@ -68,11 +76,21 @@ impl Page
 
 }
 
-impl TransactionHeader for Page
+impl TransactionContent for Page
 {
 
-    fn validate(&self) -> Result<TransactionValidationResult, Box<dyn Error>>
+    fn validate(&self, inputs: &Vec<Input>) 
+        -> Result<TransactionValidationResult, Box<dyn Error>>
     {
+        if !inputs.iter().any(|x| x.get_address() == self.site) {
+            return Ok(TransactionValidationResult::Negative);
+        }
+
+        let total_input = inputs.iter().fold(0.0, |acc, x| acc + x.amount);
+        if total_input != self.cost() + self.fee {
+            return Ok(TransactionValidationResult::Negative);
+        }
+
         let expected_hash_count = self.cost().ceil() as usize;
         if self.data_hashes.len() != expected_hash_count {
             return Ok(TransactionValidationResult::Negative);
@@ -82,12 +100,12 @@ impl TransactionHeader for Page
     }
 
     fn update_wallet_status(&self, _address: &Hash, mut status: WalletStatus,
-                            is_from_address: bool, is_block_winner: bool)
+                            from_amount: f32, is_block_winner: bool)
         -> Option<WalletStatus>
     {
-        if is_from_address
+        if from_amount > 0.0
         {
-            status.balance -= self.cost() + self.fee;
+            status.balance -= from_amount;
             if self.id <= status.max_id {
                 return None;
             }

@@ -10,7 +10,7 @@ pub enum Command
 {
     Exit,
     Balance(Vec<u8>),
-    Send(Vec<u8>, Vec<u8>, f32, f32),
+    Send(Vec<(Vec<u8>, f32)>, Vec<u8>, f32, f32),
     UpdatePage(Vec<u8>, String, Vec<u8>),
     TransactionInfo(Vec<u8>),
     TransactionHistory(Vec<u8>),
@@ -32,3 +32,4 @@ pub enum Response
     PageData(DataUnit),
     Failed,
 }
+

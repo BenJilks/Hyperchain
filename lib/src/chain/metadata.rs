@@ -37,8 +37,8 @@ impl BlockChain
         let mut page_updates = HashMap::new();
         for page in &block.pages 
         {
-            let is_creation = self.last_page_update(&page.get_from_address()).is_none();
-            page_updates.insert(page.get_from_address(), PageMetadata
+            let is_creation = self.last_page_update(&page.header.content.site).is_none();
+            page_updates.insert(page.header.content.site, PageMetadata
             {
                 is_creation,
             });
