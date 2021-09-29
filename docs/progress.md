@@ -14,12 +14,12 @@
 
 ---------------------
 
-## v0.2
+## ~~v0.2~~
 - ~~Better transactions~~
     - ~~Use hash trees~~
     - ~~Multiple inputs and outputs~~
-- Transaction queue
-    - Order by fee
+- ~~Transaction queue~~
+    - ~~Order by fee~~
 
 ---------------------
 
