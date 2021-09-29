@@ -252,7 +252,6 @@ mod tests
     use libhyperchain::miner;
 
     use std::time::Duration;
-    use std::path::PathBuf;
 
     fn wait_for_block(connection: &NetworkConnection<NodePacketHandler>, block_id: u64) 
         -> Block
@@ -302,7 +301,7 @@ mod tests
     #[test]
     fn test_node_branched_chain()
     {
-        let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet")).unwrap();
+        let wallet = PrivateWallet::open_temp(0).unwrap();
 
         let mut connection_a = create_node(8030);
         let block_a = mine_block(&mut connection_a, &wallet);
@@ -331,7 +330,7 @@ mod tests
     #[test]
     fn test_node_join_with_longer_chain()
     {
-        let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet")).unwrap();
+        let wallet = PrivateWallet::open_temp(0).unwrap();
 
         let mut connection_a = create_node(8020);
         mine_block(&mut connection_a, &wallet);
@@ -351,7 +350,7 @@ mod tests
     #[test]
     fn test_node()
     {
-        let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet")).unwrap();
+        let wallet = PrivateWallet::open_temp(0).unwrap();
 
         let mut connection_a = create_node(8010);
         let mut connection_b = create_node(8011);
