@@ -12,28 +12,6 @@ use crate::config::Hash;
 
 use serde::Serialize;
 use std::error::Error;
-use std::collections::VecDeque;
-
-fn search_queue<C>(queue: &VecDeque<Transaction<C>>, transaction_id: &Hash) 
-        -> Option<Transaction<C>>
-    where C: TransactionContent + Serialize + Clone
-{
-    for transaction in queue
-    {
-        match transaction.hash()
-        {
-            Ok(hash) =>
-            {
-                if hash == transaction_id {
-                    return Some(transaction.clone());
-                }
-            },
-            Err(_) => {},
-        }
-    }
-
-    None
-}
 
 impl BlockChain
 {
@@ -41,13 +19,8 @@ impl BlockChain
     fn get_wallet_status_after_queue(&mut self, address: &Hash) -> WalletStatus
     {
         let mut status = self.get_wallet_status(address);
-        for transfer in &self.transfer_queue {
-            status = transfer.update_wallet_status(address, status, false).unwrap();
-        }
-        for page in &self.page_queue {
-            status = page.update_wallet_status(address, status, false).unwrap();
-        }
-
+        status = self.transfer_queue.update_wallet_status(address, status).unwrap();
+        status = self.page_queue.update_wallet_status(address, status).unwrap();
         status
     }
 
@@ -90,7 +63,10 @@ impl BlockChain
         max_id + 1
     }
 
-    pub fn new_transfer(&mut self, inputs: Vec<(&PrivateWallet, f32)>, outputs: Vec<(Hash, f32)>, fee: f32)
+    pub fn new_transfer(&mut self, 
+                        inputs: Vec<(&PrivateWallet, f32)>, 
+                        outputs: Vec<(Hash, f32)>, 
+                        fee: f32)
         -> Result<Option<Transaction<Transfer>>, Box<dyn Error>>
     {
         let id = self.next_transaction_id(&inputs);
@@ -134,65 +110,54 @@ impl BlockChain
         return true;
     }
 
-    pub fn push_transfer_queue(&mut self, transaction: Transaction<Transfer>) -> bool
+    pub fn push_transfer_queue(&mut self, transaction: Transaction<Transfer>) 
+        -> Result<bool, Box<dyn Error>>
     {
         if !self.is_transaction_valid(&transaction) {
-            return false;
+            return Ok(false);
         }
-        self.transfer_queue.push_back(transaction);
-        true
+        self.transfer_queue.push(transaction)?;
+        Ok(true)
     }
 
-    pub fn push_page_queue(&mut self, transaction: Transaction<Page>) -> bool
+    pub fn push_page_queue(&mut self, transaction: Transaction<Page>) 
+        -> Result<bool, Box<dyn Error>>
     {
         if !self.is_transaction_valid(&transaction) {
-            return false;
+            return Ok(false);
         }
-        self.page_queue.push_back(transaction);
-        true
+        self.page_queue.push(transaction)?;
+        Ok(true)
     }
 
-    pub fn get_next_transfers_in_queue(&self, count: usize) -> Vec<&Transaction<Transfer>>
+    pub fn get_next_transfers_in_queue(&self, count: usize) 
+        -> impl Iterator<Item = &Transaction<Transfer>>
     {
-        let real_count = std::cmp::min(count, self.transfer_queue.len());
-        self.transfer_queue.range(0..real_count).collect()
+        self.transfer_queue.get_next(count)
     }
 
-    pub fn get_next_pages_in_queue(&self, count: usize) -> Vec<&Transaction<Page>>
+    pub fn get_next_pages_in_queue(&self, count: usize) 
+        -> impl Iterator<Item = &Transaction<Page>>
     {
-        let real_count = std::cmp::min(count, self.page_queue.len());
-        self.page_queue.range(0..real_count).collect()
+        self.page_queue.get_next(count)
     }
 
     pub fn remove_from_transaction_queue(&mut self, block: &Block)
     {
-        for transfer in &block.transfers
-        {
-            let index = self.transfer_queue.iter().position(|x| x == transfer);
-            if index.is_some() {
-                self.transfer_queue.remove(index.unwrap());
-            }
-        }
-
-        for page in &block.pages
-        {
-            let index = self.page_queue.iter().position(|x| x == page);
-            if index.is_some() {
-                self.page_queue.remove(index.unwrap());
-            }
-        }
+        self.transfer_queue.remove_in_block(&block.transfers);
+        self.page_queue.remove_in_block(&block.pages);
     }
 
     pub fn find_transaction_in_queue(&self, transaction_id: &Hash) -> Option<TransactionVariant>
     {
-        let transfer = search_queue(&self.transfer_queue, transaction_id);
+        let transfer = self.transfer_queue.find(transaction_id);
         if transfer.is_some() {
-            return Some(TransactionVariant::Transfer(transfer.unwrap()));
+            return Some(TransactionVariant::Transfer(transfer?));
         }
 
-        let page = search_queue(&self.page_queue, transaction_id);
+        let page = self.page_queue.find(transaction_id);
         if page.is_some() {
-            return Some(TransactionVariant::Page(page.unwrap()));
+            return Some(TransactionVariant::Page(page?));
         }
 
         None
@@ -206,7 +171,6 @@ mod tests
 
     use super::*;
     use super::super::BlockChainAddResult;
-    use std::path::PathBuf;
 
     use crate::block::builder::BlockBuilder;
     use crate::miner;
@@ -218,22 +182,48 @@ mod tests
         let _ = pretty_env_logger::try_init();
 
         let mut chain = BlockChain::open_temp();
-        let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet")).unwrap();
-        let other = PrivateWallet::read_from_file(&PathBuf::from("other.wallet")).unwrap();
+        let wallet = PrivateWallet::open_temp(0).unwrap();
+        let other = PrivateWallet::open_temp(1).unwrap();
+        let independant_a = PrivateWallet::open_temp(2).unwrap();
+        let independant_b = PrivateWallet::open_temp(3).unwrap();
 
         let block_a = miner::mine_block(Block::new_blank(&mut chain, &wallet).unwrap());
         assert_eq!(chain.add(&block_a).unwrap(), BlockChainAddResult::Ok);
 
-        let transaction_a = chain.new_transfer(vec![(&wallet, 3.0)], vec![(other.get_address(), 2.0)], 1.0).unwrap().unwrap();
-        assert_eq!(chain.push_transfer_queue(transaction_a.clone()), true);
+        let block_b = miner::mine_block(Block::new_blank(&mut chain, &independant_a).unwrap());
+        assert_eq!(chain.add(&block_b).unwrap(), BlockChainAddResult::Ok);
 
-        let transaction_b = chain.new_transfer(vec![(&wallet, 3.0)], vec![(other.get_address(), 2.0)], 1.0).unwrap().unwrap();
-        assert_eq!(chain.push_transfer_queue(transaction_b.clone()), true);
+        let transaction_a = chain.new_transfer(
+            vec![(&wallet, 3.0)], 
+            vec![(other.get_address(), 2.0)],
+            1.0)
+            .unwrap().unwrap();
+        assert_eq!(chain.push_transfer_queue(transaction_a.clone()).unwrap(), true);
 
-        let transaction_c = chain.new_transfer(vec![(&wallet, 11.0)], vec![(other.get_address(), 10.0)], 1.0).unwrap().unwrap();
-        assert_eq!(chain.push_transfer_queue(transaction_c), false);
+        let transaction_b = chain.new_transfer(
+            vec![(&wallet, 3.0)], 
+            vec![(other.get_address(), 1.0)], 
+            2.0)
+            .unwrap().unwrap();
+        assert_eq!(chain.push_transfer_queue(transaction_b.clone()).unwrap(), true);
 
-        assert_eq!(chain.get_next_transfers_in_queue(10), [&transaction_a, &transaction_b]);
+        let transaction_c = chain.new_transfer(
+            vec![(&wallet, 11.0)], 
+            vec![(other.get_address(), 10.0)], 
+            1.0)
+            .unwrap().unwrap();
+        assert_eq!(chain.push_transfer_queue(transaction_c).unwrap(), false);
+
+        let transaction_d = chain.new_transfer(
+            vec![(&independant_a, 6.0)], 
+            vec![(independant_b.get_address(), 3.0)], 
+            3.0)
+            .unwrap().unwrap();
+        assert_eq!(chain.push_transfer_queue(transaction_d.clone()).unwrap(), true);
+
+        assert_eq!(
+            chain.get_next_transfers_in_queue(10).collect::<Vec<_>>(), 
+            [&transaction_d, &transaction_a, &transaction_b]);
 
         let transaction_a_id_vec = transaction_a.hash().unwrap();
         let transaction_a_id = slice_as_array!(&transaction_a_id_vec, [u8; HASH_LEN]);
@@ -243,10 +233,11 @@ mod tests
         let block_b = miner::mine_block(BlockBuilder::new(&wallet)
             .add_transfer(transaction_a)
             .add_transfer(transaction_b)
+            .add_transfer(transaction_d)
             .build(&mut chain)
             .unwrap());
         assert_eq!(chain.add(&block_b).unwrap(), BlockChainAddResult::Ok);
-        assert_eq!(chain.get_next_transfers_in_queue(10).is_empty(), true);
+        assert_eq!(chain.get_next_transfers_in_queue(10).count() == 0, true);
     }
 
 }

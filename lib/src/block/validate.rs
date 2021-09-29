@@ -149,13 +149,12 @@ mod tests
     use crate::wallet::{WalletStatus, Wallet};
     use crate::wallet::private_wallet::PrivateWallet;
     use crate::miner;
-    use std::path::PathBuf;
 
     #[test]
     fn test_block_verify()
     {
-        let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet")).unwrap();
-        let other = PrivateWallet::read_from_file(&PathBuf::from("other.wallet")).unwrap();
+        let wallet = PrivateWallet::open_temp(0).unwrap();
+        let other = PrivateWallet::open_temp(1).unwrap();
         let mut chain = BlockChain::open_temp();
 
         let transaction = 

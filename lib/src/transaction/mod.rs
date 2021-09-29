@@ -25,12 +25,18 @@ pub enum TransactionValidationResult
 pub trait TransactionContent
 {
 
+    fn get_fee(&self) -> f32;
+
     fn validate(&self, inputs: &Vec<Input>)
         -> Result<TransactionValidationResult, Box<dyn Error>>;
 
     fn update_wallet_status(&self, address: &Hash, status: WalletStatus, 
                             from_amount: f32, is_block_winner: bool)
         -> Option<WalletStatus>;
+
+    fn get_to_addresses(&self) -> Vec<Hash>;
+
+    fn get_id(&self) -> u32;
 
 }
 
@@ -128,6 +134,13 @@ impl<C> Transaction<C>
         self.header.hash()
     }
 
+    pub fn fee_per_byte(&self) -> Result<f32, Box<dyn Error>>
+    {
+        let total_fee = self.header.content.get_fee();
+        let size_in_bytes = bincode::serialize(&self.header)?.len();
+        Ok(total_fee / size_in_bytes as f32)
+    }
+
     pub fn update_wallet_status(&self, address: &Hash, status: WalletStatus, 
                                 is_block_winner: bool)
         -> Option<WalletStatus>
@@ -164,7 +177,7 @@ impl<C> Transaction<C>
         Ok(TransactionValidationResult::Ok)
     }
 
-    pub fn get_from_addresses(&self) -> Vec<[u8; HASH_LEN]>
+    pub fn get_from_addresses(&self) -> Vec<Hash>
     {
         let mut addresses = Vec::new();
         for input in &self.header.inputs {
@@ -174,4 +187,18 @@ impl<C> Transaction<C>
         addresses
     }
 
+    pub fn get_addresses_used(&self) -> Vec<Hash>
+    {
+        let mut inputs = self.get_from_addresses();
+        let mut outputs = self.header.content.get_to_addresses();
+        inputs.append(&mut outputs);
+        inputs
+    }
+
+    pub fn get_id(&self) -> u32
+    {
+        self.header.content.get_id()
+    }
+
 }
+

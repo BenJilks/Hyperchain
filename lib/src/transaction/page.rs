@@ -35,7 +35,8 @@ impl Page
         }
     }
 
-    pub fn new_from_data(id: u32, site: Hash, data: &DataUnit, fee: f32) -> Result<Self, Box<dyn Error>>
+    pub fn new_from_data(id: u32, site: Hash, data: &DataUnit, fee: f32) 
+        -> Result<Self, Box<dyn Error>>
     {
         let data_hashes = data.get_hashes()?;
         let data_length = data.len()?;
@@ -79,6 +80,11 @@ impl Page
 impl TransactionContent for Page
 {
 
+    fn get_fee(&self) -> f32
+    {
+        self.fee
+    }
+
     fn validate(&self, inputs: &Vec<Input>) 
         -> Result<TransactionValidationResult, Box<dyn Error>>
     {
@@ -119,4 +125,15 @@ impl TransactionContent for Page
         Some(status)
     }
 
+    fn get_to_addresses(&self) -> Vec<Hash>
+    {
+        vec![self.site]
+    }
+
+    fn get_id(&self) -> u32
+    {
+        self.id
+    }
+
 }
+

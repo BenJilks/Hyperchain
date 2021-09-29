@@ -153,7 +153,7 @@ impl BlockChain
             }
         });
 
-        for transfer in &self.transfer_queue 
+        for transfer in self.transfer_queue.transactions()
         {
             if transfer.header.content.outputs.iter().any(|x| &x.to == address) ||
                 transfer.get_from_addresses().contains(&address)
@@ -164,7 +164,7 @@ impl BlockChain
             }
         }
 
-        for page in &self.page_queue
+        for page in self.page_queue.transactions()
         {
             if page.get_from_addresses().contains(&address)
             {
@@ -194,28 +194,26 @@ mod tests
     use crate::miner;
     use crate::config::HASH_LEN;
 
-    use std::path::PathBuf;
-
     #[test]
     fn test_chain_transaction()
     {
         let _ = pretty_env_logger::try_init();
 
         let mut chain = BlockChain::open_temp();
-        let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet")).unwrap();
-        let other = PrivateWallet::read_from_file(&PathBuf::from("other.wallet")).unwrap();
+        let wallet = PrivateWallet::open_temp(0).unwrap();
+        let other = PrivateWallet::open_temp(1).unwrap();
 
         let block_a = miner::mine_block(Block::new_blank(&mut chain, &wallet).unwrap());
         assert_eq!(chain.add(&block_a).unwrap(), BlockChainAddResult::Ok);
 
         // Create transfer
         let transaction = chain.new_transfer(vec![(&wallet, 2.0)], vec![(other.get_address(), 2.0)], 0.0).unwrap().unwrap();
-        assert_eq!(chain.push_transfer_queue(transaction.clone()), true);
+        assert_eq!(chain.push_transfer_queue(transaction.clone()).unwrap(), true);
 
         // Create page
         let page_data = CreatePageData::new("index.html".to_owned(), Vec::new());
         let page = chain.new_page(&wallet, &DataUnit::CreatePage(page_data), 0.0).unwrap().unwrap();
-        assert_eq!(chain.push_page_queue(page.clone()), true);
+        assert_eq!(chain.push_page_queue(page.clone()).unwrap(), true);
 
         // Add transactions to new block
         let block_b = miner::mine_block(BlockBuilder::new(&wallet)
@@ -237,7 +235,7 @@ mod tests
 
         // Test 'push_transfer_queue'
         let other_transaction = chain.new_transfer(vec![(&wallet, 2.0)], vec![(other.get_address(), 2.0)], 0.0).unwrap().unwrap();
-        assert_eq!(chain.push_transfer_queue(other_transaction.clone()), true);
+        assert_eq!(chain.push_transfer_queue(other_transaction.clone()).unwrap(), true);
 
         // Test 'get_transaction_history'
         assert_eq!(chain.get_transaction_history(&wallet.get_address()), 

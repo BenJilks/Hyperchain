@@ -27,7 +27,7 @@ fn add_page(connection: &mut NetworkConnection<NodePacketHandler>,
     }
 
     let page = page_or_error.unwrap().unwrap();
-    assert_eq!(chain.push_page_queue(page.clone()), true);
+    assert_eq!(chain.push_page_queue(page.clone()).unwrap(), true);
     
     let page_id = page.hash().unwrap();
     Some((page, page_id))

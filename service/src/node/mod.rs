@@ -200,7 +200,7 @@ impl Node
     {
         info!("Got transfer {:?}", transfer);
 
-        if self.chain.push_transfer_queue(transfer.clone())
+        if self.chain.push_transfer_queue(transfer.clone())?
         {
             manager.send_to(
                 Packet::Transfer(transfer), 
@@ -221,7 +221,7 @@ impl Node
         info!("Got page {:?}", page);
         
         if page.header.content.is_data_valid(&data)?
-            && self.chain.push_page_queue(page.clone())
+            && self.chain.push_page_queue(page.clone())?
         {
             let id = page.hash()?;
             self.data_store.store(&id, &data)?;

@@ -76,6 +76,11 @@ impl Transfer
 
 impl TransactionContent for Transfer
 {
+    
+    fn get_fee(&self) -> f32
+    {
+        self.fee
+    }
 
     fn validate(&self, inputs: &Vec<Input>) 
         -> Result<TransactionValidationResult, Box<dyn Error>>
@@ -121,6 +126,19 @@ impl TransactionContent for Transfer
         Some(status)
     }
 
+    fn get_to_addresses(&self) -> Vec<Hash>
+    {
+        self.outputs
+            .iter()
+            .map(|x| x.to)
+            .collect()
+    }
+
+    fn get_id(&self) -> u32
+    {
+        self.id
+    }
+
 }
 
 #[cfg(test)]
@@ -135,16 +153,14 @@ mod tests
     use crate::wallet::private_wallet::PrivateWallet;
     use crate::miner;
 
-    use std::path::PathBuf;
-
     #[test]
     fn test_transfer()
     {
         let _ = pretty_env_logger::try_init();
 
         let mut chain = BlockChain::open_temp();
-        let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet")).unwrap();
-        let other = PrivateWallet::read_from_file(&PathBuf::from("other.wallet")).unwrap();
+        let wallet = PrivateWallet::open_temp(0).unwrap();
+        let other = PrivateWallet::open_temp(1).unwrap();
 
         let block = miner::mine_block(Block::new_blank(&mut chain, &wallet).expect("Create block"));
         chain.add(&block).unwrap();

@@ -92,3 +92,29 @@ impl PrivateWallet
     }
 
 }
+
+#[cfg(test)]
+mod tests
+{
+
+    use super::*;
+
+    impl PrivateWallet
+    {
+
+        pub fn open_temp(id: u32) 
+            -> Result<Self, Box<dyn Error>>
+        {
+            let file_path = std::env::temp_dir().join(format!("{}.wallet", id));
+            if file_path.as_path().exists() {
+                return Ok(Self::read_from_file(&file_path)?);
+            }
+
+            let wallet = Self::new()?;
+            wallet.write_to_file(&file_path)?;
+            Ok(wallet)
+        }
+
+    }
+    
+}

@@ -26,6 +26,7 @@ pub mod wallet;
 pub mod block;
 pub mod transaction;
 pub mod chain;
+pub mod transaction_queue;
 pub mod data_store;
 pub mod merkle_tree;
 pub mod miner;

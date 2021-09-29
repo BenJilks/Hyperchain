@@ -72,7 +72,7 @@ pub fn send(connection: &mut NetworkConnection<NodePacketHandler>,
 
         transfer = transfer_or_error.unwrap().unwrap();
         transfer_id = transfer.hash().unwrap();
-        if !chain.push_transfer_queue(transfer.clone()) {
+        if !chain.push_transfer_queue(transfer.clone()).unwrap() {
             return Response::Failed;
         }
     }

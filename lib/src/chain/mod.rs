@@ -7,12 +7,11 @@ use storage::Storage;
 use metadata::BlockMetadata;
 use crate::block::Block;
 use crate::block::validate::BlockValidationResult;
-use crate::transaction::Transaction;
 use crate::transaction::transfer::Transfer;
 use crate::transaction::page::Page;
+use crate::transaction_queue::TransactionQueue;
 use crate::config::BLOCK_SAMPLE_SIZE;
 
-use std::collections::VecDeque;
 use std::error::Error;
 use std::path::PathBuf;
 
@@ -21,8 +20,8 @@ pub struct BlockChain
     metadata: Storage<BlockMetadata>,
     blocks: Storage<Block>,
 
-    page_queue: VecDeque<Transaction<Page>>,
-    transfer_queue: VecDeque<Transaction<Transfer>>,
+    transfer_queue: TransactionQueue<Transfer>,
+    page_queue: TransactionQueue<Page>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -46,8 +45,8 @@ impl BlockChain
             metadata: Storage::new(&path.join("metadata"))?,
             blocks: Storage::new(path)?,
 
-            page_queue: VecDeque::new(),
-            transfer_queue: VecDeque::new(),
+            page_queue: TransactionQueue::new(),
+            transfer_queue: TransactionQueue::new(),
         })
     }
 
@@ -97,10 +96,8 @@ impl BlockChain
                     base_62::encode(&address));
 
                 // NOTE: Purge any pending transfers coming from this address
-                self.transfer_queue
-                    .iter()
-                    .take_while(|x| x.get_from_addresses().contains(&address))
-                    .count();
+                self.transfer_queue.remove_from_address(&address);
+                self.page_queue.remove_from_address(&address);
 
                 return Ok(BlockChainAddResult::Invalid(BlockValidationResult::Balance(address)));
             },
@@ -147,8 +144,6 @@ mod tests
     use crate::wallet::private_wallet::PrivateWallet;
     use crate::miner;
 
-    use std::path::PathBuf;
-
     impl BlockChain
     {
         pub fn open_temp() -> Self
@@ -173,7 +168,7 @@ mod tests
 
         let mut chain_a = BlockChain::open_temp();
         let mut chain_b = BlockChain::open_temp();
-        let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet")).unwrap();
+        let wallet = PrivateWallet::open_temp(0).unwrap();
         
         let block_a = miner::mine_block(Block::new_blank(&mut chain_a, &wallet).unwrap());
         assert_eq!(chain_a.add(&block_a).unwrap(), BlockChainAddResult::Ok);

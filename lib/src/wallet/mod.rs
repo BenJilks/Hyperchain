@@ -61,14 +61,13 @@ mod tests
     use crate::transaction::transfer::TransferBuilder;
     use crate::chain::BlockChain;
     use crate::miner;
-    use std::path::PathBuf;
 
     #[test]
     fn test_wallet()
     {
         let mut chain = BlockChain::open_temp();
-        let wallet = PrivateWallet::read_from_file(&PathBuf::from("N4L8.wallet")).unwrap();
-        let other = PrivateWallet::read_from_file(&PathBuf::from("other.wallet")).unwrap();
+        let wallet = PrivateWallet::open_temp(0).unwrap();
+        let other = PrivateWallet::open_temp(1).unwrap();
 
         let block_a = miner::mine_block(Block::new_blank(&mut chain, &wallet).expect("Create block"));
         chain.add(&block_a).unwrap();
