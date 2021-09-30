@@ -64,8 +64,7 @@ impl PacketHandler for NodePacketHandler
             Packet::Page(page, data) =>
                 node.handle_page(manager, from, page, data)?,
             
-            Packet::Ping => 
-                info!("Ping!"),
+            Packet::Ping => {},
         }
 
         Ok(())

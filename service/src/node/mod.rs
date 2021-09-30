@@ -74,16 +74,45 @@ impl Node
         &mut self.data_store
     }
 
-    fn is_valid_next_entry_in_branch(branch: &Vec<(Block, HashMap<Hash, DataUnit>)>, 
-                                     block: &Block) 
+    fn try_insert_block_into_branch(branch: &mut Vec<(Block, HashMap<Hash, DataUnit>)>, 
+                                    block: Block, data: HashMap<Hash, DataUnit>) 
         -> bool
     {
-        if branch.is_empty() {
+        // Is start of new branch
+        if branch.is_empty() 
+        {
+            branch.push((block, data));
             return true;
         }
 
+        // Can be added to the bottom
         let (bottom, _) = branch.first().unwrap();
-        bottom.validate_next(block).is_ok()
+        if bottom.validate_next(&block).is_ok() 
+        {
+            branch.insert(0, (block, data));
+            return true;
+        }
+
+        // Can be added to the top
+        let (top, _) = branch.last().unwrap();
+        if block.validate_next(top).is_ok() {
+            branch.push((block, data));
+            return true;
+        }
+
+        // Already exists
+        let bottom_id = bottom.header.block_id;
+        let top_id = top.header.block_id;
+        if (bottom_id..=top_id).contains(&block.header.block_id) 
+        {
+            let branch_index = (block.header.block_id - bottom_id) as usize;
+            let (existing_block_in_branch, _) = branch.get(branch_index).unwrap();
+            if &block == existing_block_in_branch {
+                return true;
+            }
+        }
+
+        false
     }
 
     fn add_to_branch(&mut self, from: &str, block: Block, data: HashMap<Hash, DataUnit>)
@@ -93,9 +122,7 @@ impl Node
         }
 
         let mut branch = self.branches.remove(from).unwrap();
-        if Self::is_valid_next_entry_in_branch(&branch, &block) 
-        {
-            branch.insert(0, (block, data));
+        if Self::try_insert_block_into_branch(&mut branch, block, data) {
             self.branches.insert(from.to_owned(), branch);
         }
     }
