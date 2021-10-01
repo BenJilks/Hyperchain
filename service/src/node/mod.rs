@@ -115,15 +115,28 @@ impl Node
         false
     }
 
-    fn add_to_branch(&mut self, from: &str, block: Block, data: HashMap<Hash, DataUnit>)
+    fn add_to_branch(&mut self, from: &str, 
+                     block: Block, 
+                     data: HashMap<Hash, DataUnit>)
+        -> Option<u64>
     {
         if !self.branches.contains_key(from) {
             self.branches.insert(from.to_owned(), Vec::new());
         }
 
         let mut branch = self.branches.remove(from).unwrap();
-        if Self::try_insert_block_into_branch(&mut branch, block, data) {
-            self.branches.insert(from.to_owned(), branch);
+        if !Self::try_insert_block_into_branch(&mut branch, block, data) {
+            return None;
+        }
+        
+        let (bottom, _) = branch.first().unwrap();
+        let bottom_id = bottom.header.block_id;
+        self.branches.insert(from.to_owned(), branch);
+
+        if bottom_id == 0 {
+            None
+        } else {
+            Some(bottom_id - 1)
         }
     }
 
@@ -149,10 +162,36 @@ impl Node
         Ok(())
     }
 
+    fn should_ignore_block(&mut self, from: &str, block: &Block)
+        -> bool
+    {
+        let top_or_none = self.chain.top();
+        if top_or_none.is_none() {
+            return false;
+        }
+
+        let top = top_or_none.unwrap();
+        let top_id = top.header.block_id;
+        match self.branches.get(from)
+        {
+            Some(branch) =>
+            {
+                let (branch_top, _) = branch.last().unwrap();
+                branch_top.header.block_id < top_id
+            },
+
+            None => block.header.block_id < top_id,
+        }
+    }
+
     fn handle_block(&mut self, manager: &mut ClientManager, from: &str, 
                     block: Block, data: HashMap<Hash, DataUnit>) 
         -> Result<(), Box<dyn Error>>
     {
+        if self.should_ignore_block(from, &block) {
+            return Ok(());
+        }
+
         // NOTE: Post v0.1, we won't care about a blocks data, until we request some for 
         //       storage or page building. For now we store everything.
 
@@ -183,12 +222,11 @@ impl Node
                 info!("[{}] Invalid block {}", self.port, block.header.block_id);
 
                 // Add block to this nodes branch
-                let block_id = block.header.block_id;
-                self.add_to_branch(from, block, data);
+                let next_block = self.add_to_branch(from, block, data);
                 
                 // Request the next block. If there's no more, complete the branch
-                if block_id > 0 {
-                    manager.send_to(Packet::BlockRequest(block_id - 1), |x| x == from)?;
+                if next_block.is_some() {
+                    manager.send_to(Packet::BlockRequest(next_block.unwrap()), |x| x == from)?;
                 } else {
                     self.complete_branch(from)?;
                 }
