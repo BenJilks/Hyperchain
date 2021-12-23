@@ -339,9 +339,9 @@ mod tests
     {
         let time = libhyperchain::block::current_timestamp();
         let path = std::env::temp_dir().join(format!("{}{}", time, port.to_string()));
-        let node = Node::new(port, path).unwrap();
+        let node = Node::new(port, &path).unwrap();
         let handler = NodePacketHandler::new(node);
-        let network_connection = NetworkConnection::open(port, handler).unwrap();
+        let network_connection = NetworkConnection::open(port, &path, handler).unwrap();
         network_connection
     }
 

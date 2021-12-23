@@ -162,7 +162,11 @@ impl ClientManager
 
         info!("[{}] Discovered new node {}", self.port, address);
         data.known_nodes.insert(address.to_owned(), Default::default());
-        data.flush_changes().expect("Can flush changes");
+
+        // FIXME: We probably shouldn't be ignoring this error, but it 
+        //        doesn't stop us running for now.
+        let _ = data.flush_changes();
+
         true
     }
 
@@ -204,7 +208,10 @@ impl ClientManager
         if !data.known_nodes.contains_key(&address) 
         {
             data.known_nodes.insert(address.clone(), Default::default());
-            data.flush_changes()?;
+
+            // FIXME: We probably shouldn't be ignoring this error, but it 
+            //        doesn't stop us running for now.
+            let _ = data.flush_changes();
         }
 
         // Send all our known nodes over
