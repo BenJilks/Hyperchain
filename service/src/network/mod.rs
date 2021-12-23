@@ -11,6 +11,7 @@ use node_discovery::start_node_discovery_thread;
 use std::net::TcpStream;
 use std::thread::JoinHandle;
 use std::sync::{Arc, Mutex};
+use std::path::PathBuf;
 use std::error::Error;
 
 struct NetworkConnectionData
@@ -26,7 +27,7 @@ struct NetworkConnectionData
 pub struct NetworkConnection<H>
     where H: PacketHandler
 {
-    data: Arc<Mutex<NetworkConnectionData>>,
+    _data: Arc<Mutex<NetworkConnectionData>>,
     shutdown_signal: Arc<Mutex<bool>>,
     handler: H,
     manager: ClientManager,
@@ -36,10 +37,11 @@ impl<H> NetworkConnection<H>
     where H: PacketHandler + Clone + Send + Sync + 'static
 {
 
-    pub fn open(port: u16, packet_handler: H) -> Result<Self, Box<dyn Error>>
+    pub fn open(port: u16, data_directory: &PathBuf, packet_handler: H) 
+        -> Result<Self, Box<dyn Error>>
     {
         let shutdown_signal = Arc::from(Mutex::from(false));
-        let manager = ClientManager::new(port, shutdown_signal.clone());
+        let manager = ClientManager::new(port, data_directory, shutdown_signal.clone());
 
         let server = start_server_thread(
             packet_handler.clone(), manager.clone())?;
@@ -49,7 +51,7 @@ impl<H> NetworkConnection<H>
 
         Ok(Self
         {
-            data: Arc::from(Mutex::from(NetworkConnectionData
+            _data: Arc::from(Mutex::from(NetworkConnectionData
             {
                 port,
                 shutdown_signal: shutdown_signal.clone(),
@@ -150,8 +152,8 @@ mod tests
             assert_eq!(recv_a.recv().unwrap(), Packet::OnConnected);
             assert_eq!(recv_b.recv().unwrap(), Packet::OnConnected);
 
-            connection_a.manager().send(Packet::Ping).unwrap();
-            assert_eq!(recv_b.recv().unwrap(), Packet::Ping);
+            connection_a.manager().send(Packet::Ping(0)).unwrap();
+            assert_eq!(recv_b.recv().unwrap(), Packet::Ping(0));
 
             // NOTE: Disconnects here
         }
@@ -160,8 +162,8 @@ mod tests
         assert_eq!(recv_a.recv().unwrap(), Packet::OnConnected);
         assert_eq!(recv_b.recv().unwrap(), Packet::OnConnected);
 
-        connection_a.manager().send(Packet::Ping).unwrap();
-        assert_eq!(recv_b.recv().unwrap(), Packet::Ping);
+        connection_a.manager().send(Packet::Ping(0)).unwrap();
+        assert_eq!(recv_b.recv().unwrap(), Packet::Ping(0));
     }
 
     #[test]
@@ -183,7 +185,7 @@ mod tests
                 match recv.recv_timeout(std::time::Duration::from_secs(10))
                 {
                     Ok(Packet::OnConnected) => connection_count += 1,
-                    Ok(Packet::Ping) => {},
+                    Ok(Packet::Ping(0)) => {},
                     _ => panic!(),
                 }
             }
@@ -193,12 +195,12 @@ mod tests
         recv_on_connect_command(&recv_b, 2);
         recv_on_connect_command(&recv_c, 2);
 
-        connection_a.manager().send(Packet::Ping).unwrap();
-        connection_b.manager().send(Packet::Ping).unwrap();
-        assert_eq!(recv_a.recv().expect("Got packet"), Packet::Ping);
-        assert_eq!(recv_b.recv().expect("Got packet"), Packet::Ping);
-        assert_eq!(recv_c.recv().expect("Got packet"), Packet::Ping);
-        assert_eq!(recv_c.recv().expect("Got packet"), Packet::Ping);
+        connection_a.manager().send(Packet::Ping(0)).unwrap();
+        connection_b.manager().send(Packet::Ping(0)).unwrap();
+        assert_eq!(recv_a.recv().expect("Got packet"), Packet::Ping(0));
+        assert_eq!(recv_b.recv().expect("Got packet"), Packet::Ping(0));
+        assert_eq!(recv_c.recv().expect("Got packet"), Packet::Ping(0));
+        assert_eq!(recv_c.recv().expect("Got packet"), Packet::Ping(0));
 
         let (mut connection_d, recv_d) = create_connection(8003);
         connection_d.manager().register_node("127.0.0.1:8000");
@@ -207,10 +209,10 @@ mod tests
         recv_on_connect_command(&recv_c, 1);
         recv_on_connect_command(&recv_d, 3);
 
-        connection_d.manager().send(Packet::Ping).unwrap();
-        assert_eq!(recv_a.recv().expect("Got packet"), Packet::Ping);
-        assert_eq!(recv_b.recv().expect("Got packet"), Packet::Ping);
-        assert_eq!(recv_c.recv().expect("Got packet"), Packet::Ping);
+        connection_d.manager().send(Packet::Ping(0)).unwrap();
+        assert_eq!(recv_a.recv().expect("Got packet"), Packet::Ping(0));
+        assert_eq!(recv_b.recv().expect("Got packet"), Packet::Ping(0));
+        assert_eq!(recv_c.recv().expect("Got packet"), Packet::Ping(0));
     }
 
 }

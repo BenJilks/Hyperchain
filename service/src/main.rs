@@ -2,6 +2,7 @@ extern crate libhyperchain;
 extern crate clap;
 extern crate rand;
 extern crate pretty_env_logger;
+extern crate serde_json;
 
 #[macro_use]
 extern crate slice_as_array;
@@ -67,14 +68,15 @@ fn main() -> Result<(), Box<dyn Error>>
     let disable_local_server = matches.is_present("local-server");
 
     // Create and open node
-    let node = Node::new(port, PathBuf::from("hyperchain"))?;
+    let data_directory = PathBuf::from("hyperchain");
+    let node = Node::new(port, &data_directory)?;
     let packet_handler = NodePacketHandler::new(node);
 
     let miner_thread;
     {
         // Register a common node to connect to
-        let mut network_connection = NetworkConnection::open(port, packet_handler)?;
-        network_connection.manager().register_node("192.168.0.27:8001");
+        let mut network_connection = NetworkConnection::open(port, &data_directory, packet_handler)?;
+        network_connection.manager().register_node("192.168.0.52:8001");
 
         // Start miner thread
         miner_thread = start_miner_thread(network_connection.clone());

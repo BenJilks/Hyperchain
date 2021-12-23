@@ -3,7 +3,7 @@ use super::client_manager::ClientManager;
 
 use std::net::TcpStream;
 use std::thread::JoinHandle;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::error::Error;
 
 fn try_connect_to_node<H>(address: String, packet_handler: &H,
@@ -32,7 +32,11 @@ fn connect_to_new_nodes<H>(packet_handler: &H,
 
 fn ping_old_nodes(manager: &mut ClientManager)
 {
-    let _ = manager.send(Packet::Ping);
+    let current_time_nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("Time went backwards")
+        .as_nanos();
+    let _ = manager.send(Packet::Ping(current_time_nanos));
 }
 
 pub fn start_node_discovery_thread<H>(packet_handler: H, 

@@ -64,7 +64,8 @@ impl PacketHandler for NodePacketHandler
             Packet::Page(page, data) =>
                 node.handle_page(manager, from, page, data)?,
             
-            Packet::Ping => {},
+            Packet::Ping(time_sent) =>
+                manager.report_ping_time(from, time_sent),
         }
 
         Ok(())

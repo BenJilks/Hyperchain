@@ -20,7 +20,7 @@ pub enum Packet
     BlockRequest(u64),
     Transfer(Transaction<Transfer>),
     Page(Transaction<Page>, DataUnit),
-    Ping,
+    Ping(u128),
 }
 
 #[derive(Serialize, Deserialize, Debug)]

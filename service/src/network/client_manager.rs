@@ -2,10 +2,15 @@ use super::packet::{Packet, PacketHandler};
 use super::packet::{Message, MessageSender};
 use super::client::client_handler_thread;
 
+use serde_json;
+use serde::{Serialize, Deserialize};
 use tcp_channel::ChannelSend;
 use std::net::TcpStream;
 use std::sync::{Arc, Mutex};
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::path::PathBuf;
+use std::fs::File;
 use std::error::Error;
 
 struct ClientSender
@@ -19,28 +24,94 @@ struct ClientReceiver
     stream: TcpStream,
 }
 
-struct ConnectionData
+#[derive(Serialize, Deserialize)]
+struct NodeConnectionInformation
 {
-    client_senders: Vec<ClientSender>,
-    client_receivers: Vec<ClientReceiver>,
-
-    known_nodes: HashSet<String>,
-    connected_nodes: HashSet<String>,
+    ping_time_samples: Vec<Duration>,
 }
 
-impl Default for ConnectionData
+impl NodeConnectionInformation
+{
+
+    pub fn add_sample(&mut self, sample: Duration)
+    {
+        self.ping_time_samples.push(sample);
+        if self.ping_time_samples.len() > 10 {
+            self.ping_time_samples.remove(0);
+        }
+    }
+
+    pub fn average_ping_time(&self) -> Option<Duration>
+    {
+        let count = self.ping_time_samples.len() as u32;
+        if count == 0 {
+            return None;
+        }
+
+        let sum = self.ping_time_samples.iter().sum::<Duration>();
+        Some(sum / count)
+    }
+
+}
+
+impl Default for NodeConnectionInformation
 {
 
     fn default() -> Self
     {
         Self
         {
+            ping_time_samples: Vec::new(),
+        }
+    }
+
+}
+
+struct ConnectionData
+{
+    client_senders: Vec<ClientSender>,
+    client_receivers: Vec<ClientReceiver>,
+
+    data_directory: PathBuf,
+    known_nodes: HashMap<String, NodeConnectionInformation>,
+    connected_nodes: HashSet<String>,
+}
+
+impl ConnectionData
+{
+
+    pub fn new(data_directory: &PathBuf) -> Arc<Mutex<Self>>
+    {
+        let known_nodes = Self::existing_known_nodes(data_directory)
+            .unwrap_or(HashMap::new());
+
+        Arc::from(Mutex::from(Self
+        {
             client_senders: Vec::new(),
             client_receivers: Vec::new(),
 
-            known_nodes: HashSet::new(),
+            data_directory: data_directory.clone(),
+            known_nodes,
             connected_nodes: HashSet::new(),
-        }
+        }))
+    }
+
+    fn existing_known_nodes(data_directory: &PathBuf) 
+        -> Result<HashMap<String, NodeConnectionInformation>, Box<dyn Error>>
+    {
+        let known_nodes_path = data_directory.join("known_nodes.json");
+        let known_nodes_file = File::open(&known_nodes_path)?;
+        Ok(serde_json::from_reader(known_nodes_file)?)
+    }
+
+    pub fn flush_changes(&self) 
+        -> Result<(), Box<dyn Error>>
+    {
+        let known_nodes_path = self.data_directory.join("known_nodes.json");
+        let known_nodes_file = File::create(&known_nodes_path)?;
+        serde_json::to_writer_pretty(known_nodes_file, &self.known_nodes)?;
+
+        Ok(())
     }
 
 }
@@ -56,13 +127,15 @@ pub struct ClientManager
 impl ClientManager
 {
 
-    pub fn new(port: u16, shutdown_signal: Arc<Mutex<bool>>) -> Self
+    pub fn new(port: u16, data_directory: &PathBuf, 
+               shutdown_signal: Arc<Mutex<bool>>) 
+        -> Self
     {
         ClientManager
         {
             port,
             shutdown_signal,
-            data: Default::default(),
+            data: ConnectionData::new(data_directory),
         }
     }
 
@@ -83,11 +156,13 @@ impl ClientManager
         }
         
         let mut data = self.data.lock().unwrap();
-        if !data.known_nodes.insert(address.to_owned()) {
+        if data.known_nodes.contains_key(address) {
             return false;
         }
 
         info!("[{}] Discovered new node {}", self.port, address);
+        data.known_nodes.insert(address.to_owned(), Default::default());
+        data.flush_changes().expect("Can flush changes");
         true
     }
 
@@ -96,8 +171,8 @@ impl ClientManager
         let data = self.data.lock().unwrap();
         data.known_nodes
             .iter()
-            .filter(|x| !data.connected_nodes.contains(*x))
-            .map(|x| x.to_owned())
+            .filter(|(x, _)| !data.connected_nodes.contains(*x))
+            .map(|(x, _)| x.to_owned())
             .collect()
     }
 
@@ -125,10 +200,15 @@ impl ClientManager
     {
         let mut data = self.data.lock().unwrap();
         data.connected_nodes.insert(address.clone());
-        data.known_nodes.insert(address.clone());
+
+        if !data.known_nodes.contains_key(&address) 
+        {
+            data.known_nodes.insert(address.clone(), Default::default());
+            data.flush_changes()?;
+        }
 
         // Send all our known nodes over
-        for node in &data.known_nodes
+        for (node, _) in &data.known_nodes
         {
             if node != &address {
                 sender.send(&Message::KnownNode(node.clone()))?;
@@ -143,6 +223,24 @@ impl ClientManager
         });
 
         Ok(())
+    }
+
+    pub fn report_ping_time(&mut self, from: &str, time_sent_nanos: u128)
+    {
+        let mut data = self.data.lock().unwrap();
+        if !data.known_nodes.contains_key(from) {
+            return;
+        }
+
+        let current_time_nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("Time went backwards")
+            .as_nanos();
+
+        let node_info = data.known_nodes.get_mut(from).unwrap();
+        let time_taken = Duration::from_nanos((current_time_nanos - time_sent_nanos) as u64);
+        node_info.add_sample(time_taken);
+        data.flush_changes().expect("Can flush changes");
     }
 
     pub fn register_disconnect(&mut self, address: &str)
@@ -163,13 +261,14 @@ impl ClientManager
             let mut data = self.data.lock().unwrap();
             for connection in &mut data.client_senders
             {
-                if predicate(&connection.address)
-                {
-                    let send_result = connection.sender.send(&message);
-                    let flush_result = connection.sender.flush();
-                    if send_result.is_err() || flush_result.is_err() {
-                        disconnected_clients.push(connection.address.clone());
-                    }
+                if !predicate(&connection.address) {
+                    continue;
+                }
+
+                let send_result = connection.sender.send(&message);
+                let flush_result = connection.sender.flush();
+                if send_result.is_err() || flush_result.is_err() {
+                    disconnected_clients.push(connection.address.clone());
                 }
             }
         }

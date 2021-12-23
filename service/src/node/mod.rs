@@ -50,7 +50,7 @@ fn is_block_data_valid(block: &Block, data: &HashMap<Hash, DataUnit>)
 impl Node
 {
 
-    pub fn new(port: u16, path: PathBuf) -> Result<Arc<Mutex<Self>>, Box<dyn Error>>
+    pub fn new(port: u16, path: &PathBuf) -> Result<Arc<Mutex<Self>>, Box<dyn Error>>
     {
         let chain = BlockChain::open(&path.join("blockchain"))?;
         let data_store = DataStore::open(&path.join("data"))?;
