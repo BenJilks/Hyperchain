@@ -13,6 +13,8 @@ use std::path::PathBuf;
 use std::fs::File;
 use std::error::Error;
 
+const MAX_CONNECTION_COUNT: usize = 14;
+
 struct ClientSender
 {
     address: String,
@@ -170,13 +172,26 @@ impl ClientManager
         true
     }
 
-    pub fn get_not_connected_nodes(&self) -> Vec<String>
+    pub fn pending_connections(&self) -> Vec<String>
     {
         let data = self.data.lock().unwrap();
-        data.known_nodes
+        let connection_count_left = 
+            std::cmp::max(MAX_CONNECTION_COUNT - data.connected_nodes.len(), 0);
+
+        if connection_count_left == 0 {
+            return Vec::new();
+        }
+
+        let mut all_unconnected = data.known_nodes
             .iter()
             .filter(|(x, _)| !data.connected_nodes.contains(*x))
-            .map(|(x, _)| x.to_owned())
+            .collect::<Vec<_>>();
+
+        all_unconnected.sort_by_key(|(_, info)| info.average_ping_time());
+        all_unconnected
+            .iter()
+            .take(connection_count_left)
+            .map(|(x, _)| (*x).to_owned())
             .collect()
     }
 
@@ -184,12 +199,18 @@ impl ClientManager
         -> Result<(), Box<dyn Error>>
         where H: PacketHandler + Clone + Sync + Send + 'static
     {
+        let mut data = self.data.lock().unwrap();
+        if data.connected_nodes.len() >= MAX_CONNECTION_COUNT 
+        {
+            info!("Rejecting incoming connection from '{}', as we've reached our maximum :))", ip);
+            return Ok(());
+        }
+
         client_handler_thread(
             packet_handler,
             self.clone(),
             stream.try_clone().unwrap(), ip)?;
 
-        let mut data = self.data.lock().unwrap();
         data.client_receivers.push(ClientReceiver
         {
             stream,

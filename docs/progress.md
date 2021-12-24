@@ -23,11 +23,11 @@
 
 ---------------------
 
-## v0.3
-- Better networking
-    - Limit number of clients
+## ~~v0.3~~
+- ~~Better networking~~
+    - ~~Limit number of clients~~
     - ~~Measure strongest connection~~
-    - Pick best nodes
+    - ~~Pick best nodes~~
     - ~~Store known nodes~~
 
 ---------------------

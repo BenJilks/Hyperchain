@@ -24,7 +24,7 @@ fn connect_to_new_nodes<H>(packet_handler: &H,
                            manager: &mut ClientManager)
     where H: PacketHandler + Clone + Send + Sync + 'static
 {
-    let not_connected_nodes = manager.get_not_connected_nodes();
+    let not_connected_nodes = manager.pending_connections();
     for address in not_connected_nodes {
         let _ = try_connect_to_node(address, packet_handler, manager);
     }
