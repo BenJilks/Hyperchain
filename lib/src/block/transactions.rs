@@ -54,7 +54,7 @@ impl Block
     }
 
     pub fn update_wallet_status(&self, address: &Hash, mut status: WalletStatus) 
-        -> Option<WalletStatus>
+        -> Result<WalletStatus, Box<dyn Error>>
     {
         if &self.header.raward_to == address {
             status.balance += self.calculate_reward()
@@ -63,24 +63,16 @@ impl Block
         for transfer in &self.transfers
         {
             let is_block_winner = &self.header.raward_to == address;
-            match transfer.update_wallet_status(address, status, is_block_winner)
-            {
-                Some(new_status) => status = new_status,
-                None => return None,
-            }
+            status = transfer.update_wallet_status(address, status, is_block_winner)?;
         }
 
         for page in &self.pages
         {
             let is_block_winner = &self.header.raward_to == address;
-            match page.update_wallet_status(address, status, is_block_winner)
-            {
-                Some(new_status) => status = new_status,
-                None => return None,
-            }
+            status = page.update_wallet_status(address, status, is_block_winner)?;
         }
 
-        Some(status)
+        Ok(status)
     }
 
     pub fn transactions(&self) -> Vec<TransactionVariant>

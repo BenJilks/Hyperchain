@@ -32,7 +32,7 @@ pub trait TransactionContent
 
     fn update_wallet_status(&self, address: &Hash, status: WalletStatus, 
                             from_amount: f32, is_block_winner: bool)
-        -> Option<WalletStatus>;
+        -> Result<WalletStatus, Box<dyn Error>>;
 
     fn get_to_addresses(&self) -> Vec<Hash>;
 
@@ -143,7 +143,7 @@ impl<C> Transaction<C>
 
     pub fn update_wallet_status(&self, address: &Hash, status: WalletStatus, 
                                 is_block_winner: bool)
-        -> Option<WalletStatus>
+        -> Result<WalletStatus, Box<dyn Error>>
     {
         let from = self.header.inputs.iter().find(|x| &x.get_address() == address);
         let from_amount = match from

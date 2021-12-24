@@ -75,11 +75,11 @@ impl BlockChain
                 }
 
                 let status = wallets.get_mut(&address).unwrap();
-                let new_status = block.update_wallet_status(&address, status.clone());
-                if new_status.is_none() || new_status.as_ref().unwrap().balance < 0.0 {
+                let new_status = block.update_wallet_status(&address, status.clone())?;
+                if new_status.balance < 0.0 {
                     return Ok(BlockValidationResult::Balance(address));
                 }
-                *status = new_status.unwrap();
+                *status = new_status;
             }
 
             if last_block_or_none.is_some()

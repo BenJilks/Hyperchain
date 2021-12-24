@@ -22,12 +22,19 @@ fn add_page(connection: &mut NetworkConnection<NodePacketHandler>,
     let chain = &mut node.chain();
     let from_wallet = from_wallet_or_error.unwrap();
     let page_or_error = chain.new_page(&from_wallet, &data_unit, 1.0);
-    if page_or_error.is_err() || page_or_error.as_ref().unwrap().is_none() {
+    if page_or_error.is_err() 
+    {
+        warn!("Error in send: {}", page_or_error.unwrap_err());
         return None;
     }
 
-    let page = page_or_error.unwrap().unwrap();
-    assert_eq!(chain.push_page_queue(page.clone()).unwrap(), true);
+    let page = page_or_error.unwrap();
+    let result = chain.push_page_queue(page.clone());
+    if result.is_err()
+    {
+        warn!("Error in send: {}", result.unwrap_err());
+        return None;
+    }
     
     let page_id = page.hash().unwrap();
     Some((page, page_id))

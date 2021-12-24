@@ -1,5 +1,6 @@
 use super::{Input, TransactionContent, TransactionValidationResult};
 use crate::wallet::WalletStatus;
+use crate::error::ErrorMessage;
 use crate::config::Hash;
 
 use serde::{Serialize, Deserialize};
@@ -101,13 +102,16 @@ impl TransactionContent for Transfer
 
     fn update_wallet_status(&self, address: &Hash, mut status: WalletStatus,
                             from_amount: f32, is_block_winner: bool)
-        -> Option<WalletStatus>
+        -> Result<WalletStatus, Box<dyn Error>>
     {
         if from_amount > 0.0
         {
             status.balance -= from_amount;
-            if self.id <= status.max_id {
-                return None;
+            if self.id <= status.max_id 
+            {
+                return Err(ErrorMessage::new(
+                    &format!("Id is not incremental ({} -> {})",
+                        status.max_id, self.id)));
             }
             status.max_id = self.id;
         }
@@ -123,7 +127,7 @@ impl TransactionContent for Transfer
             status.balance += self.fee;
         }
 
-        Some(status)
+        Ok(status)
     }
 
     fn get_to_addresses(&self) -> Vec<Hash>

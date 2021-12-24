@@ -8,6 +8,7 @@ use crate::transaction::builder::TransactionBuilder;
 use crate::wallet::{Wallet, WalletStatus};
 use crate::wallet::private_wallet::PrivateWallet;
 use crate::data_store::DataUnit;
+use crate::error::ErrorMessage;
 use crate::config::Hash;
 
 use serde::Serialize;
@@ -25,7 +26,7 @@ impl BlockChain
     }
 
     fn new_transaction<C>(&mut self, inputs: Vec<(&PrivateWallet, f32)>, content: C)
-            -> Result<Option<Transaction<C>>, Box<dyn Error>>
+            -> Result<Transaction<C>, Box<dyn Error>>
         where C: TransactionContent + Serialize
     {
         let mut builder = TransactionBuilder::new(content);
@@ -34,21 +35,17 @@ impl BlockChain
         }
 
         let transaction = builder.build()?;
-        if transaction.validate_content()? != TransactionValidationResult::Ok 
-        {
-            debug!("Invalid content");
-            return Ok(None);
+        if transaction.validate_content()? != TransactionValidationResult::Ok {
+            return Err(ErrorMessage::new("Invalid content"));
         }
 
         for (wallet, _) in inputs
         {
             let status = self.get_wallet_status_after_queue(&wallet.get_address());
-            if transaction.update_wallet_status(&wallet.get_address(), status, false).is_none() {
-                return Ok(None);
-            }
+            transaction.update_wallet_status(&wallet.get_address(), status, false)?;
         }
 
-        Ok(Some(transaction))
+        Ok(transaction)
     }
 
     fn next_transaction_id(&mut self, inputs: &Vec<(&PrivateWallet, f32)>) -> u32
@@ -67,7 +64,7 @@ impl BlockChain
                         inputs: Vec<(&PrivateWallet, f32)>, 
                         outputs: Vec<(Hash, f32)>, 
                         fee: f32)
-        -> Result<Option<Transaction<Transfer>>, Box<dyn Error>>
+        -> Result<Transaction<Transfer>, Box<dyn Error>>
     {
         let id = self.next_transaction_id(&inputs);
         let mut transfer_builder = TransferBuilder::new(id, fee);
@@ -79,7 +76,7 @@ impl BlockChain
     }
 
     pub fn new_page(&mut self, from: &PrivateWallet, data: &DataUnit, fee: f32)
-        -> Result<Option<Transaction<Page>>, Box<dyn Error>>
+        -> Result<Transaction<Page>, Box<dyn Error>>
     {
         let status = self.get_wallet_status_after_queue(&from.get_address());
         let page = Page::new_from_data(status.max_id + 1, from.get_address(), data, fee)?;
@@ -87,7 +84,7 @@ impl BlockChain
         self.new_transaction(vec![(from, total_output)], page)
     }
 
-    fn is_transaction_valid<C>(&mut self, transaction: &Transaction<C>) -> bool
+    fn is_transaction_valid<C>(&mut self, transaction: &Transaction<C>) -> Result<(), Box<dyn Error>>
         where C: TransactionContent + Serialize
     {
         // NOTE: We validate before adding, as everything in the transaction 
@@ -97,37 +94,29 @@ impl BlockChain
         {
             let status = self.get_wallet_status_after_queue(&address);
 
-            let new_status = transaction.update_wallet_status(&address, status, false);
-            if new_status.is_none() {
-                return false;
-            }
-
-            if new_status.unwrap().balance < 0.0 {
-                return false;
+            let new_status = transaction.update_wallet_status(&address, status, false)?;
+            if new_status.balance < 0.0 {
+                return Err(ErrorMessage::new("Negative balance"));
             }
         }
 
-        return true;
+        Ok(())
     }
 
     pub fn push_transfer_queue(&mut self, transaction: Transaction<Transfer>) 
-        -> Result<bool, Box<dyn Error>>
+        -> Result<(), Box<dyn Error>>
     {
-        if !self.is_transaction_valid(&transaction) {
-            return Ok(false);
-        }
+        self.is_transaction_valid(&transaction)?;
         self.transfer_queue.push(transaction)?;
-        Ok(true)
+        Ok(())
     }
 
     pub fn push_page_queue(&mut self, transaction: Transaction<Page>) 
-        -> Result<bool, Box<dyn Error>>
+        -> Result<(), Box<dyn Error>>
     {
-        if !self.is_transaction_valid(&transaction) {
-            return Ok(false);
-        }
+        self.is_transaction_valid(&transaction)?;
         self.page_queue.push(transaction)?;
-        Ok(true)
+        Ok(())
     }
 
     pub fn get_next_transfers_in_queue(&self, count: usize) 
@@ -197,29 +186,29 @@ mod tests
             vec![(&wallet, 3.0)], 
             vec![(other.get_address(), 2.0)],
             1.0)
-            .unwrap().unwrap();
-        assert_eq!(chain.push_transfer_queue(transaction_a.clone()).unwrap(), true);
+            .unwrap();
+        chain.push_transfer_queue(transaction_a.clone()).unwrap();
 
         let transaction_b = chain.new_transfer(
             vec![(&wallet, 3.0)], 
             vec![(other.get_address(), 1.0)], 
             2.0)
-            .unwrap().unwrap();
-        assert_eq!(chain.push_transfer_queue(transaction_b.clone()).unwrap(), true);
+            .unwrap();
+        chain.push_transfer_queue(transaction_b.clone()).unwrap();
 
         let transaction_c = chain.new_transfer(
             vec![(&wallet, 11.0)], 
             vec![(other.get_address(), 10.0)], 
             1.0)
-            .unwrap().unwrap();
-        assert_eq!(chain.push_transfer_queue(transaction_c).unwrap(), false);
+            .unwrap();
+        assert_eq!(chain.push_transfer_queue(transaction_c).is_err(), true);
 
         let transaction_d = chain.new_transfer(
             vec![(&independant_a, 6.0)], 
             vec![(independant_b.get_address(), 3.0)], 
             3.0)
-            .unwrap().unwrap();
-        assert_eq!(chain.push_transfer_queue(transaction_d.clone()).unwrap(), true);
+            .unwrap();
+        chain.push_transfer_queue(transaction_d.clone()).unwrap();
 
         assert_eq!(
             chain.get_next_transfers_in_queue(10).collect::<Vec<_>>(), 

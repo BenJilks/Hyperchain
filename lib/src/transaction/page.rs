@@ -1,6 +1,7 @@
 use super::{Input, TransactionContent, TransactionValidationResult};
 use crate::wallet::WalletStatus;
 use crate::data_store::DataUnit;
+use crate::error::ErrorMessage;
 use crate::config::{Hash, PAGE_CHUNK_SIZE};
 
 use serde::{Serialize, Deserialize};
@@ -58,21 +59,21 @@ impl Page
     }
 
     pub fn is_data_valid(&self, data: &DataUnit) 
-        -> Result<bool, Box<dyn Error>>
+        -> Result<(), Box<dyn Error>>
     {
         let hashes = data.get_hashes()?;
         if hashes.len() != self.data_hashes.len() {
-            return Ok(false);
+            return Err(ErrorMessage::new("Missmatched data length"));
         }
 
         for i in 0..hashes.len() 
         {
             if hashes[i] != self.data_hashes[i] {
-                return Ok(false);
+                return Err(ErrorMessage::new("Incorrect data"));
             }
         }
 
-        Ok(true)
+        Ok(())
     }
 
 }
@@ -107,13 +108,16 @@ impl TransactionContent for Page
 
     fn update_wallet_status(&self, _address: &Hash, mut status: WalletStatus,
                             from_amount: f32, is_block_winner: bool)
-        -> Option<WalletStatus>
+        -> Result<WalletStatus, Box<dyn Error>>
     {
         if from_amount > 0.0
         {
             status.balance -= from_amount;
-            if self.id <= status.max_id {
-                return None;
+            if self.id <= status.max_id 
+            {
+                return Err(ErrorMessage::new(
+                    &format!("Id is not incremental ({} -> {})",
+                        status.max_id, self.id)));
             }
             status.max_id = self.id;
         }
@@ -122,7 +126,7 @@ impl TransactionContent for Page
             status.balance += self.fee;
         }
 
-        Some(status)
+        Ok(status)
     }
 
     fn get_to_addresses(&self) -> Vec<Hash>

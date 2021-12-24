@@ -66,13 +66,18 @@ pub fn send(connection: &mut NetworkConnection<NodePacketHandler>,
         let mut node = connection.handler().node();
         let chain = &mut node.chain();
         let transfer_or_error = chain.new_transfer(ref_inputs, outputs, fee);
-        if transfer_or_error.is_err() || transfer_or_error.as_ref().unwrap().is_none() {
+        if transfer_or_error.is_err() 
+        {
+            warn!("Error in send: {}", transfer_or_error.unwrap_err());
             return Response::Failed;
         }
 
-        transfer = transfer_or_error.unwrap().unwrap();
+        transfer = transfer_or_error.unwrap();
         transfer_id = transfer.hash().unwrap();
-        if !chain.push_transfer_queue(transfer.clone()).unwrap() {
+        let result = chain.push_transfer_queue(transfer.clone());
+        if result.is_err() 
+        {
+            warn!("Error in send: {}", result.unwrap_err());
             return Response::Failed;
         }
     }

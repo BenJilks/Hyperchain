@@ -207,13 +207,13 @@ mod tests
         assert_eq!(chain.add(&block_a).unwrap(), BlockChainAddResult::Ok);
 
         // Create transfer
-        let transaction = chain.new_transfer(vec![(&wallet, 2.0)], vec![(other.get_address(), 2.0)], 0.0).unwrap().unwrap();
-        assert_eq!(chain.push_transfer_queue(transaction.clone()).unwrap(), true);
+        let transaction = chain.new_transfer(vec![(&wallet, 2.0)], vec![(other.get_address(), 2.0)], 0.0).unwrap();
+        chain.push_transfer_queue(transaction.clone()).expect("Valid");
 
         // Create page
         let page_data = CreatePageData::new("index.html".to_owned(), Vec::new());
-        let page = chain.new_page(&wallet, &DataUnit::CreatePage(page_data), 0.0).unwrap().unwrap();
-        assert_eq!(chain.push_page_queue(page.clone()).unwrap(), true);
+        let page = chain.new_page(&wallet, &DataUnit::CreatePage(page_data), 0.0).unwrap();
+        chain.push_page_queue(page.clone()).expect("Valid");
 
         // Add transactions to new block
         let block_b = miner::mine_block(BlockBuilder::new(&wallet)
@@ -234,16 +234,16 @@ mod tests
                    Some((TransactionVariant::Transfer(transaction.clone()), block_b.clone())));
 
         // Test 'push_transfer_queue'
-        let other_transaction = chain.new_transfer(vec![(&wallet, 2.0)], vec![(other.get_address(), 2.0)], 0.0).unwrap().unwrap();
-        assert_eq!(chain.push_transfer_queue(other_transaction.clone()).unwrap(), true);
+        let other_transaction = chain.new_transfer(vec![(&wallet, 2.0)], vec![(other.get_address(), 2.0)], 0.0).unwrap();
+        chain.push_transfer_queue(other_transaction.clone()).expect("Valid");
 
         // Test 'get_transaction_history'
         assert_eq!(chain.get_transaction_history(&wallet.get_address()), 
-                   [
-                       (TransactionVariant::Transfer(other_transaction), None),
-                       (TransactionVariant::Page(page), Some(block_b.clone())),
-                       (TransactionVariant::Transfer(transaction), Some(block_b.clone())),
-                   ]);
+           [
+               (TransactionVariant::Transfer(other_transaction), None),
+               (TransactionVariant::Page(page), Some(block_b.clone())),
+               (TransactionVariant::Transfer(transaction), Some(block_b.clone())),
+           ]);
     }
 
 }

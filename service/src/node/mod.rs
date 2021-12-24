@@ -39,7 +39,7 @@ fn is_block_data_valid(block: &Block, data: &HashMap<Hash, DataUnit>)
             return Ok(false);
         }
 
-        if !page.header.content.is_data_valid(data_unit.unwrap())? {
+        if page.header.content.is_data_valid(data_unit.unwrap()).is_err() {
             return Ok(false);
         }
     }
@@ -265,16 +265,10 @@ impl Node
     {
         info!("Got transfer {:?}", transfer);
 
-        if self.chain.push_transfer_queue(transfer.clone())?
-        {
-            manager.send_to(
-                Packet::Transfer(transfer), 
-                |x| x != from)?;
-        }
-        else
-        {
-            warn!("Invalid transfer");
-        }
+        self.chain.push_transfer_queue(transfer.clone())?;
+        manager.send_to(
+            Packet::Transfer(transfer), 
+            |x| x != from)?;
 
         Ok(())
     }
@@ -285,20 +279,15 @@ impl Node
     {
         info!("Got page {:?}", page);
         
-        if page.header.content.is_data_valid(&data)?
-            && self.chain.push_page_queue(page.clone())?
-        {
-            let id = page.hash()?;
-            self.data_store.store(&id, &data)?;
+        page.header.content.is_data_valid(&data)?;
+        self.chain.push_page_queue(page.clone())?;
 
-            manager.send_to(
-                Packet::Page(page, data),
-                |x| x != from)?;
-        }
-        else
-        {
-            warn!("Invalid page");
-        }
+        let id = page.hash()?;
+        self.data_store.store(&id, &data)?;
+
+        manager.send_to(
+            Packet::Page(page, data),
+            |x| x != from)?;
 
         Ok(())
     }

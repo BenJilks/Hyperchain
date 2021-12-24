@@ -111,12 +111,12 @@ impl<C> TransactionQueue<C>
     }
 
     pub fn update_wallet_status(&self, address: &Hash, mut status: WalletStatus) 
-        -> Option<WalletStatus>
+        -> Result<WalletStatus, Box<dyn Error>>
     {
         for (_, transaction) in &self.queue {
             status = transaction.update_wallet_status(address, status, false)?;
         }
-        Some(status)
+        Ok(status)
     }
 
     pub fn find(&self, transaction_id: &Hash) 
