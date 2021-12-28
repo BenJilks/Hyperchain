@@ -1,6 +1,6 @@
 use super::{Input, TransactionContent, TransactionValidationResult};
 use crate::wallet::WalletStatus;
-use crate::data_store::DataUnit;
+use crate::data_store::data_unit::DataUnit;
 use crate::error::ErrorMessage;
 use crate::config::{Hash, PAGE_CHUNK_SIZE};
 
@@ -39,7 +39,7 @@ impl Page
     pub fn new_from_data(id: u32, site: Hash, data: &DataUnit, fee: f32) 
         -> Result<Self, Box<dyn Error>>
     {
-        let data_hashes = data.get_hashes()?;
+        let data_hashes = data.hashes()?;
         let data_length = data.len()?;
         Ok(Page
         {
@@ -61,7 +61,7 @@ impl Page
     pub fn is_data_valid(&self, data: &DataUnit) 
         -> Result<(), Box<dyn Error>>
     {
-        let hashes = data.get_hashes()?;
+        let hashes = data.hashes()?;
         if hashes.len() != self.data_hashes.len() {
             return Err(ErrorMessage::new("Missmatched data length"));
         }

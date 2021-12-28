@@ -3,6 +3,7 @@ extern crate clap;
 extern crate rand;
 extern crate pretty_env_logger;
 extern crate serde_json;
+extern crate base_62;
 
 #[macro_use]
 extern crate slice_as_array;
@@ -61,29 +62,39 @@ fn main() -> Result<(), Box<dyn Error>>
             .takes_value(false)
             .required(false)
             .help("Disable running local server"))
+        .arg(Arg::with_name("mining")
+            .short("m")
+            .long("mining")
+            .takes_value(false)
+            .required(false)
+            .help("Disable mining"))
         .get_matches();
 
     // Crate logger and read port from command line
     let port = matches.value_of("port").unwrap_or("8001").parse::<u16>().unwrap();
     let disable_local_server = matches.is_present("local-server");
+    let disable_mining = matches.is_present("mining");
 
     // Create and open node
     let data_directory = PathBuf::from("hyperchain");
     let node = Node::new(port, &data_directory)?;
     let packet_handler = NodePacketHandler::new(node);
 
-    let miner_thread;
+    let mut miner_thread = None;
     {
         // Register a common node to connect to
         let mut network_connection = NetworkConnection::open(port, &data_directory, packet_handler)?;
-        network_connection.manager().register_node("192.168.0.52:8001");
+        network_connection.manager().register_node("192.168.0.53:8001");
 
         // Start miner thread
-        miner_thread = start_miner_thread(network_connection.clone());
-        if disable_local_server
+        if !disable_mining
         {
-            miner_thread.join().unwrap();
-            return Ok(());
+            miner_thread = Some(start_miner_thread(network_connection.clone()));
+            if disable_local_server
+            {
+                miner_thread.unwrap().join().unwrap();
+                return Ok(());
+            }
         }
 
         // Start local server
@@ -125,7 +136,9 @@ fn main() -> Result<(), Box<dyn Error>>
         })?;
     }
 
-    miner_thread.join().unwrap();
+    if miner_thread.is_some() {
+        miner_thread.unwrap().join().unwrap();
+    }
     Ok(())
 }
 

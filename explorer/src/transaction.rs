@@ -80,15 +80,30 @@ fn page_data(page: &Transaction<Page>, block_id: String)
         "amount": page.header.content.cost(),
     })];
 
+    let data = page.header.content.data_hashes
+        .iter()
+        .map(|x| json!(
+        {
+            "hash": base_62::encode(x),
+        }))
+        .collect::<Vec<_>>();
+
+    let data_size_bytes = page.header.content.data_length;
+    let data_size = data_size_bytes as f32 / (1000.0 * 1000.0);
+    let chunk_count = page.header.content.data_hashes.len();
+
     json!(
     {
         "type": "Page Update",
         "id": id,
         "inputs": inputs,
         "outputs": outputs,
+        "data": data,
         "amount": page.header.content.cost(),
         "fee": page.header.content.fee,
         "block": block_id,
+        "data_size": data_size,
+        "chunk_count": chunk_count,
     })
 }
 

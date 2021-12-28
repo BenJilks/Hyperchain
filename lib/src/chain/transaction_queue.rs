@@ -7,7 +7,7 @@ use crate::transaction::page::Page;
 use crate::transaction::builder::TransactionBuilder;
 use crate::wallet::{Wallet, WalletStatus};
 use crate::wallet::private_wallet::PrivateWallet;
-use crate::data_store::DataUnit;
+use crate::data_store::data_unit::DataUnit;
 use crate::error::ErrorMessage;
 use crate::config::Hash;
 

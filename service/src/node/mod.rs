@@ -5,11 +5,11 @@ use crate::network::client_manager::ClientManager;
 use libhyperchain::chain::{BlockChain, BlockChainAddResult};
 use libhyperchain::chain::branch::BlockChainCanMergeResult;
 use libhyperchain::block::Block;
-use libhyperchain::data_store::{DataStore, DataUnit};
+use libhyperchain::data_store::DataStore;
+use libhyperchain::data_store::data_unit::DataUnit;
 use libhyperchain::transaction::Transaction;
 use libhyperchain::transaction::transfer::Transfer;
 use libhyperchain::transaction::page::Page;
-use libhyperchain::config::{Hash, HASH_LEN};
 use std::path::PathBuf;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -20,31 +20,7 @@ pub struct Node
     port: u16,
     chain: BlockChain,
     data_store: DataStore,
-    branches: HashMap<String, Vec<(Block, HashMap<Hash, DataUnit>)>>,
-}
-
-fn is_block_data_valid(block: &Block, data: &HashMap<Hash, DataUnit>) 
-    -> Result<bool, Box<dyn Error>>
-{
-    for page in &block.pages
-    {
-        let hash_vec = page.hash()?;
-        let hash = slice_as_array!(&hash_vec, [u8; HASH_LEN]);
-        if hash.is_none() {
-            return Ok(false);
-        }
-
-        let data_unit = data.get(hash.unwrap());
-        if data_unit.is_none() {
-            return Ok(false);
-        }
-
-        if page.header.content.is_data_valid(data_unit.unwrap()).is_err() {
-            return Ok(false);
-        }
-    }
-
-    Ok(true)
+    branches: HashMap<String, Vec<Block>>,
 }
 
 impl Node
@@ -74,29 +50,28 @@ impl Node
         &mut self.data_store
     }
 
-    fn try_insert_block_into_branch(branch: &mut Vec<(Block, HashMap<Hash, DataUnit>)>, 
-                                    block: Block, data: HashMap<Hash, DataUnit>) 
+    fn try_insert_block_into_branch(branch: &mut Vec<Block>, block: Block) 
         -> bool
     {
         // Is start of new branch
         if branch.is_empty() 
         {
-            branch.push((block, data));
+            branch.push(block);
             return true;
         }
 
         // Can be added to the bottom
-        let (bottom, _) = branch.first().unwrap();
+        let bottom = branch.first().unwrap();
         if bottom.validate_next(&block).is_ok() 
         {
-            branch.insert(0, (block, data));
+            branch.insert(0, block);
             return true;
         }
 
         // Can be added to the top
-        let (top, _) = branch.last().unwrap();
+        let top = branch.last().unwrap();
         if block.validate_next(top).is_ok() {
-            branch.push((block, data));
+            branch.push(block);
             return true;
         }
 
@@ -106,7 +81,7 @@ impl Node
         if (bottom_id..=top_id).contains(&block.header.block_id) 
         {
             let branch_index = (block.header.block_id - bottom_id) as usize;
-            let (existing_block_in_branch, _) = branch.get(branch_index).unwrap();
+            let existing_block_in_branch = branch.get(branch_index).unwrap();
             if &block == existing_block_in_branch {
                 return true;
             }
@@ -115,9 +90,7 @@ impl Node
         false
     }
 
-    fn add_to_branch(&mut self, from: &str, 
-                     block: Block, 
-                     data: HashMap<Hash, DataUnit>)
+    fn add_to_branch(&mut self, from: &str, block: Block)
         -> Option<u64>
     {
         if !self.branches.contains_key(from) {
@@ -125,11 +98,11 @@ impl Node
         }
 
         let mut branch = self.branches.remove(from).unwrap();
-        if !Self::try_insert_block_into_branch(&mut branch, block, data) {
+        if !Self::try_insert_block_into_branch(&mut branch, block) {
             return None;
         }
         
-        let (bottom, _) = branch.first().unwrap();
+        let bottom = branch.first().unwrap();
         let bottom_id = bottom.header.block_id;
         self.branches.insert(from.to_owned(), branch);
 
@@ -147,17 +120,10 @@ impl Node
         }
 
         let branch = self.branches.remove(from).unwrap();
-        let branch_blocks = branch.iter().map(|(x, _)| x.clone()).collect::<Vec<_>>();
-        if self.chain.can_merge_branch(&branch_blocks)? == BlockChainCanMergeResult::Ok
+        if self.chain.can_merge_branch(&branch)? == BlockChainCanMergeResult::Ok
         {
             info!("[{}] Merge longer branch", self.port);
-            for (_, data) in &branch 
-            {
-                for (id, unit) in data {
-                    self.data_store.store(id, unit)?;
-                }
-            }
-            self.chain.merge_branch(branch_blocks);
+            self.chain.merge_branch(branch);
         }
         Ok(())
     }
@@ -176,7 +142,7 @@ impl Node
         {
             Some(branch) =>
             {
-                let (branch_top, _) = branch.last().unwrap();
+                let branch_top = branch.last().unwrap();
                 branch_top.header.block_id < top_id
             },
 
@@ -185,20 +151,10 @@ impl Node
     }
 
     fn handle_block(&mut self, manager: &mut ClientManager, from: &str, 
-                    block: Block, data: HashMap<Hash, DataUnit>) 
+                    block: Block) 
         -> Result<(), Box<dyn Error>>
     {
         if self.should_ignore_block(from, &block) {
-            return Ok(());
-        }
-
-        // NOTE: Post v0.1, we won't care about a blocks data, until we request some for 
-        //       storage or page building. For now we store everything.
-
-        // Reject block if data is not valid
-        if !is_block_data_valid(&block, &data)?
-        {
-            warn!("[{}] Invalid block data for {}", self.port, block.header.block_id);
             return Ok(());
         }
 
@@ -208,13 +164,8 @@ impl Node
             {
                 info!("[{}] Added block {}", self.port, block.header.block_id);
 
-                // Store the blocks data
-                for (id, unit) in &data {
-                    self.data_store.store(id, unit)?;
-                }
-
                 // Relay this block to the rest of the network
-                manager.send(Packet::Block(block.clone(), data))?;
+                manager.send(Packet::Block(block.clone()))?;
             },
 
             BlockChainAddResult::Invalid(_) | BlockChainAddResult::MoreNeeded => 
@@ -222,7 +173,7 @@ impl Node
                 info!("[{}] Invalid block {}", self.port, block.header.block_id);
 
                 // Add block to this nodes branch
-                let next_block = self.add_to_branch(from, block, data);
+                let next_block = self.add_to_branch(from, block);
                 
                 // Request the next block. If there's no more, complete the branch
                 if next_block.is_some() {
@@ -252,8 +203,7 @@ impl Node
         if block_or_none.is_some() 
         {
             let block = block_or_none.unwrap();
-            let data = self.data_store.for_page_updates(&block.pages)?;
-            manager.send_to(Packet::Block(block.clone(), data), |x| x == from)?;
+            manager.send_to(Packet::Block(block.clone()), |x| x == from)?;
         }
 
         Ok(())
@@ -281,9 +231,7 @@ impl Node
         
         page.header.content.is_data_valid(&data)?;
         self.chain.push_page_queue(page.clone())?;
-
-        let id = page.hash()?;
-        self.data_store.store(&id, &data)?;
+        self.data_store.store_data_unit(&data)?;
 
         manager.send_to(
             Packet::Page(page, data),
@@ -348,7 +296,7 @@ mod tests
             block
         };
 
-        connection.manager().send(Packet::Block(block.clone(), HashMap::new())).unwrap();
+        connection.manager().send(Packet::Block(block.clone())).unwrap();
         block
     }
 

@@ -4,17 +4,18 @@ use libhyperchain::service::client::Client;
 use libhyperchain::service::command::{Command, Response};
 use libhyperchain::transaction::Transaction;
 use libhyperchain::transaction::page::Page;
-use libhyperchain::data_store::DataUnit;
+use libhyperchain::data_store::data_unit::DataUnit;
 use actix_web::{get, web};
 use actix_web::{HttpRequest, HttpResponse, Responder};
 use std::error::Error;
 
-fn apply_data_unit(result: &mut Vec<u8>, page_name: &str, data: DataUnit)
+fn apply_data_unit(result: &mut Vec<u8>, site: &str, page_name: &str, data: DataUnit)
 {
     match data
     {
         DataUnit::CreatePage(create_page) =>
         {
+            info!("[{}] [{}] new page of {} bytes", site, page_name, create_page.page.len());
             if create_page.name == page_name {
                 *result = create_page.page;
             }
@@ -22,7 +23,7 @@ fn apply_data_unit(result: &mut Vec<u8>, page_name: &str, data: DataUnit)
     }
 }
 
-fn render_updates(client: &mut Client, page_name: &str, updates: &[Transaction<Page>]) 
+fn render_updates(client: &mut Client, site: &str, page_name: &str, updates: &[Transaction<Page>]) 
     -> Result<Vec<u8>, Box<dyn Error>>
 {
     let mut result = Vec::<u8>::new();
@@ -32,9 +33,13 @@ fn render_updates(client: &mut Client, page_name: &str, updates: &[Transaction<P
         match client.send(Command::PageData(id))?
         {
             Response::PageData(data) => 
-                apply_data_unit(&mut result, page_name, data),
+                apply_data_unit(&mut result, site, page_name, data),
 
-            _ => {},
+            _ => 
+            {
+                warn!("[{}] [{}] No data found for update '{}'",
+                      site, page_name, base_62::encode(&update.hash()?));
+            },
         }
     }
 
@@ -47,6 +52,8 @@ fn render_updates(client: &mut Client, page_name: &str, updates: &[Transaction<P
 
 fn get_page(client: &mut Client, site: String, page: String) -> impl Responder
 {
+    info!("[{}] Rendering new page {}", site, page);
+
     let id_or_error = base_62::decode(&site);
     if id_or_error.is_err() {
         return HttpResponse::Ok().body(format!("Unkown site: {}", site));
@@ -58,7 +65,9 @@ fn get_page(client: &mut Client, site: String, page: String) -> impl Responder
     {
         Response::PageUpdates(updates) =>
         {
-            let page = render_updates(client, &page, &updates).unwrap();
+            info!("[{}] [{}] Got {} updates", site, page, updates.len());
+            let page = render_updates(client, &site, &page, &updates).unwrap();
+
             HttpResponse::Ok()
                 .header("Location", format!("/site/{}/", site))
                 .body(page)

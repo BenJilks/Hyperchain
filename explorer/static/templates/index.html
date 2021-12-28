@@ -1,0 +1,47 @@
+<html>
+    <head>
+        <title>Index</title>
+        <link rel="stylesheet" href="../root/style.css">
+
+        <style>
+            .header
+            {
+                position: fixed;
+                top: 0px;
+                left: 0px;
+                right: 0px;
+                margin: 0px;
+                padding: 1em;
+
+                display: flex;
+                background-color: #FFF;
+            }
+
+            .header h1
+            {
+                display: inline;
+                flex-grow: 1;
+            }
+
+            .header #search-bar
+            {
+                display: inline;
+            }
+
+            .header #address
+            {
+                width: 50em;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>Hyperchain Explorer</h1>
+            <form id="search-bar" action="/wallet" method="get">
+                <input id="address" name="address" placeholder="address"></input>
+                <button type="submit">Search</button>
+            </form>
+        </div>
+    </body>
+</html>
+

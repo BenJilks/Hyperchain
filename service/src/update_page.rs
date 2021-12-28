@@ -6,7 +6,7 @@ use libhyperchain::service::command::Response;
 use libhyperchain::wallet::private_wallet::PrivateWallet;
 use libhyperchain::transaction::Transaction;
 use libhyperchain::transaction::page::Page;
-use libhyperchain::data_store::DataUnit;
+use libhyperchain::data_store::data_unit::DataUnit;
 use libhyperchain::data_store::page::CreatePageData;
 
 fn add_page(connection: &mut NetworkConnection<NodePacketHandler>,
@@ -51,7 +51,7 @@ pub fn update_page(connection: &mut NetworkConnection<NodePacketHandler>,
     }
 
     let (page, page_id) = page_or_none.unwrap();
-    connection.handler().node().data_store().store(&page_id, &data_unit).unwrap();
+    connection.handler().node().data_store().store_data_unit(&data_unit).unwrap();
     connection.manager().send(Packet::Page(page, data_unit)).unwrap();
     Response::Sent(page_id)
 }

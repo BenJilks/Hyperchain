@@ -21,6 +21,28 @@
         {{ /if }}
     </div>
 
+    {{ #if (not (eq data_size "")) }}
+        <div class="item">
+            <text>Size</text>
+            <text>{{ data_size }} mb</text>
+        </div>
+        <div class="item">
+            <text>Chunks</text>
+            <text>{{ chunk_count }}</text>
+        </div>
+
+        <h3>Chunk Hashes</h3>
+        <ul class="data-list">
+            {{ #each data }}
+            <li>
+                {{ #with this }}
+                <text id="hash">{{ hash }}</text>
+                {{ /with }}
+            </li>
+            {{ /each }}
+        </ul>
+    {{ /if }}
+
     <div id="input-output">
         <div class="column" id="inputs">
             <h3>Inputs</h3>

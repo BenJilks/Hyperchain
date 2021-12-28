@@ -122,6 +122,24 @@ impl BlockChain
         None
     }
 
+    pub fn find_transaction(&mut self, transaction_id: &Hash)
+        -> Option<(TransactionVariant, Option<Block>)>
+    {
+        let in_queue = self.find_transaction_in_queue(transaction_id);
+        if in_queue.is_some() {
+            return Some((in_queue.unwrap(), None));
+        }
+
+        let in_chain = self.find_transaction_in_chain(transaction_id);
+        if in_chain.is_some() 
+        {
+            let (transaction, block) = in_chain.unwrap();
+            return Some((transaction, Some(block)));
+        }
+
+        None
+    }
+
     pub fn get_transaction_history(&mut self, address: &Hash) 
         -> Vec<(TransactionVariant, Option<Block>)>
     {
@@ -189,7 +207,7 @@ mod tests
     use crate::block::builder::BlockBuilder;
     use crate::wallet::Wallet;
     use crate::wallet::private_wallet::PrivateWallet;
-    use crate::data_store::DataUnit;
+    use crate::data_store::data_unit::DataUnit;
     use crate::data_store::page::CreatePageData;
     use crate::miner;
     use crate::config::HASH_LEN;

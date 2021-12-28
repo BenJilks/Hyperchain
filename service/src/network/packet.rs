@@ -1,12 +1,10 @@
 use super::client_manager::ClientManager;
 use libhyperchain::block::Block;
-use libhyperchain::data_store::DataUnit;
+use libhyperchain::data_store::data_unit::DataUnit;
 use libhyperchain::transaction::Transaction;
 use libhyperchain::transaction::transfer::Transfer;
 use libhyperchain::transaction::page::Page;
-use libhyperchain::config::Hash;
 use serde::{Serialize, Deserialize};
-use std::collections::HashMap;
 use std::error::Error;
 
 pub type MessageSender = tcp_channel::Sender<Message, tcp_channel::LittleEndian>;
@@ -16,7 +14,7 @@ pub type MessageReceiver = tcp_channel::Receiver<Message, tcp_channel::LittleEnd
 pub enum Packet
 {
     OnConnected,
-    Block(Block, HashMap<Hash, DataUnit>),
+    Block(Block),
     BlockRequest(u64),
     Transfer(Transaction<Transfer>),
     Page(Transaction<Page>, DataUnit),

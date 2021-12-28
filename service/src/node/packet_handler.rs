@@ -44,16 +44,15 @@ impl PacketHandler for NodePacketHandler
                 {
                     Some(top) =>
                     {
-                        let data = node.data_store.for_page_updates(&top.pages)?;
-                        manager.send_to(Packet::Block(top.clone(), data),
+                        manager.send_to(Packet::Block(top.clone()),
                             |addr| addr == from)?;
                     },
                     None => {},
                 }
             },
 
-            Packet::Block(block, data) => 
-                node.handle_block(manager, from, block, data)?,
+            Packet::Block(block) => 
+                node.handle_block(manager, from, block)?,
 
             Packet::BlockRequest(id) =>
                 node.handle_block_request(manager, from, id)?,

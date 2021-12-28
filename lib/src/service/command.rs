@@ -2,7 +2,7 @@ use crate::wallet::WalletStatus;
 use crate::transaction::{Transaction, TransactionVariant};
 use crate::transaction::page::Page;
 use crate::block::Block;
-use crate::data_store::DataUnit;
+use crate::data_store::data_unit::DataUnit;
 use serde::{Serialize, Deserialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

@@ -80,9 +80,7 @@ fn mine_next_block(connection: &mut NetworkConnection<NodePacketHandler>,
                 println!("Won block {}! With difficulty {}", 
                     block.header.block_id, 
                     block::target::difficulty(&block.header.target));
-
-                let data = node.data_store().for_page_updates(&block.pages)?;
-                connection.manager().send(Packet::Block(block, data))?;
+                connection.manager().send(Packet::Block(block))?;
             },
 
             _ => {},

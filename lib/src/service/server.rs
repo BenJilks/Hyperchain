@@ -31,6 +31,7 @@ fn client_handler_thread(stream: TcpStream, command_sender: Sender<(Sender<Respo
         {
             Ok(command) =>
             {
+                debug!("Got command '{:?}'", command);
                 command_sender.send((response_send.clone(), command)).unwrap();
 
                 let response = response_recv.recv().unwrap();

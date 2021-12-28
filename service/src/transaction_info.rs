@@ -17,20 +17,12 @@ pub fn transaction_info(connection: &mut NetworkConnection<NodePacketHandler>,
     let transaction_id_hash = transaction_id_hash_or_none.unwrap();
     let chain = node.chain();
 
-    // Search pending
-    let transaction_in_queue = chain.find_transaction_in_queue(&transaction_id_hash);
-    if transaction_in_queue.is_some() {
-        return Response::TransactionInfo(transaction_in_queue.unwrap(), None);
+    let transaction_or_none = chain.find_transaction(&transaction_id_hash);
+    if transaction_or_none.is_none() {
+        return Response::Failed;
     }
 
-    // Search chain
-    let transaction_in_chain = chain.find_transaction_in_chain(&transaction_id_hash);
-    if transaction_in_chain.is_some() 
-    {
-        let (transaction, block) = transaction_in_chain.unwrap();
-        return Response::TransactionInfo(transaction, Some(block));
-    }
-
-    Response::Failed
+    let (transaction, block) = transaction_or_none.unwrap();
+    Response::TransactionInfo(transaction, block)
 }
 
