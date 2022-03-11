@@ -5,7 +5,7 @@ use transfer::Transfer;
 use page::Page;
 use crate::wallet::WalletStatus;
 use crate::wallet::public_wallet::{PublicWallet, WalletValidationResult};
-use crate::config::{Signature, Hash, HASH_LEN};
+use crate::hash::{Hash, Signature};
 
 use serde::{Serialize, Deserialize};
 use sha2::{Sha256, Digest};
@@ -43,9 +43,7 @@ pub trait TransactionContent
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct Input
 {
-    #[serde(with = "BigArray")]
     pub from: Signature,
-
     pub e: [u8; 3],
     pub amount: f32,
 }
@@ -63,7 +61,7 @@ pub struct Transaction<C>
     where C: TransactionContent
 {
     pub header: TransactionHeader<C>,
-    pub signatures: HashMap<Hash, Vec<u8>>,
+    pub signatures: HashMap<Hash, Signature>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -92,12 +90,14 @@ impl<C> TransactionHeader<C>
     where C: TransactionContent + Serialize
 {
 
-    pub fn hash(&self) -> Result<Vec<u8>, Box<dyn Error>>
+    pub fn hash(&self) -> Result<Hash, Box<dyn Error>>
     {
         let result = bincode::serialize(self)?;
         let mut hasher = Sha256::new();
         hasher.update(&result);
-        Ok( hasher.finalize().to_vec() )
+
+        let hash = Hash::from(&hasher.finalize().to_vec());
+        Ok(hash)
     }
 
 }
@@ -111,7 +111,7 @@ impl Input
         hasher.update(&self.from);
 
         let hash = hasher.finalize().to_vec();
-        *slice_as_array!(&hash, [u8; HASH_LEN]).unwrap()
+        Hash::from(&hash)
     }
 
 }
@@ -120,7 +120,7 @@ impl<C> Transaction<C>
     where C: TransactionContent + Serialize
 {
 
-    pub fn new(header: TransactionHeader<C>, signatures: HashMap<Hash, Vec<u8>>) -> Self
+    pub fn new(header: TransactionHeader<C>, signatures: HashMap<Hash, Signature>) -> Self
     {
         Self
         {
@@ -129,7 +129,7 @@ impl<C> Transaction<C>
         }
     }
 
-    pub fn hash(&self) -> Result<Vec<u8>, Box<dyn Error>>
+    pub fn hash(&self) -> Result<Hash, Box<dyn Error>>
     {
         self.header.hash()
     }
@@ -167,7 +167,7 @@ impl<C> Transaction<C>
         {
             let signature = &self.signatures[&input.get_address()];
             let wallet = PublicWallet::from_public_key_e(input.from, input.e);
-            let wallet_result = wallet.verify(&self.hash()?, &signature)?;
+            let wallet_result = wallet.verify(self.hash()?.data(), signature.data())?;
 
             if wallet_result != WalletValidationResult::Ok {
                 return Ok(TransactionValidationResult::Wallet(wallet_result));

@@ -1,7 +1,7 @@
 use super::{Input, TransactionContent, TransactionValidationResult};
 use crate::wallet::WalletStatus;
 use crate::error::ErrorMessage;
-use crate::config::Hash;
+use crate::hash::Hash;
 
 use serde::{Serialize, Deserialize};
 use std::error::Error;

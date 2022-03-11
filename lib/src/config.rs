@@ -6,6 +6,4 @@ pub const PAGE_CHUNK_SIZE: usize = 1000 * 1000; // 1MB
 
 pub const PUB_KEY_LEN: usize = 256;
 pub const HASH_LEN: usize = 32;
-pub type Signature = [u8; PUB_KEY_LEN];
-pub type Hash = [u8; HASH_LEN];
 

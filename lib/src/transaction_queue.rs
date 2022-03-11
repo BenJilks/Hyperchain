@@ -1,6 +1,6 @@
 use crate::transaction::{Transaction, TransactionContent};
 use crate::wallet::WalletStatus;
-use crate::config::Hash;
+use crate::hash::Hash;
 
 use serde::Serialize;
 use std::error::Error;
@@ -124,15 +124,11 @@ impl<C> TransactionQueue<C>
     {
         for (_, transaction) in &self.queue
         {
-            match transaction.hash()
+            if let Ok(hash) = transaction.hash()
             {
-                Ok(hash) =>
-                {
-                    if hash == transaction_id {
-                        return Some(transaction.clone());
-                    }
-                },
-                Err(_) => {},
+                if &hash == transaction_id {
+                    return Some(transaction.clone());
+                }
             }
         }
 

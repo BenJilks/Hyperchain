@@ -3,11 +3,10 @@ pub mod data_unit;
 use data_unit::DataUnit;
 use crate::transaction::Transaction;
 use crate::transaction::page::Page;
-use crate::config::{Hash, HASH_LEN};
-
-use std::path::PathBuf;
+use crate::hash::Hash;
+use std::path::{Path, PathBuf};
 use std::fs::File;
-use std::collections::HashMap;
+use std::collections::{HashSet, HashMap};
 use std::error::Error;
 
 pub struct DataStore
@@ -34,18 +33,17 @@ impl DataStore
         for update in updates 
         {
             let data_unit = self.get_data_unit(update)?;
-            let hash_vec = update.hash()?;
-            let hash = *slice_as_array!(&hash_vec, [u8; HASH_LEN]).unwrap();
+            let hash = update.hash()?;
             data.insert(hash, data_unit);
         }
 
         Ok(data)
     }
 
-    pub fn store(&self, id: &[u8], data: &[u8]) 
+    pub fn store(&self, id: &Hash, data: &[u8]) 
         -> Result<(), Box<dyn Error>>
     {
-        let file_name = base_62::encode(id);
+        let file_name = format!("{}", id);
         let file = File::create(self.path.join(file_name))?;
         bincode::serialize_into(file, &data)?;
         Ok(())
@@ -60,9 +58,9 @@ impl DataStore
         Ok(())
     }
 
-    pub fn get(&self, id: &[u8]) -> Result<Vec<u8>, Box<dyn Error>>
+    pub fn get(&self, id: &Hash) -> Result<Vec<u8>, Box<dyn Error>>
     {
-        let file_name = base_62::encode(id);
+        let file_name = format!("{}", id);
         let file = File::open(self.path.join(file_name))?;
         Ok(bincode::deserialize_from(file)?)
     }
@@ -114,8 +112,8 @@ mod tests
             CreatePageData::new("index.html".to_owned(), Vec::new()));
 
         let test_data = bincode::serialize(&test_unit).unwrap();
-        data_store.store(&[0, 1, 2], &test_data).unwrap();
-        assert_eq!(data_store.get(&[0, 1, 2]).unwrap(), test_data);
+        data_store.store(&Hash::empty(), &test_data).unwrap();
+        assert_eq!(data_store.get(&Hash::empty()).unwrap(), test_data);
     }
 
 }

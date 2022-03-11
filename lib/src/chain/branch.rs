@@ -2,7 +2,7 @@ use super::{BlockChain, BLOCK_SAMPLE_SIZE};
 use super::{BlockValidationResult, BlockChainAddResult};
 use crate::block::Block;
 use crate::wallet::WalletStatus;
-use crate::config::Hash;
+use crate::hash::Hash;
 
 use std::error::Error;
 use std::collections::HashMap;

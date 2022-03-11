@@ -30,5 +30,6 @@ pub mod transaction_queue;
 pub mod data_store;
 pub mod merkle_tree;
 pub mod miner;
+pub mod hash;
 pub mod error;
 

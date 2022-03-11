@@ -9,7 +9,7 @@ use crate::wallet::{Wallet, WalletStatus};
 use crate::wallet::private_wallet::PrivateWallet;
 use crate::data_store::data_unit::DataUnit;
 use crate::error::ErrorMessage;
-use crate::config::Hash;
+use crate::hash::Hash;
 
 use serde::Serialize;
 use std::error::Error;
@@ -163,7 +163,6 @@ mod tests
 
     use crate::block::builder::BlockBuilder;
     use crate::miner;
-    use crate::config::HASH_LEN;
 
     #[test]
     fn test_transaction_queue()
@@ -214,9 +213,8 @@ mod tests
             chain.get_next_transfers_in_queue(10).collect::<Vec<_>>(), 
             [&transaction_d, &transaction_a, &transaction_b]);
 
-        let transaction_a_id_vec = transaction_a.hash().unwrap();
-        let transaction_a_id = slice_as_array!(&transaction_a_id_vec, [u8; HASH_LEN]);
-        assert_eq!(chain.find_transaction_in_queue(transaction_a_id.unwrap()),
+        let transaction_a_id = transaction_a.hash().unwrap();
+        assert_eq!(chain.find_transaction_in_queue(&transaction_a_id),
                    Some(TransactionVariant::Transfer(transaction_a.clone())));
 
         let block_b = miner::mine_block(BlockBuilder::new(&wallet)

@@ -1,7 +1,7 @@
 use super::Wallet;
 use super::public_wallet::PublicWallet;
+use crate::hash::Signature;
 use crate::config::PUB_KEY_LEN;
-
 use rsa::{RSAPrivateKey, PaddingScheme, PrivateKeyEncoding, PublicKeyParts};
 use rand::rngs::OsRng;
 use std::fs::File;
@@ -18,10 +18,10 @@ pub struct PrivateWallet
 impl Wallet for PrivateWallet
 {
 
-    fn get_public_key(&self) -> [u8; PUB_KEY_LEN]
+    fn get_public_key(&self) -> Signature
     {
         let bytes = self.key.n().to_bytes_le();
-        *slice_as_array!(&bytes, [u8; PUB_KEY_LEN]).unwrap()
+        Signature::from(&bytes)
     }
 
 }
@@ -34,8 +34,7 @@ impl PrivateWallet
         let mut rng = OsRng;
         let key = RSAPrivateKey::new(&mut rng, PUB_KEY_LEN * 8)?;
 
-        Ok(Self
-        {
+        Ok(Self {
             key,
         })
     }

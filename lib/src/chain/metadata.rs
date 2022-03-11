@@ -1,7 +1,7 @@
 use super::BlockChain;
 use crate::wallet::WalletStatus;
 use crate::block::Block;
-use crate::config::Hash;
+use crate::hash::Hash;
 
 use serde::{Serialize, Deserialize};
 use std::collections::HashMap;

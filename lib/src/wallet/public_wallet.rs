@@ -1,6 +1,5 @@
 use super::Wallet;
-use crate::config::PUB_KEY_LEN;
-
+use crate::hash::Signature;
 use serde::{Serialize, Deserialize};
 use rsa::{RSAPublicKey, PublicKey, PaddingScheme, BigUint};
 use std::error::Error;
@@ -31,16 +30,14 @@ impl std::fmt::Display for WalletValidationResult
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PublicWallet
 {
-    #[serde(with = "BigArray")]
-    public_key: [u8; PUB_KEY_LEN],
-
+    public_key: Signature,
     e: Option<[u8; 3]>,
 }
 
 impl Wallet for PublicWallet
 {
 
-    fn get_public_key(&self) -> [u8; PUB_KEY_LEN]
+    fn get_public_key(&self) -> Signature
     {
         self.public_key
     }
@@ -52,15 +49,14 @@ impl PublicWallet
 
     pub fn from_public_key(public_key: &[u8]) -> Self
     {
-        let key = slice_as_array!(public_key, [u8; PUB_KEY_LEN]).expect("Bad hash length");
         Self
         {
-            public_key: *key,
+            public_key: Signature::from(public_key),
             e: None,
         }
     }
 
-    pub fn from_public_key_e(public_key: [u8; PUB_KEY_LEN], e: [u8; 3]) -> Self
+    pub fn from_public_key_e(public_key: Signature, e: [u8; 3]) -> Self
     {
         Self
         {
@@ -73,7 +69,7 @@ impl PublicWallet
     {
         assert_eq!(self.e.is_none(), false);
 
-        let n = BigUint::from_bytes_le(&self.public_key);
+        let n = BigUint::from_bytes_le(self.public_key.data());
         let e = BigUint::from_bytes_le(&self.e.unwrap());
         let key = RSAPublicKey::new(n, e)?;
         if key.verify(PaddingScheme::new_pkcs1v15_sign(None), hash, signature).is_ok() {

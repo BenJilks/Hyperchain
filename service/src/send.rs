@@ -4,7 +4,7 @@ use crate::node::packet_handler::NodePacketHandler;
 
 use libhyperchain::service::command::Response;
 use libhyperchain::wallet::private_wallet::PrivateWallet;
-use libhyperchain::config::{Hash, HASH_LEN};
+use libhyperchain::hash::Hash;
 
 fn deserialize_inputs(serialized_inputs: Vec<(Vec<u8>, f32)>) 
     -> Option<Vec<(PrivateWallet, f32)>>
@@ -30,19 +30,18 @@ fn deserialize_outputs(serialized_outputs: Vec<(Vec<u8>, f32)>)
     let mut outputs = Vec::new();
     for (to_vec, amount) in serialized_outputs
     {
-        let to = slice_as_array!(&to_vec, [u8; HASH_LEN]);
-        if to.is_none() {
-            return None;
-        }
-
-        outputs.push((*to.unwrap(), amount));
+        // TODO: Varify this is a valid hash
+        let to = Hash::from(&to_vec);
+        outputs.push((to, amount));
     }
 
     Some(outputs)
 }
 
 pub fn send(connection: &mut NetworkConnection<NodePacketHandler>,
-            serialized_inputs: Vec<(Vec<u8>, f32)>, serialized_outputs: Vec<(Vec<u8>, f32)>, fee: f32)
+            serialized_inputs: Vec<(Vec<u8>, f32)>,
+            serialized_outputs: Vec<(Vec<u8>, f32)>,
+            fee: f32)
     -> Response
 {
     let transfer;
@@ -83,6 +82,6 @@ pub fn send(connection: &mut NetworkConnection<NodePacketHandler>,
     }
 
     connection.manager().send(Packet::Transfer(transfer)).unwrap();
-    Response::Sent(transfer_id)
+    Response::Sent(transfer_id.data().to_vec())
 }
 

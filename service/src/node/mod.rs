@@ -10,6 +10,7 @@ use libhyperchain::data_store::data_unit::DataUnit;
 use libhyperchain::transaction::Transaction;
 use libhyperchain::transaction::transfer::Transfer;
 use libhyperchain::transaction::page::Page;
+use libhyperchain::hash::Hash;
 use std::path::PathBuf;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};

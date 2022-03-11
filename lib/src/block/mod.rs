@@ -9,14 +9,14 @@ use crate::transaction::transfer::Transfer;
 use crate::transaction::page::Page;
 use crate::chain::BlockChain;
 use crate::wallet::Wallet;
-use crate::config::{Hash, HASH_LEN};
+use crate::config::HASH_LEN;
+use crate::hash::Hash;
 
 use sha2::{Sha256, Digest};
 use serde::{Serialize, Deserialize};
 use std::time::SystemTime;
 use std::error::Error;
 use bincode;
-use slice_as_array;
 
 pub fn current_timestamp() -> u128
 {
@@ -78,7 +78,7 @@ impl Block
             match chain.top()
             {
                 Some(top) => (Some(top.header.block_id), top.hash()?),
-                None => (None, [0u8; HASH_LEN]),
+                None => (None, Hash::empty()),
             };
 
         let block_id =
@@ -119,9 +119,8 @@ impl Block
         let mut hasher = Sha256::default();
         let bytes = bincode::serialize(&self.header)?;
         hasher.update(&bytes);
-
-        let hash = hasher.clone().finalize();
-        Ok( *slice_as_array!(&hash[0..HASH_LEN], [u8; HASH_LEN]).unwrap() )
+        Ok(Hash::from(&hasher.clone().finalize()))
     }
 
 }
+

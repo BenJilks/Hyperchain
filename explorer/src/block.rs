@@ -40,7 +40,6 @@ pub async fn block_handler(request: HttpRequest) -> impl Responder
         Response::Blocks(blocks) if (blocks.len() == 1) =>
         {
             let block = &blocks[0];
-            let winner = base_62::encode(&block.header.raward_to);
             let difficulty = difficulty(&block.header.target);
 
             let data = json!({
@@ -49,8 +48,8 @@ pub async fn block_handler(request: HttpRequest) -> impl Responder
                 "last_block_id": block_id - 1,
                 "top_block_id": top_block_id,
                 "timestamp": (block.header.timestamp / 1000) as u64,
-                "winner": winner,
-                "merkle_root": base_62::encode(&block.header.transaction_merkle_root),
+                "winner": format!("{}", block.header.raward_to),
+                "merkle_root": format!("{}", block.header.transaction_merkle_root),
                 "difficulty": difficulty,
                 "pow": block.header.pow,
                 "transactions":

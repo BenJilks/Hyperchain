@@ -30,7 +30,7 @@ fn render_updates(client: &mut Client, site: &str, page_name: &str, updates: &[T
     for update in updates
     {
         let id = update.hash()?;
-        match client.send(Command::PageData(id))?
+        match client.send(Command::PageData(id.data().to_vec()))?
         {
             Response::PageData(data) => 
                 apply_data_unit(&mut result, site, page_name, data),
@@ -38,7 +38,7 @@ fn render_updates(client: &mut Client, site: &str, page_name: &str, updates: &[T
             _ => 
             {
                 warn!("[{}] [{}] No data found for update '{}'",
-                      site, page_name, base_62::encode(&update.hash()?));
+                      site, page_name, id);
             },
         }
     }
@@ -105,3 +105,4 @@ pub async fn site_handler(web::Path((site, page)): web::Path<(String, String)>,
     let mut client = app_data.client();
     get_page(&mut client, site, page)
 }
+

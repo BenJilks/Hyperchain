@@ -25,7 +25,7 @@ fn inputs_from_transaction<C>(transaction: &Transaction<C>)
         {
             json!(
             {
-                "address": base_62::encode(&input.get_address()),
+                "address": format!("{}", input.get_address()),
                 "amount": input.amount,
             })
         })
@@ -35,9 +35,7 @@ fn inputs_from_transaction<C>(transaction: &Transaction<C>)
 fn transfer_data(transfer: &Transaction<Transfer>, block_id: String) 
     -> serde_json::Value
 {
-    let hash = transfer.hash().unwrap();
-    let id = base_62::encode(&hash);
-
+    let id = transfer.hash().unwrap();
     let inputs = inputs_from_transaction(&transfer);
     let outputs = transfer.header.content.outputs
         .iter()
@@ -45,7 +43,7 @@ fn transfer_data(transfer: &Transaction<Transfer>, block_id: String)
         {
             json!(
             {
-                "address": base_62::encode(&output.to),
+                "address": format!("{}", output.to),
                 "amount": output.amount,
             })
         })
@@ -58,7 +56,7 @@ fn transfer_data(transfer: &Transaction<Transfer>, block_id: String)
     json!(
     {
         "type": "Transfer",
-        "id": id,
+        "id": format!("{}", id),
         "inputs": inputs,
         "outputs": outputs,
         "total_amount": total_amount,
@@ -70,13 +68,11 @@ fn transfer_data(transfer: &Transaction<Transfer>, block_id: String)
 fn page_data(page: &Transaction<Page>, block_id: String) 
     -> serde_json::Value
 {
-    let hash = page.hash().unwrap();
-    let id = base_62::encode(&hash);
-
+    let id = page.hash().unwrap();
     let inputs = inputs_from_transaction(&page);
     let outputs = vec![json!(
     {
-        "address": base_62::encode(&page.header.content.site),
+        "address": format!("{}", &page.header.content.site),
         "amount": page.header.content.cost(),
     })];
 
@@ -84,7 +80,7 @@ fn page_data(page: &Transaction<Page>, block_id: String)
         .iter()
         .map(|x| json!(
         {
-            "hash": base_62::encode(x),
+            "hash": format!("{}", x),
         }))
         .collect::<Vec<_>>();
 

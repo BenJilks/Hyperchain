@@ -93,7 +93,7 @@ impl BlockChain
             BlockValidationResult::Balance(address) =>
             {
                 warn!("Got invalid block, as {} has insufficient balance",
-                    base_62::encode(&address));
+                    address);
 
                 // NOTE: Purge any pending transfers coming from this address
                 self.transfer_queue.remove_from_address(&address);

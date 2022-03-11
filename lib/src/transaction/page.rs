@@ -2,8 +2,8 @@ use super::{Input, TransactionContent, TransactionValidationResult};
 use crate::wallet::WalletStatus;
 use crate::data_store::data_unit::DataUnit;
 use crate::error::ErrorMessage;
-use crate::config::{Hash, PAGE_CHUNK_SIZE};
-
+use crate::hash::Hash;
+use crate::config::PAGE_CHUNK_SIZE;
 use serde::{Serialize, Deserialize};
 use std::error::Error;
 

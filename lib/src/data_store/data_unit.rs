@@ -1,6 +1,6 @@
 use super::page::CreatePageData;
-use crate::config::{Hash, HASH_LEN, PAGE_CHUNK_SIZE};
-
+use crate::config::PAGE_CHUNK_SIZE;
+use crate::hash::Hash;
 use serde::{Serialize, Deserialize};
 use sha2::{Sha256, Digest};
 use std::error::Error;
@@ -28,9 +28,8 @@ impl DataUnit
             let mut hasher = Sha256::new();
             hasher.update(chunk);
 
-            let hash_vec = hasher.finalize().to_vec();
-            let hash = slice_as_array!(&hash_vec, [u8; HASH_LEN]);
-            hashes.push((chunk.to_vec(), *hash.unwrap()));
+            let hash = Hash::from(&hasher.finalize());
+            hashes.push((chunk.to_vec(), hash));
             
             chunk_start = chunk_end;
         }

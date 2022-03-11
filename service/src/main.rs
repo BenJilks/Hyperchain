@@ -6,9 +6,6 @@ extern crate serde_json;
 extern crate base_62;
 
 #[macro_use]
-extern crate slice_as_array;
-
-#[macro_use]
 extern crate log;
 
 mod node;

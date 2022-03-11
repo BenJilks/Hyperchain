@@ -1,8 +1,7 @@
 pub mod private_wallet;
 pub mod public_wallet;
-use crate::config::{Hash, HASH_LEN, PUB_KEY_LEN};
 use crate::chain::BlockChain;
-
+use crate::hash::{Hash, Signature};
 use sha2::{Sha256, Digest};
 use serde::{Serialize, Deserialize};
 
@@ -30,15 +29,13 @@ impl Default for WalletStatus
 pub trait Wallet
 {
 
-    fn get_public_key(&self) -> [u8; PUB_KEY_LEN];
+    fn get_public_key(&self) -> Signature;
 
     fn get_address(&self) -> Hash
     {
         let mut hasher = Sha256::default();
         hasher.update(&self.get_public_key());
-
-        let hash = hasher.finalize();
-        *slice_as_array!(&hash, [u8; HASH_LEN]).unwrap()
+        Hash::from(&hasher.finalize())
     }
 
     fn get_status(&self, chain: &mut BlockChain) -> WalletStatus

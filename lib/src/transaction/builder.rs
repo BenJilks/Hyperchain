@@ -1,7 +1,7 @@
 use super::{Input, Transaction, TransactionHeader, TransactionContent};
 use crate::wallet::Wallet;
 use crate::wallet::private_wallet::PrivateWallet;
-
+use crate::hash::Signature;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::error::Error;
@@ -51,7 +51,7 @@ impl<'a, C> TransactionBuilder<'a, C>
         let mut signatures = HashMap::new();
         for (wallet, input) in &self.inputs 
         {
-            let signature = wallet.sign(&header_hash)?;
+            let signature = Signature::from(&wallet.sign(header_hash.data())?);
             signatures.insert(input.get_address(), signature);
         }
 

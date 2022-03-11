@@ -1,5 +1,4 @@
-use crate::config::{Hash, HASH_LEN};
-
+use crate::hash::Hash;
 use sha2::{Sha256, Digest};
 
 type Node = Vec<u8>;
@@ -26,7 +25,7 @@ pub fn calculate_merkle_root<H>(data: &[H]) -> Hash
     where H: AsRef<[u8]>
 {
     if data.len() == 0 {
-        return [0u8; HASH_LEN];
+        return Hash::empty();
     }
 
     let mut nodes = data
@@ -44,7 +43,7 @@ pub fn calculate_merkle_root<H>(data: &[H]) -> Hash
     }
 
     let root = &nodes[0];
-    *slice_as_array!(root, [u8; HASH_LEN]).unwrap()
+    Hash::from(root)
 }
 
 #[cfg(test)]
@@ -60,10 +59,10 @@ mod tests
         let b = vec![6, 4, 7];
         let c = vec![0];
 
-        let expected_hash = 
-            [55, 96, 134, 211, 95, 199, 179, 17, 11, 240, 249, 
+        let expected_hash = Hash::from(
+            &[55, 96, 134, 211, 95, 199, 179, 17, 11, 240, 249, 
             17, 155, 238, 27, 49, 204, 189, 47, 127, 98, 20, 
-            247, 132, 161, 187, 217, 199, 158, 253, 81, 231];
+            247, 132, 161, 187, 217, 199, 158, 253, 81, 231]);
 
         {
             let merkle_root = calculate_merkle_root(&[&a, &b, &c]);
@@ -75,7 +74,7 @@ mod tests
             assert_ne!(merkle_root, expected_hash);
         }
 
-        assert_eq!(calculate_merkle_root::<Vec<u8>>(&[]), [0u8; HASH_LEN]);
+        assert_eq!(calculate_merkle_root::<Vec<u8>>(&[]), Hash::empty());
     }
 
 }

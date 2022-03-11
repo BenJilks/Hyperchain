@@ -90,7 +90,7 @@ impl Block
         -> Result<BlockValidationResult, Box<dyn Error>>
     {
         let hash = self.hash()?;
-        let hash_num = BigUint::from_bytes_be(&hash);
+        let hash_num = BigUint::from_bytes_be(hash.data());
         let target_num = BigUint::from_bytes_be(&hash_from_target(&self.header.target));
         if hash_num < target_num {
             Ok(BlockValidationResult::Ok)

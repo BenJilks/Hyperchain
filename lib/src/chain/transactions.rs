@@ -3,7 +3,7 @@ use crate::transaction::{Transaction, TransactionContent, TransactionVariant};
 use crate::transaction::page::Page;
 use crate::block::Block;
 use crate::wallet::WalletStatus;
-use crate::config::Hash;
+use crate::hash::Hash;
 
 use serde::Serialize;
 
@@ -13,15 +13,11 @@ fn find_transaction<C>(transactions: &Vec<Transaction<C>>, transaction_id: &Hash
 {
     for transaction in transactions
     {
-        match transaction.hash()
+        if let Ok(hash) = transaction.hash()
         {
-            Ok(hash) =>
-            {
-                if hash == transaction_id {
-                    return Some(transaction.clone());
-                }
-            },
-            Err(_) => {},
+            if &hash == transaction_id {
+                return Some(transaction.clone());
+            }
         }
     }
 
@@ -210,7 +206,6 @@ mod tests
     use crate::data_store::data_unit::DataUnit;
     use crate::data_store::page::CreatePageData;
     use crate::miner;
-    use crate::config::HASH_LEN;
 
     #[test]
     fn test_chain_transaction()
@@ -246,9 +241,8 @@ mod tests
                    [page.clone()]);
 
         // Test 'find_transaction_in_chain'
-        let transaction_id_vec = transaction.hash().unwrap();
-        let transaction_id = slice_as_array!(&transaction_id_vec, [u8; HASH_LEN]).unwrap();
-        assert_eq!(chain.find_transaction_in_chain(transaction_id), 
+        let transaction_id = transaction.hash().unwrap();
+        assert_eq!(chain.find_transaction_in_chain(&transaction_id), 
                    Some((TransactionVariant::Transfer(transaction.clone()), block_b.clone())));
 
         // Test 'push_transfer_queue'

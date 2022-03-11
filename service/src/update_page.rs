@@ -37,7 +37,7 @@ fn add_page(connection: &mut NetworkConnection<NodePacketHandler>,
     }
     
     let page_id = page.hash().unwrap();
-    Some((page, page_id))
+    Some((page, page_id.data().to_vec()))
 }
 
 pub fn update_page(connection: &mut NetworkConnection<NodePacketHandler>,

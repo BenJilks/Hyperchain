@@ -5,7 +5,7 @@ use crate::transaction::transfer::Transfer;
 use crate::transaction::page::Page;
 use crate::transaction::TransactionVariant;
 use crate::merkle_tree::calculate_merkle_root;
-use crate::config::Hash;
+use crate::hash::Hash;
 
 use std::collections::HashSet;
 use std::error::Error;

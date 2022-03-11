@@ -25,11 +25,12 @@ fn balance(mut client: Client, options: &ArgMatches) -> Result<(), Box<dyn Error
     }
 
     let wallet = wallet_or_error.unwrap();
-    match client.send(Command::Balance(wallet.get_address().to_vec()))?
+    let address = wallet.get_address().data().to_vec();
+    match client.send(Command::Balance(address))?
     {
         Response::WalletStatus(status) =>
         {
-            println!("Address: {}", base_62::encode(&wallet.get_address()));
+            println!("Address: {}", wallet.get_address());
             println!("Balance: {}", status.balance)
         },
         _ => {},
@@ -152,12 +153,12 @@ fn transaction_info(mut client: Client, options: &ArgMatches)
                     println!("Transfer:");
                     for input in &transfer.header.inputs 
                     {
-                        println!("From: {}", base_62::encode(&input.get_address()));
+                        println!("From: {}", input.get_address());
                         println!("Amount: {}", input.amount);
                     }
                     for output in &transfer.header.content.outputs
                     {
-                        println!("To: {}", base_62::encode(&output.to));
+                        println!("To: {}", output.to);
                         println!("Amount: {}", output.amount);
                     }
                     println!("Fee: {}", transfer.header.content.fee);
@@ -168,7 +169,7 @@ fn transaction_info(mut client: Client, options: &ArgMatches)
                     println!("Page:");
                     for input in &page.header.inputs 
                     {
-                        println!("From: {}", base_62::encode(&input.get_address()));
+                        println!("From: {}", input.get_address());
                         println!("Amount: {}", input.amount);
                     }
                     println!("Length: {} bytes", page.header.content.data_length);
