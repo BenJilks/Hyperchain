@@ -91,7 +91,7 @@ fn page_data(page: &Transaction<Page>, block_id: String)
     json!(
     {
         "type": "Page Update",
-        "id": id,
+        "id": format!("{}", id),
         "inputs": inputs,
         "outputs": outputs,
         "data": data,

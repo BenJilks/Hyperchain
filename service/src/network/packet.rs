@@ -1,4 +1,6 @@
 use super::client_manager::ClientManager;
+use crate::report::NodeReport;
+
 use libhyperchain::block::Block;
 use libhyperchain::data_store::data_unit::DataUnit;
 use libhyperchain::transaction::Transaction;
@@ -18,6 +20,7 @@ pub enum Packet
     BlockRequest(u64),
     Transfer(Transaction<Transfer>),
     Page(Transaction<Page>, DataUnit),
+    Report(Option<String>, NodeReport),
     Ping(u128),
 }
 
@@ -31,7 +34,11 @@ pub enum Message
 
 pub trait PacketHandler
 {
+
     fn handle(&self, from: &str, packet: Packet, manager: &mut ClientManager)
         -> Result<(), Box<dyn Error>>;
+
+    fn update_reports(&self, manager: &mut ClientManager);
+
 }
 

@@ -40,15 +40,14 @@ impl PacketHandler for NodePacketHandler
         {
             Packet::OnConnected => 
             {
-                match node.chain.top()
+                if let Some(top) = node.chain.top()
                 {
-                    Some(top) =>
-                    {
-                        manager.send_to(Packet::Block(top.clone()),
-                            |addr| addr == from)?;
-                    },
-                    None => {},
+                    manager.send_to(Packet::Block(top.clone()),
+                        |addr| addr == from)?;
                 }
+
+                manager.send_to(Packet::Report(None, node.our_report()?),
+                    |addr| addr == from)?;
             },
 
             Packet::Block(block) => 
@@ -62,12 +61,25 @@ impl PacketHandler for NodePacketHandler
 
             Packet::Page(page, data) =>
                 node.handle_page(manager, from, page, data)?,
-            
+
+            Packet::Report(address, report) =>
+                match address
+                {
+                    Some(addr) => node.handle_report(manager, &addr, report)?,
+                    None => node.handle_report(manager, from, report)?,
+                },
+
             Packet::Ping(time_sent) =>
                 manager.report_ping_time(from, time_sent),
         }
 
         Ok(())
+    }
+
+    fn update_reports(&self, manager: &mut ClientManager)
+    {
+        let mut node = self.node.lock().unwrap();
+        node.update_reports(manager);
     }
 
 }

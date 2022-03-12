@@ -1,6 +1,5 @@
 use super::AppData;
 use super::transaction::data_for_transaction;
-
 use libhyperchain::service::command::{Command, Response};
 use libhyperchain::wallet::WalletStatus;
 use libhyperchain::transaction::TransactionVariant;
@@ -49,7 +48,7 @@ pub async fn wallet_handler(request: HttpRequest) -> impl Responder
     let transacion_history = get_transaction_history(&mut client, &address);
 
     let data = json!({
-        "address": parameters.address,
+        "address": format!("{}", parameters.address),
         "balance": wallet_status.balance,
         "transaction_count": transacion_history.len(),
         "history": 
@@ -62,3 +61,4 @@ pub async fn wallet_handler(request: HttpRequest) -> impl Responder
     let body = app_data.hb.render("wallet", &data).unwrap();
     HttpResponse::Ok().body(body)
 }
+

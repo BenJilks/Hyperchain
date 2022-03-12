@@ -50,9 +50,15 @@ pub fn update_page(connection: &mut NetworkConnection<NodePacketHandler>,
         return Response::Failed;
     }
 
+    // TODO: Handle errors.
+
     let (page, page_id) = page_or_none.unwrap();
     connection.handler().node().data_store().store_data_unit(&data_unit).unwrap();
     connection.manager().send(Packet::Page(page, data_unit)).unwrap();
+
+    let report = connection.handler().node().our_report().unwrap();
+    connection.manager().send(Packet::Report(None, report)).unwrap();
+
     Response::Sent(page_id)
 }
 

@@ -41,7 +41,7 @@ fn ping_old_nodes(manager: &mut ClientManager)
 
 pub fn start_node_discovery_thread<H>(packet_handler: H, 
                                       mut manager: ClientManager)
-    -> JoinHandle<()>
+        -> JoinHandle<()>
     where H: PacketHandler + Clone + Send + Sync + 'static
 {
     std::thread::spawn(move || loop

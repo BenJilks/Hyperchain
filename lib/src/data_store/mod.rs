@@ -78,6 +78,27 @@ impl DataStore
         Ok(bincode::deserialize(&data_unit_bytes)?)
     }
 
+    pub fn report(&self)
+        -> Result<HashSet<Hash>, Box<dyn Error>>
+    {
+        let mut stored = HashSet::new();
+        for entry_or_error in std::fs::read_dir(&self.path)?
+        {
+            let entry = entry_or_error?;
+            let hash_vec = base_62::decode(entry.file_name().to_str().unwrap())?;
+            let hash = Hash::from(&hash_vec);
+            stored.insert(hash);
+        }
+
+        Ok(stored)
+    }
+
+    pub fn has_chunk(&self, hash: &Hash) -> bool
+    {
+        let file_name = format!("{}", hash);
+        Path::new(&self.path.join(file_name)).exists()
+    }
+
 }
 
 #[cfg(test)]

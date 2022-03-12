@@ -15,6 +15,7 @@ mod wallet;
 mod transaction;
 mod block;
 mod site;
+mod index;
 
 use libhyperchain::service::client::Client;
 use actix_web::{web, App};
@@ -77,6 +78,7 @@ async fn main() -> Result<(), Box<dyn Error>>
                 .service(site::site_index_redirect_handler)
                 .service(site::site_index_handler)
                 .service(site::site_handler)
+                .service(index::index_handler)
                 .service(Files::new("/", "./static/root").index_file("index.html"))
         })
         .bind("0.0.0.0:8080")?

@@ -19,6 +19,8 @@ mod transaction_info;
 mod transaction_history;
 mod page;
 mod blocks;
+mod statistics;
+mod report;
 
 use miner::start_miner_thread;
 use send::send;
@@ -29,6 +31,7 @@ use transaction_info::transaction_info;
 use page::page_updates;
 use page::page_data;
 use blocks::{blocks, top_block};
+use statistics::statistics;
 use crate::network::NetworkConnection;
 use crate::node::Node;
 use crate::node::packet_handler::NodePacketHandler;
@@ -129,6 +132,10 @@ fn main() -> Result<(), Box<dyn Error>>
 
                 Command::TopBlock =>
                     top_block(&mut connection),
+
+                Command::Statistics =>
+                    statistics(&mut connection),
+
             }
         })?;
     }

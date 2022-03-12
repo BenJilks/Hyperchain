@@ -1,12 +1,12 @@
 <html>
     <head>
         <title>Index</title>
-        <link rel="stylesheet" href="../root/style.css">
+        <link rel="stylesheet" href="style.css">
 
         <style>
             .header
             {
-                position: fixed;
+                position: sticky;
                 top: 0px;
                 left: 0px;
                 right: 0px;
@@ -14,18 +14,21 @@
                 padding: 1em;
 
                 display: flex;
+                align-items: center;
                 background-color: #FFF;
             }
 
             .header h1
             {
                 display: inline;
+                margin: 0px;
                 flex-grow: 1;
             }
 
             .header #search-bar
             {
                 display: inline;
+                margin: 0px;
             }
 
             .header #address
@@ -34,6 +37,7 @@
             }
         </style>
     </head>
+
     <body>
         <div class="header">
             <h1>Hyperchain Explorer</h1>
@@ -42,6 +46,22 @@
                 <button type="submit">Search</button>
             </form>
         </div>
+
+        <article>
+            <h1>Statistics</h1>
+            <div class="item">
+                <text>Hash Rate</text>
+                <text>{{ hash_rate }} H/s</text>
+            </div>
+            <div class="item">
+                <text>Known Chunks</text>
+                <text>{{ known_chunks }}</text>
+            </div>
+            <div class="item">
+                <text>Replication</text>
+                <text>{{ replication_percent }}%</text>
+            </div>
+        </article>
     </body>
 </html>
 

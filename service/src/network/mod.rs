@@ -3,10 +3,12 @@ pub mod client;
 pub mod server;
 pub mod client_manager;
 mod node_discovery;
+mod report_manager;
 use packet::PacketHandler;
 use client_manager::ClientManager;
 use server::start_server_thread;
 use node_discovery::start_node_discovery_thread;
+use report_manager::start_report_manager_thread;
 
 use std::net::TcpStream;
 use std::thread::JoinHandle;
@@ -20,6 +22,7 @@ struct NetworkConnectionData
     shutdown_signal: Arc<Mutex<bool>>,
     server_thread: Option<JoinHandle<()>>,
     node_discovery_thread: Option<JoinHandle<()>>,
+    report_manager_thread: Option<JoinHandle<()>>,
     manager: ClientManager,
 }
 
@@ -49,6 +52,9 @@ impl<H> NetworkConnection<H>
         let node_discovery = start_node_discovery_thread(
             packet_handler.clone(), manager.clone());
 
+        let report_manager = start_report_manager_thread(
+            packet_handler.clone(), manager.clone());
+
         Ok(Self
         {
             _data: Arc::from(Mutex::from(NetworkConnectionData
@@ -57,6 +63,7 @@ impl<H> NetworkConnection<H>
                 shutdown_signal: shutdown_signal.clone(),
                 server_thread: Some(server),
                 node_discovery_thread: Some(node_discovery),
+                report_manager_thread: Some(report_manager),
                 manager: manager.clone(),
             })),
 
@@ -99,6 +106,9 @@ impl Drop for NetworkConnectionData
 
         let node_discovery = self.node_discovery_thread.take().unwrap();
         node_discovery.join().unwrap();
+
+        let report_manager = self.report_manager_thread.take().unwrap();
+        report_manager.join().unwrap();
     }
 
 }
@@ -127,6 +137,10 @@ mod tests
         {
             let _ = self.test_sender.lock().unwrap().send(packet);
             Ok(())
+        }
+
+        fn update_reports(&self, _: &mut ClientManager)
+        {
         }
 
     }

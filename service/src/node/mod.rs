@@ -1,6 +1,7 @@
 pub mod packet_handler;
 use crate::network::packet::Packet;
 use crate::network::client_manager::ClientManager;
+use crate::report::{Report, NodeReport};
 
 use libhyperchain::chain::{BlockChain, BlockChainAddResult};
 use libhyperchain::chain::branch::BlockChainCanMergeResult;
@@ -21,6 +22,7 @@ pub struct Node
     port: u16,
     chain: BlockChain,
     data_store: DataStore,
+    report: Report,
     branches: HashMap<String, Vec<Block>>,
 }
 
@@ -31,12 +33,14 @@ impl Node
     {
         let chain = BlockChain::open(&path.join("blockchain"))?;
         let data_store = DataStore::open(&path.join("data"))?;
+        let report = Report::open(&path.join("report.json"));
 
         Ok(Arc::from(Mutex::from(Self
         {
             port,
             chain,
             data_store,
+            report,
             branches: HashMap::new()
         })))
     }
@@ -49,6 +53,25 @@ impl Node
     pub fn data_store(&mut self) -> &mut DataStore
     {
         &mut self.data_store
+    }
+
+    pub fn our_report(&self) -> Result<NodeReport, Box<dyn Error>>
+    {
+        Ok(NodeReport::new(self.data_store.report()?))
+    }
+
+    pub fn storage_usage(&self) -> Result<HashMap<Hash, usize>, Box<dyn Error>>
+    {
+        let mut usage = self.report.storage_usage();
+        for chunk in self.data_store.report()?
+        {
+            if !usage.contains_key(&chunk) {
+                usage.insert(chunk.clone(), 0);
+            }
+            *usage.get_mut(&chunk).unwrap() += 1;
+        }
+
+        Ok(usage)
     }
 
     fn try_insert_block_into_branch(branch: &mut Vec<Block>, block: Block) 
@@ -234,6 +257,7 @@ impl Node
         self.chain.push_page_queue(page.clone())?;
         self.data_store.store_data_unit(&data)?;
 
+        manager.send(Packet::Report(None, self.our_report()?))?;
         manager.send_to(
             Packet::Page(page, data),
             |x| x != from)?;
@@ -241,10 +265,33 @@ impl Node
         Ok(())
     }
 
+    fn handle_report(&mut self, manager: &mut ClientManager, 
+                     from: &str, report: NodeReport)
+        -> Result<(), Box<dyn Error>>
+    {
+        if self.report.add(from, report.clone()) 
+        {
+            info!("Got new report for node '{}'", from);
+            manager.send_to(Packet::Report(Some(from.to_owned()), report),
+                |addr| addr != from)?;
+        }
+
+        Ok(())
+    }
+
+    fn update_reports(&mut self, _manager: &mut ClientManager)
+    {
+        for address in self.report.update()
+        {
+            info!("Report for {} expired", address);
+            // TODO: Request new reports
+        }
+    }
+
 }
 
 #[cfg(test)]
-mod tests
+pub mod tests
 {
 
     use super::*;
@@ -256,7 +303,7 @@ mod tests
 
     use std::time::Duration;
 
-    fn wait_for_block(connection: &NetworkConnection<NodePacketHandler>, block_id: u64) 
+    pub fn wait_for_block(connection: &NetworkConnection<NodePacketHandler>, block_id: u64) 
         -> Block
     {
         loop
@@ -273,7 +320,7 @@ mod tests
         }
     }
 
-    fn create_node(port: u16) -> NetworkConnection<NodePacketHandler>
+    pub fn create_node(port: u16) -> NetworkConnection<NodePacketHandler>
     {
         let time = libhyperchain::block::current_timestamp();
         let path = std::env::temp_dir().join(format!("{}{}", time, port.to_string()));
@@ -283,7 +330,7 @@ mod tests
         network_connection
     }
 
-    fn mine_block(connection: &mut NetworkConnection<NodePacketHandler>,
+    pub fn mine_block(connection: &mut NetworkConnection<NodePacketHandler>,
                   wallet: &PrivateWallet) -> Block
     {
         let block = 

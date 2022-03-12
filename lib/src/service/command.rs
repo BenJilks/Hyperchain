@@ -18,6 +18,15 @@ pub enum Command
     TopBlock,
     PageUpdates(Vec<u8>),
     PageData(Vec<u8>),
+    Statistics,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct Statistics
+{
+    pub hash_rate: f64,
+    pub known_chunks: usize,
+    pub replication: f64,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -31,6 +40,7 @@ pub enum Response
     Blocks(Vec<Block>),
     PageUpdates(Vec<Transaction<Page>>),
     PageData(DataUnit),
+    Statistics(Statistics),
     Failed,
 }
 

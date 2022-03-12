@@ -30,7 +30,7 @@ pub fn difficulty(target: &Target) -> f64
     coefficent_diff * exponent_diff.exp2()
 }
 
-fn hash_rate(diff: f64, time: u64) -> f64
+pub fn hash_rate(diff: f64, time: u64) -> f64
 {
     (diff * 256.0 * BLOCK_SAMPLE_SIZE as f64) / time as f64
 }
