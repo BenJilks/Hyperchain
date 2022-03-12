@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2022, Ben Jilks <benjyjilks@gmail.com>
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+
 use super::command::{Command, Response};
 
 use tcp_channel::LittleEndian;
@@ -114,3 +120,4 @@ pub fn start<F>(mut on_command: F) -> Result<(), Box<dyn Error>>
     
     Ok(())
 }
+

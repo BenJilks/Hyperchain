@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2022, Ben Jilks <benjyjilks@gmail.com>
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+
 use crate::network::NetworkConnection;
 use crate::node::packet_handler::NodePacketHandler;
 

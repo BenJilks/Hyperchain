@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2022, Ben Jilks <benjyjilks@gmail.com>
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+
 use super::{BlockChain, BLOCK_SAMPLE_SIZE};
 use super::{BlockValidationResult, BlockChainAddResult};
 use crate::block::Block;
@@ -148,3 +154,4 @@ impl BlockChain
     }
 
 }
+

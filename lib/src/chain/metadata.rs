@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2022, Ben Jilks <benjyjilks@gmail.com>
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+
 use super::BlockChain;
 use crate::wallet::WalletStatus;
 use crate::block::Block;
@@ -52,3 +58,4 @@ impl BlockChain
     }
 
 }
+

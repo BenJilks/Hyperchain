@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2022, Ben Jilks <benjyjilks@gmail.com>
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+
 use libhyperchain::block::Block;
 use libhyperchain::block::builder::BlockBuilder;
 use libhyperchain::chain::BlockChain;
@@ -18,3 +24,4 @@ pub fn build<W>(chain: &mut BlockChain, wallet: &W) -> Result<Block, Box<dyn Err
 
     Ok(block_builder.build(chain)?)
 }
+

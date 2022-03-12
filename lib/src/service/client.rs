@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2022, Ben Jilks <benjyjilks@gmail.com>
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+
 use super::command::{Command, Response};
 
 use tcp_channel;
@@ -47,3 +53,4 @@ impl Client
     }
 
 }
+

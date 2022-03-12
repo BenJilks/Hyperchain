@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2022, Ben Jilks <benjyjilks@gmail.com>
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+
 use super::{Input, TransactionContent, TransactionValidationResult};
 use crate::wallet::WalletStatus;
 use crate::data_store::data_unit::DataUnit;

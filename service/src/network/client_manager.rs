@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2022, Ben Jilks <benjyjilks@gmail.com>
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+
 use super::packet::{Packet, PacketHandler};
 use super::packet::{Message, MessageSender};
 use super::client::client_handler_thread;

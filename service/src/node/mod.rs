@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2022, Ben Jilks <benjyjilks@gmail.com>
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+
 pub mod packet_handler;
 use crate::network::packet::Packet;
 use crate::network::client_manager::ClientManager;

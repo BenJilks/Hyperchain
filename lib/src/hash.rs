@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2022, Ben Jilks <benjyjilks@gmail.com>
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+
 use crate::config::{HASH_LEN, PUB_KEY_LEN};
 use serde::{Serialize, Deserialize};
 use serde::{Serializer, Deserializer};

@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2022, Ben Jilks <benjyjilks@gmail.com>
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+
 use super::HASH_LEN;
 use super::Block;
 use crate::config::{BLOCK_SAMPLE_SIZE, BLOCK_TIME};
@@ -139,3 +145,4 @@ mod tests
     }
 
 }
+

@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2022, Ben Jilks <benjyjilks@gmail.com>
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+
 use super::{Block, Hash, current_timestamp};
 use super::target::{calculate_target, hash_from_target};
 use super::transactions::merkle_root_for_transactions;

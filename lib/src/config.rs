@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2022, Ben Jilks <benjyjilks@gmail.com>
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+
 
 pub const BLOCK_TIME: u64 = 10 * 1000; // 10 second blocks
 // pub const BLOCK_TIME: u64 = 10 * 60 * 1000; // 10 minute blocks

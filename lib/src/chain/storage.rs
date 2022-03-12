@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2022, Ben Jilks <benjyjilks@gmail.com>
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+
 use serde::{Serialize, Deserialize};
 use serde::de::DeserializeOwned;
 use std::path::PathBuf;
@@ -174,3 +180,4 @@ impl<T> Storage<T>
     }
 
 }
+

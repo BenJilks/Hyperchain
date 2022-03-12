@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2022, Ben Jilks <benjyjilks@gmail.com>
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+
 use super::{Input, Transaction, TransactionHeader, TransactionContent};
 use crate::wallet::Wallet;
 use crate::wallet::private_wallet::PrivateWallet;
@@ -59,3 +65,4 @@ impl<'a, C> TransactionBuilder<'a, C>
     }
 
 }
+
