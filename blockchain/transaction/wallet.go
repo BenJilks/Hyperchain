@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
-package blockchain
+package transaction
 
 import (
 	"crypto"
@@ -18,6 +18,28 @@ import (
 
 type Wallet struct {
     Key *rsa.PrivateKey
+}
+
+type WalletStatus struct {
+    Balance float32
+    LastId uint64
+}
+
+type WalletStatusError int
+const (
+    WalletStatusNegativeBalance = WalletStatusError(iota)
+    WalletStatusInvalidId
+)
+
+func (err WalletStatusError) Error() string {
+    switch err {
+    case WalletStatusNegativeBalance:
+        return "Transaction results in a negative balance"
+    case WalletStatusInvalidId:
+        return "Transaction ID is non-sequential"
+    default:
+        panic(err)
+    }
 }
 
 func NewWallet() (Wallet, error) {
@@ -79,7 +101,7 @@ func (wallet *Wallet) Address() [32]byte {
 
     hasher := sha256.New()
     hasher.Write(publicKey.N.Bytes())
-    hasher.Write(intToBytes(publicKey.E))
+    hasher.Write(IntToBytes(publicKey.E))
     
     var address [32]byte
     copy(address[:], hasher.Sum(nil))

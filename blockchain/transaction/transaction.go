@@ -4,14 +4,14 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
-package blockchain
+package transaction
 
 import (
 	"crypto"
 	"crypto/rsa"
 	"crypto/sha256"
-	"encoding/binary"
 	"math/big"
+    "hash"
 )
 
 type Input struct {
@@ -21,25 +21,21 @@ type Input struct {
     Amount float32
 }
 
-func intToBytes(i int) []byte {
-    bytes := make([]byte, 4)
-    binary.LittleEndian.PutUint32(bytes, uint32(i))
-    return bytes
-}
-
 func (input *Input) Address() [32]byte {
     var address [32]byte
     hasher := sha256.New()
     hasher.Write(input.KeyN.Bytes())
-    hasher.Write(intToBytes(input.KeyE))
+    hasher.Write(IntToBytes(input.KeyE))
     copy(address[:], hasher.Sum(nil))
 
     return address
 }
 
-type Output struct {
-    Address [32]byte
-    Amount float32
+type Output interface {
+    hash(hash.Hash)
+    cost() float32
+    addresses() [][32]byte
+    apply(*WalletStatus, [32]byte) (bool, error)
 }
 
 type Transaction struct {
@@ -51,16 +47,15 @@ type Transaction struct {
 
 func (transaction *Transaction) Hash() [32]byte {
     hasher := sha256.New()
-    hasher.Write(uint64AsBytes(transaction.Id))
-    hasher.Write(float32AsBytes(transaction.Fee))
+    hasher.Write(Uint64AsBytes(transaction.Id))
+    hasher.Write(Float32AsBytes(transaction.Fee))
     for _, input := range transaction.Inputs {
         hasher.Write(input.KeyN.Bytes())
-        hasher.Write(intToBytes(input.KeyE))
-        hasher.Write(float32AsBytes(input.Amount))
+        hasher.Write(IntToBytes(input.KeyE))
+        hasher.Write(Float32AsBytes(input.Amount))
     }
     for _, output := range transaction.Outputs {
-        hasher.Write(output.Address[:])
-        hasher.Write(float32AsBytes(output.Amount))
+        output.hash(hasher)
     }
 
     var hash [32]byte
@@ -102,12 +97,47 @@ func (transaction *Transaction) Validate() error {
 
     outputAmount := transaction.Fee
     for _, output := range transaction.Outputs {
-        outputAmount += output.Amount
+        outputAmount += output.cost()
     }
 
     // FIXME: Comparing float values like this is a no-no
     if inputAmount != outputAmount {
         return TransactionInsufficientInput
+    }
+
+    return nil
+}
+
+func (transaction *Transaction) Apply(status *WalletStatus, address [32]byte, rewardTo [32]byte) error {
+    areWeInvolved := false
+
+    for _, input := range transaction.Inputs {
+        if input.Address() == address {
+            status.Balance -= input.Amount
+            areWeInvolved = true
+        }
+    }
+
+    for _, output := range transaction.Outputs {
+        involved, err := output.apply(status, address)
+        areWeInvolved = areWeInvolved || involved
+
+        if err != nil {
+            return err
+        }
+    }
+
+    if rewardTo == address {
+        status.Balance += transaction.Fee
+        areWeInvolved = true
+    }
+
+    if areWeInvolved {
+        if transaction.Id <= status.LastId {
+            return WalletStatusInvalidId
+        }
+
+        status.LastId = transaction.Id
     }
 
     return nil
@@ -134,8 +164,10 @@ func AddressesUsed(transactions []Transaction) [][32]byte {
         }
 
         for _, output := range transaction.Outputs {
-            if !contains(addresses, output.Address) {
-                addresses = append(addresses, output.Address)
+            for _, address := range output.addresses() {
+                if !contains(addresses, address) {
+                    addresses = append(addresses, address)
+                }
             }
         }
     }
@@ -171,55 +203,5 @@ func MerkleRoot(transactions []Transaction) [32]byte {
     }
 
     return merkleRootForNodes(nodes)
-}
-
-type TransactionBuilder struct {
-    transaction Transaction
-    wallets []Wallet
-}
-
-func NewTransactionBuilder(id uint64, fee float32) TransactionBuilder {
-    return TransactionBuilder {
-        transaction: Transaction {
-            Id: id,
-            Fee: fee,
-        },
-        wallets: []Wallet{},
-    }
-}
-
-func (builder TransactionBuilder) AddInput(wallet Wallet, amount float32) TransactionBuilder {
-    builder.transaction.Inputs = append(builder.transaction.Inputs, Input {
-        KeyN: *wallet.Key.N,
-        KeyE: wallet.Key.E,
-        Amount: amount,
-    })
-
-    builder.wallets = append(builder.wallets, wallet)
-    return builder
-}
-
-func (builder TransactionBuilder) AddOutput(address [32]byte, amount float32) TransactionBuilder {
-    builder.transaction.Outputs = append(builder.transaction.Outputs, Output {
-        Address: address,
-        Amount: amount,
-    })
-    return builder
-}
-
-func (builder TransactionBuilder) Build() (Transaction, error) {
-    for i := range builder.transaction.Inputs {
-        input := &builder.transaction.Inputs[i]
-        wallet := builder.wallets[i]
-
-        signature, err := wallet.Sign(builder.transaction)
-        if err != nil {
-            return Transaction{}, err
-        }
-
-        input.Signature = signature
-    }
-
-    return builder.transaction, nil
 }
 

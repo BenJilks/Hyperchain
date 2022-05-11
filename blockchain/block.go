@@ -8,8 +8,7 @@ package blockchain
 
 import (
 	"crypto/sha256"
-	"encoding/binary"
-	"math"
+    . "hyperchain/blockchain/transaction"
 )
 
 const BlockReward = float32(100)
@@ -24,29 +23,16 @@ type Block struct {
     Pow uint64
 }
 
-func uint64AsBytes(i uint64) []byte {
-    bytes := make([]byte, 8)
-    binary.LittleEndian.PutUint64(bytes, i)
-    return bytes
-}
-
-func float32AsBytes(f float32) []byte {
-    bytes := make([]byte, 4)
-    floatBits := math.Float32bits(f)
-    binary.LittleEndian.PutUint32(bytes, floatBits)
-    return bytes
-}
-
 func (block *Block) Hash() [32]byte {
     hasher := sha256.New()
     merkleRoot := MerkleRoot(block.Transactions)
-    hasher.Write(uint64AsBytes(block.Id))
+    hasher.Write(Uint64AsBytes(block.Id))
     hasher.Write(block.PrevBlock[:])
-    hasher.Write(uint64AsBytes(block.Timestamp))
+    hasher.Write(Uint64AsBytes(block.Timestamp))
     hasher.Write(block.Target[:])
     hasher.Write(block.RewardTo[:])
     hasher.Write(merkleRoot[:])
-    hasher.Write(uint64AsBytes(block.Pow))
+    hasher.Write(Uint64AsBytes(block.Pow))
     
     var hash [32]byte
     copy(hash[:], hasher.Sum(nil))

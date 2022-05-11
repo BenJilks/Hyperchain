@@ -6,7 +6,10 @@
 
 package blockchain
 
-import "testing"
+import (
+    "testing"
+    . "hyperchain/blockchain/transaction"
+)
 
 func (chain *BlockChain) testBlock(t *testing.T,
                                    expect error,
@@ -90,7 +93,7 @@ func TestBlockChainAddTransaction(t *testing.T) {
     block := chain.NewBlock(wallet_a.Address())
     transaction, err := NewTransactionBuilder(1, 1).
         AddInput(wallet_a, 11).
-        AddOutput(wallet_b.Address(), 10).
+        AddOutput(&Transfer { wallet_b.Address(), 10 }).
         Build()
     if err != nil {
         t.Error(err)

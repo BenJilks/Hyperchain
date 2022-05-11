@@ -8,6 +8,7 @@ package blockchain
 
 import (
 	"time"
+    . "hyperchain/blockchain/transaction"
 )
 
 type AddError int
@@ -136,28 +137,6 @@ func (chain *BlockChain) NewBlock(rewardTo [32]byte) Block {
     return block
 }
 
-type WalletStatusError int
-const (
-    WalletStatusNegativeBalance = WalletStatusError(iota)
-    WalletStatusInvalidId
-)
-
-func (err WalletStatusError) Error() string {
-    switch err {
-    case WalletStatusNegativeBalance:
-        return "Transaction results in a negative balance"
-    case WalletStatusInvalidId:
-        return "Transaction ID is non-sequential"
-    default:
-        panic(err)
-    }
-}
-
-type WalletStatus struct {
-    Balance float32
-    LastId uint64
-}
-
 func (chain *BlockChain) WalletStatus(address [32]byte) (WalletStatus, error) {
     var status WalletStatus
     for _, block := range chain.blocks {
@@ -165,34 +144,12 @@ func (chain *BlockChain) WalletStatus(address [32]byte) (WalletStatus, error) {
             status.Balance += BlockReward
         }
 
-        maxId := uint64(0)
         for _, transaction := range block.Transactions {
-            for _, input := range transaction.Inputs {
-                if input.Address() == address {
-                    status.Balance -= input.Amount
-                }
-            }
-
-            for _, output := range transaction.Outputs {
-                if output.Address == address {
-                    status.Balance += output.Amount
-                }
-            }
-
-            if block.RewardTo == address {
-                status.Balance += transaction.Fee
-            }
-
-            if transaction.Id > maxId {
-                maxId = transaction.Id
-            }
-
-            if transaction.Id <= status.LastId {
-                return WalletStatus{}, WalletStatusInvalidId
+            if err := transaction.Apply(&status, address, block.RewardTo); err != nil {
+                return WalletStatus{}, err
             }
         }
 
-        status.LastId = maxId
         if status.Balance < 0 {
             return WalletStatus{}, WalletStatusNegativeBalance
         }
