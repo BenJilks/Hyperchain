@@ -91,9 +91,19 @@ func TestBlockChainAddTransaction(t *testing.T) {
     }
 
     block := chain.NewBlock(wallet_a.Address())
+    testPageCost := float32(1010.0/(1000.0*1000.0))
     transaction, err := NewTransactionBuilder(1, 1).
         AddInput(wallet_a, 11).
-        AddOutput(&Transfer { wallet_b.Address(), 10 }).
+        AddOutput(&Transfer {
+            Address: wallet_b.Address(),
+            Amount: 10.0 - testPageCost,
+        }).
+        AddOutput(&NewPage {
+            Address: wallet_b.Address(),
+            Name: "index.html",
+            Length: 1000,
+            Chunks: make([][32]byte, 0),
+        }).
         Build()
     if err != nil {
         t.Error(err)
@@ -115,9 +125,9 @@ func TestBlockChainAddTransaction(t *testing.T) {
         t.Error(err)
     }
 
-    if status_a.Balance != BlockReward - 10 && status_b.Balance != 10 {
-        t.Errorf("Expected balance a = %f and b = 10. Got %f and %f instead",
-            BlockReward - 10, status_a.Balance, status_b.Balance)
+    if status_a.Balance != BlockReward - 10 && status_b.Balance != 10.0 - testPageCost {
+        t.Errorf("Expected balance a = %f and b = %f. Got %f and %f instead",
+            BlockReward - 10, 10.0 - testPageCost, status_a.Balance, status_b.Balance)
     }
 
     if status_a.LastId != 1 && status_b.LastId != 1 {
