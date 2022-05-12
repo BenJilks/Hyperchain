@@ -8,6 +8,7 @@ package node
 
 import (
 	"fmt"
+	. "hyperchain/blockchain"
 	. "hyperchain/blockchain/transaction"
 	. "hyperchain/blockchain/wallet"
 )
@@ -18,6 +19,8 @@ const (
     CommandConnect
     CommandBalance
     CommandSend
+    CommandBlock
+    CommandStats
 )
 
 type Command struct {
@@ -27,6 +30,7 @@ type Command struct {
     Address Address
     Wallet Wallet
     Amount float32
+    ID int
 }
 
 func (ping *Command) ping(node *Node) (Response, error) {
@@ -77,5 +81,25 @@ func (send *Command) send(node *Node) (Response, error) {
 
     node.transactionQueue = append(node.transactionQueue, transaction)
     return Response{}, nil
+}
+
+func (block *Command) block(node *Node) (Response, error) {
+    blockOrNone := node.chain.Block(block.ID)
+    if blockOrNone == nil {
+        return Response{}, fmt.Errorf("Unkown block %d", block.ID)
+    }
+
+    return Response { Block: *blockOrNone }, nil
+}
+
+func (stats *Command) stats(node *Node) (Response, error) {
+    top := Block{}
+    if block := node.chain.Top(); block != nil {
+        top = *block
+    }
+
+    return Response {
+        Block: top,
+    }, nil
 }
 

@@ -61,6 +61,10 @@ func (node *Node) handleCommand(request commandRequest) {
         response, err = command.balance(node)
     case CommandSend:
         response, err = command.send(node)
+    case CommandBlock:
+        response, err = command.block(node)
+    case CommandStats:
+        response, err = command.stats(node)
     default:
         panic(command.Kind)
     }

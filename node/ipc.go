@@ -12,11 +12,13 @@ import (
 	"fmt"
 	"io"
 	"net"
+    . "hyperchain/blockchain"
 )
 
 type Response struct {
     Error string
     Balance float32
+    Block Block
 }
 
 type commandRequest struct {

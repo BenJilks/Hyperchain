@@ -54,6 +54,15 @@ func (chain *BlockChain) Top() *Block {
     return &top
 }
 
+func (chain *BlockChain) Block(id int) *Block {
+    if id < 0 || id >= len(chain.blocks) {
+        return nil
+    }
+
+    block := chain.blocks[id]
+    return &block
+}
+
 func (chain *BlockChain) ValidateBlock(block Block) error {
     if block.Id > 0 {
         lastBlock := chain.blocks[block.Id - 1]
