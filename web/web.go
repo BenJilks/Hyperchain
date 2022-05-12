@@ -13,21 +13,17 @@ import (
 	"net/http"
 )
 
-var templates Templates
-
-type Templates struct {
-    index *template.Template
-    block *template.Template
-}
+var templates *template.Template
 
 func main() {
     http.HandleFunc("/", index)
     http.HandleFunc("/block", block)
 
-    templates = Templates {
-        index: template.Must(template.ParseFiles("./web/templates/index.html")),
-        block: template.Must(template.ParseFiles("./web/templates/block.html")),
-    }
+    templates = template.Must(template.ParseFiles(
+        "./web/templates/index.html",
+        "./web/templates/block.html",
+        "./web/templates/transaction-data.html",
+    ))
 
     fmt.Printf("Starting server at port 8000\n")
     if err := http.ListenAndServe(":8000", nil); err != nil {

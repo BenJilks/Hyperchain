@@ -73,7 +73,13 @@ func (send *Command) send(node *Node) (Response, error) {
 
     transaction, err := NewTransactionBuilder(status.LastId + 1, fee).
         AddInput(send.Wallet, send.Amount + fee).
-        AddOutput(&Transfer { Address: send.Address, Amount: send.Amount }).
+        AddOutput(Output {
+            Kind: OutputTransfer,
+            Transfer: Transfer {
+                Address: send.Address,
+                Amount: send.Amount,
+            },
+        }).
         Build()
     if err != nil {
         return Response{}, err

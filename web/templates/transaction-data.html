@@ -1,0 +1,67 @@
+{{ define "TransactionData" }}
+<div class="transaction-data">
+    <h1><a href="/transaction?id={{ .ID }}">{{ .ID }}</a></h1>
+    <div class="item">
+        <text>Amount</text>
+        <text>{{ .TotalAmount }}mb</text>
+    </div>
+    <div class="item">
+        <text>Fee</text>
+        <text>{{ .Fee }}mb</text>
+    </div>
+    <div class="item">
+        <text>Block</text>
+        {{ if .IsPending }}
+            <text>Pending...</text>
+        {{ else }}
+            <a href="/block?id={{ .Block }}">{{ .Block }}</a>
+        {{ end }}
+    </div>
+
+    {{ if .ContainsChunks }}
+        <div class="item">
+            <text>Size</text>
+            <text>{{ .DataSize }} mb</text>
+        </div>
+        <div class="item">
+            <text>Chunks</text>
+            <text>{{ .ChunkCount }}</text>
+        </div>
+
+        <h3>Chunk Hashes</h3>
+        <ul class="data-list">
+            {{ range .Data }}
+            <li>
+                <text id="hash">{{ .Hash }}</text>
+            </li>
+            {{ end }}
+        </ul>
+    {{ end }}
+
+    <div id="input-output">
+        <div class="column" id="inputs">
+            <h3>Inputs</h3>
+            <ul class="io-list">
+                {{ range .Inputs }}
+                <li>
+                    <a href="/wallet?address={{ .Address }}" id="address">{{ .Address }}</a>
+                    <text id="amount">{{ .Amount }}mb</text>
+                </li>
+                {{ end }}
+            </ul>
+        </div>
+        <div class="column" id="outputs">
+            <h3>Outputs</h3>
+            <ul class="io-list">
+                {{ range .Outputs }}
+                <li>
+                    <a href="/wallet?address={{ .Address }}" id="address">{{ .Address }}</a>
+                    <text id="amount">{{ .Amount }}mb</text>
+                </li>
+                {{ end }}
+            </ul>
+        </div>
+    </div>
+</div>
+{{ end }}
+

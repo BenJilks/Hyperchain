@@ -1,11 +1,69 @@
+{{ define "Index" }}
 <html>
     <head>
-        <title>Hyperchain</title>
-        <link rel="stylesheet" href="/index.css" />
+        <title>Index</title>
+        <link rel="stylesheet" href="style.css">
+
+        <style>
+            .header
+            {
+                position: sticky;
+                top: 0px;
+                left: 0px;
+                right: 0px;
+                margin: 0px;
+                padding: 1em;
+
+                display: flex;
+                align-items: center;
+                background-color: #FFF;
+            }
+
+            .header h1
+            {
+                display: inline;
+                margin: 0px;
+                flex-grow: 1;
+            }
+
+            .header #search-bar
+            {
+                display: inline;
+                margin: 0px;
+            }
+
+            .header #address
+            {
+                width: 50em;
+            }
+        </style>
     </head>
 
     <body>
-        <h1>{{ .Test }}</h1>
+        <div class="header">
+            <h1>Hyperchain Explorer</h1>
+            <form id="search-bar" action="/wallet" method="get">
+                <input id="address" name="address" placeholder="address"></input>
+                <button type="submit">Search</button>
+            </form>
+        </div>
+
+        <article>
+            <h1>Statistics</h1>
+            <div class="item">
+                <text>Hash Rate</text>
+                <text>{{ .HashRate }} H/s</text>
+            </div>
+            <div class="item">
+                <text>Known Chunks</text>
+                <text>{{ .KnownChunks }}</text>
+            </div>
+            <div class="item">
+                <text>Replication</text>
+                <text>{{ .ReplicationPercent }}%</text>
+            </div>
+        </article>
     </body>
 </html>
+{{ end }}
 

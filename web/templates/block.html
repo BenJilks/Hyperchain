@@ -1,12 +1,63 @@
+{{ define "Block" }}
 <html>
     <head>
-        <title>Hyperchain - Block {{ .ID }}</title>
-        <link rel="stylesheet" href="/index.css" />
-    </head>
+        <title>Block {{ .ID }}</title>
+        <link rel="stylesheet" href="style.css">
+        <meta charset="UTF-8">
 
+        <style>
+            .nav-buttons
+            {
+                margin: 1em;
+            }
+
+            .nav-buttons>form
+            {
+                display: inline;
+            }
+
+            .nav-buttons>.right-button
+            {
+                float: right;
+            }
+        </style>
+    </head>
     <body>
-        <h1>Block {{ .ID }}</h1>
-        <p><a href="/block?id={{ .Top }}">Top {{ .Top }}</a></p>
+        <form action="/block" class="nav-buttons">
+            <button name="id" value="{{ .LastBlockID }}">« Last Block</button>
+            <button name="id" value="{{ .NextBlockID }}">Next Block »</button>
+            <button name="id" value="{{ .Top }}" class="right-button">Latest Block ({{ .Top }})</button>
+        </form>
+        <article>
+            <h1>Block {{ .ID }}</h1>
+            <div class="item big">
+                <text>Timestamp</text>
+                <text>{{ .Timestamp }}</text>
+            </div>
+            <div class="item big">
+                <text>Winner</text>
+                <a href="/wallet?address={{ .Winner }}">{{ .Winner }}</a>
+            </div>
+            <div class="item big">
+                <text>Merkle Root</text>
+                <text>{{ .MerkleRoot }}</text>
+            </div>
+            <div class="item big">
+                <text>Difficulty</text>
+                <text>{{ .Difficulty }}</text>
+            </div>
+            <div class="item big">
+                <text>pow</text>
+                <text>{{ .POW }}</text>
+            </div>
+        </article>
+
+        {{ range .Transactions }}
+            <article>
+                {{ template "TransactionData" . }}
+            </article>
+        {{ end }}
     </body>
 </html>
+{{ end }}
 

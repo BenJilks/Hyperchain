@@ -22,7 +22,7 @@ func index(response http.ResponseWriter, request *http.Request) {
         return
     }
 
-    templates.index.Execute(response, IndexData {
+    templates.ExecuteTemplate(response, "Index", IndexData {
         Test: "This is a test",
     })
 }

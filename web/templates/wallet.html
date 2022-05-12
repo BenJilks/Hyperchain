@@ -1,0 +1,26 @@
+<html>
+    <body>
+        <title>Wallet</title>
+        <link rel="stylesheet" href="style.css">
+    </body>
+    <html>
+        <article>
+            <h1>{{ address }}</h1>
+            <div class="item big">
+                <text>Balance</text>
+                <text>{{ balance }}mb</text>
+            </div>
+            <div class="item big">
+                <text>Transaction Count</text>
+                <text>{{ transaction_count }}</text>
+            </div>
+        </article>
+
+        {{ #each history }}
+            <article>
+                {{> transaction-data this }}
+            </article>
+        {{ /each }}
+    </html>
+</html>
+

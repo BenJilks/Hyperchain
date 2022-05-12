@@ -41,7 +41,7 @@ func coefficent(target Target) uint32 {
     return result
 }
 
-func difficulty(target Target) float64 {
+func Difficulty(target Target) float64 {
     exponent_diff := float64(8 * (index(MinTarget()) - index(target)))
     coefficent_diff := float64(coefficent(MinTarget())) / float64(coefficent(target))
     return coefficent_diff * math.Exp2(exponent_diff)
@@ -96,7 +96,7 @@ func CalculateTarget(sample_start_or_none *Block,
     // Calculate new target with sample
     sample_start := *sample_start_or_none
     sample_time := sample_end.Timestamp - sample_start.Timestamp
-    curr_diff := difficulty(sample_end.Target)
+    curr_diff := Difficulty(sample_end.Target)
     curr_hash_rate := hashRate(curr_diff, sample_time)
 
     new_diff := diffForHashRate(curr_hash_rate)

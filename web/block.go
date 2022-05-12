@@ -10,11 +10,48 @@ import (
 	"net/http"
 	"strconv"
     "hyperchain/node"
+    . "hyperchain/blockchain"
+    . "hyperchain/blockchain/transaction"
 )
+
+type InputData struct {
+    Address string
+    Amount float32
+}
+
+type TransactionData struct {
+    ID string
+    TotalAmount float32
+    Fee float32
+    
+    IsPending bool
+    Block uint64
+
+    ContainsChunks bool
+    DataSize uint64
+    ChunkCount uint64
+    Data []struct {
+        Hash string
+    }
+
+    Inputs []InputData
+    Outputs []InputData
+}
 
 type BlockData struct {
     ID uint64
+    
+    LastBlockID uint64
+    NextBlockID uint64
     Top uint64
+
+    Timestamp uint64
+    Winner string
+    MerkleRoot string
+    Difficulty float64
+    POW uint64
+
+    Transactions []TransactionData
 }
 
 func block(w http.ResponseWriter, request *http.Request) {
@@ -43,9 +80,61 @@ func block(w http.ResponseWriter, request *http.Request) {
         return
     }
 
-    templates.block.Execute(w, BlockData {
-        ID: response.Block.Id,
-        Top: stats.Block.Id,
+    block := response.Block
+    top := stats.Block
+    
+    transactions := make([]TransactionData, 0)
+    for _, transaction := range block.Transactions {
+        inputs := make([]InputData, 0)
+        totalAmount := float32(0.0)
+        for _, input := range transaction.Inputs {
+            inputs = append(inputs, InputData {
+                Address: input.Address().ToString(),
+                Amount: input.Amount,
+            })
+            totalAmount += input.Amount
+        }
+
+        outputs := make([]InputData, 0)
+        for _, output := range transaction.Outputs {
+            outputs = append(outputs, InputData {
+                Address: output.Interface().Addresses()[0].ToString(),
+                Amount: output.Interface().Cost(),
+            })
+        }
+
+        transactions = append(transactions, TransactionData {
+            ID: transaction.Hash().ToString(),
+            TotalAmount: totalAmount,
+            Fee: transaction.Fee,
+            
+            IsPending: false,
+            Block: block.Id,
+
+            ContainsChunks: false,
+            DataSize: 0,
+            ChunkCount: 0,
+            Data: make([]struct{Hash string}, 0),
+
+            Inputs: inputs,
+            Outputs: outputs,
+        })
+    }
+
+    templates.ExecuteTemplate(w, "Block", BlockData {
+        ID: block.Id,
+
+        LastBlockID: block.Id - 1,
+        NextBlockID: block.Id + 1,
+        Top: top.Id,
+
+        Timestamp: block.Timestamp,
+        Winner: block.RewardTo.ToString(),
+        MerkleRoot: MerkleRoot(block.Transactions).ToString(),
+        Difficulty: Difficulty(block.Target),
+        POW: block.Pow,
+
+        Transactions: transactions,
     })
 }
 

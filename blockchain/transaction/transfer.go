@@ -21,11 +21,11 @@ func (transfer *Transfer) hash(hasher hash.Hash) {
     hasher.Write(Float32AsBytes(transfer.Amount))
 }
 
-func (transfer *Transfer) cost() float32 {
+func (transfer *Transfer) Cost() float32 {
     return transfer.Amount
 }
 
-func (transfer *Transfer) addresses() []Address {
+func (transfer *Transfer) Addresses() []Address {
     return []Address { transfer.Address }
 }
 

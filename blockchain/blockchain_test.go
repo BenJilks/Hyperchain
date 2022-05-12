@@ -95,15 +95,21 @@ func TestBlockChainAddTransaction(t *testing.T) {
     testPageCost := float32(1010.0/(1000.0*1000.0))
     transaction, err := NewTransactionBuilder(1, 1).
         AddInput(wallet_a, 11).
-        AddOutput(&Transfer {
-            Address: wallet_b.Address(),
-            Amount: 10.0 - testPageCost,
+        AddOutput(Output {
+            Kind: OutputTransfer,
+            Transfer: Transfer {
+                Address: wallet_b.Address(),
+                Amount: 10.0 - testPageCost,
+            },
         }).
-        AddOutput(&NewPage {
-            Address: wallet_b.Address(),
-            Name: "index.html",
-            Length: 1000,
-            Chunks: make([]Address, 0),
+        AddOutput(Output {
+            Kind: OutputNewPage,
+            NewPage: NewPage {
+                Address: wallet_b.Address(),
+                Name: "index.html",
+                Length: 1000,
+                Chunks: make([]Address, 0),
+            },
         }).
         Build()
     if err != nil {

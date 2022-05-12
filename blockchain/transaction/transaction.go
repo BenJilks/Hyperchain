@@ -22,11 +22,24 @@ type Input struct {
     Amount float32
 }
 
-type Output interface {
+type OutputKind int
+const (
+    OutputTransfer = OutputKind(iota)
+    OutputNewPage
+)
+
+type OutputIterface interface {
+    Cost() float32
+    Addresses() []Address
+
     hash(hash.Hash)
-    cost() float32
-    addresses() []Address
     apply(*WalletStatus, Address) (bool, error)
+}
+
+type Output struct {
+    Kind OutputKind
+    Transfer Transfer
+    NewPage NewPage
 }
 
 type Transaction struct {
@@ -34,6 +47,17 @@ type Transaction struct {
     Fee float32
     Inputs []Input
     Outputs []Output
+}
+
+func (output *Output) Interface() OutputIterface {
+    switch output.Kind {
+    case OutputTransfer:
+        return &output.Transfer
+    case OutputNewPage:
+        return &output.NewPage
+    default:
+        panic(output.Kind)
+    }
 }
 
 func (input *Input) Address() Address {
@@ -56,7 +80,7 @@ func (transaction *Transaction) Hash() Address {
         hasher.Write(Float32AsBytes(input.Amount))
     }
     for _, output := range transaction.Outputs {
-        output.hash(hasher)
+        output.Interface().hash(hasher)
     }
 
     var hash Address
@@ -98,7 +122,7 @@ func (transaction *Transaction) Validate() error {
 
     outputAmount := transaction.Fee
     for _, output := range transaction.Outputs {
-        outputAmount += output.cost()
+        outputAmount += output.Interface().Cost()
     }
 
     // FIXME: Comparing float values like this is a no-no
@@ -120,7 +144,7 @@ func (transaction *Transaction) Apply(status *WalletStatus, address Address, rew
     }
 
     for _, output := range transaction.Outputs {
-        involved, err := output.apply(status, address)
+        involved, err := output.Interface().apply(status, address)
         areWeInvolved = areWeInvolved || involved
 
         if err != nil {
@@ -165,7 +189,7 @@ func AddressesUsed(transactions []Transaction) []Address {
         }
 
         for _, output := range transaction.Outputs {
-            for _, address := range output.addresses() {
+            for _, address := range output.Interface().Addresses() {
                 if !contains(addresses, address) {
                     addresses = append(addresses, address)
                 }

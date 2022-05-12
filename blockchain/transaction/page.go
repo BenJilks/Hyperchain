@@ -27,12 +27,12 @@ func (page *NewPage) hash(hasher hash.Hash) {
     }
 }
 
-func (page *NewPage) cost() float32 {
+func (page *NewPage) Cost() float32 {
     length := page.Length + len(page.Name)
     return float32(length) / (1000.0*1000.0)
 }
 
-func (page *NewPage) addresses() []Address {
+func (page *NewPage) Addresses() []Address {
     return []Address { page.Address }
 }
 
