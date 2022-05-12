@@ -39,6 +39,7 @@ type commandRequest struct {
 func handleConnection(connection net.Conn, channel chan commandRequest) {
     fmt.Println("Got IPC connection")
     reader := bufio.NewReader(connection)
+    defer connection.Close()
 
     for {
         bytes, err := reader.ReadBytes('\n')
@@ -81,6 +82,7 @@ func startIpcServer(channel chan commandRequest) {
         panic(err)
     }
 
+    defer listener.Close()
     for {
         connection, err := listener.Accept()
         if err != nil {
@@ -103,9 +105,11 @@ func SendIpc(command Command) (Response, error) {
         Name: "/tmp/hyperchain",
         Net: "unix",
     })
+
     if err != nil {
         return Response{}, err
     }
+    defer sender.Close()
 
     command_json, err := json.Marshal(command)
     if err != nil {

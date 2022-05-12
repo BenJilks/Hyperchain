@@ -55,6 +55,8 @@ func packetSender(newPeer chan net.Conn,
 }
 
 func handlePeerConnection(connection net.Conn, receive chan Packet) {
+    defer connection.Close()
+
     fmt.Printf("[%s] Connected to %s\n",
         connection.LocalAddr().String(),
         connection.RemoteAddr().String())
@@ -83,6 +85,8 @@ func handlePeerConnection(connection net.Conn, receive chan Packet) {
 func peerListener(listener net.Listener,
                   newPeer chan net.Conn,
                   receive chan Packet) {
+    defer listener.Close()
+
     for {
         connection, err := listener.Accept()
         if err != nil {
