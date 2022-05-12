@@ -50,11 +50,13 @@ func startMiner(blocks chan Block) {
         }
 
         if didStartNewBlock {
-            fmt.Printf("Started mining block %d\n", currBlock.Id)
+            fmt.Printf("Started mining block %d with %d transactions\n",
+                currBlock.Id, len(currBlock.Transactions))
         }
         
         if tryMine(&currBlock) {
-            fmt.Printf("Successfully mined block %d!\n", currBlock.Id)
+            fmt.Printf("Successfully mined block %d with %d transactions!\n",
+                currBlock.Id, len(currBlock.Transactions))
             blocks <- currBlock
             hasBlock = false
         }

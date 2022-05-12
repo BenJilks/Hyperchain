@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
-package transaction
+package wallet
 
 import (
 	"crypto"
@@ -96,7 +96,7 @@ func (wallet *Wallet) Save(filePath string) error {
     return nil
 }
 
-func (wallet *Wallet) Address() [32]byte {
+func (wallet *Wallet) Address() Address {
     publicKey := wallet.Key.PublicKey
 
     hasher := sha256.New()
@@ -108,9 +108,8 @@ func (wallet *Wallet) Address() [32]byte {
     return address
 }
 
-func (wallet *Wallet) Sign(transaction Transaction) ([]byte, error) {
-    hash := transaction.Hash()
-    signature, err := rsa.SignPKCS1v15(rand.Reader, wallet.Key, crypto.SHA256, hash[:])
+func (wallet *Wallet) Sign(data []byte) ([]byte, error) {
+    signature, err := rsa.SignPKCS1v15(rand.Reader, wallet.Key, crypto.SHA256, data)
     if err != nil {
         return []byte{}, err
     }

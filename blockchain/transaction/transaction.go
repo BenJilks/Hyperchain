@@ -12,6 +12,7 @@ import (
 	"crypto/sha256"
 	"math/big"
     "hash"
+    . "hyperchain/blockchain/wallet"
 )
 
 type Input struct {
@@ -21,21 +22,11 @@ type Input struct {
     Amount float32
 }
 
-func (input *Input) Address() [32]byte {
-    var address [32]byte
-    hasher := sha256.New()
-    hasher.Write(input.KeyN.Bytes())
-    hasher.Write(IntToBytes(input.KeyE))
-    copy(address[:], hasher.Sum(nil))
-
-    return address
-}
-
 type Output interface {
     hash(hash.Hash)
     cost() float32
-    addresses() [][32]byte
-    apply(*WalletStatus, [32]byte) (bool, error)
+    addresses() []Address
+    apply(*WalletStatus, Address) (bool, error)
 }
 
 type Transaction struct {
@@ -45,7 +36,17 @@ type Transaction struct {
     Outputs []Output
 }
 
-func (transaction *Transaction) Hash() [32]byte {
+func (input *Input) Address() Address {
+    var address Address
+    hasher := sha256.New()
+    hasher.Write(input.KeyN.Bytes())
+    hasher.Write(IntToBytes(input.KeyE))
+    copy(address[:], hasher.Sum(nil))
+
+    return address
+}
+
+func (transaction *Transaction) Hash() Address {
     hasher := sha256.New()
     hasher.Write(Uint64AsBytes(transaction.Id))
     hasher.Write(Float32AsBytes(transaction.Fee))
@@ -58,7 +59,7 @@ func (transaction *Transaction) Hash() [32]byte {
         output.hash(hasher)
     }
 
-    var hash [32]byte
+    var hash Address
     copy(hash[:], hasher.Sum(nil))
     return hash
 }
@@ -108,7 +109,7 @@ func (transaction *Transaction) Validate() error {
     return nil
 }
 
-func (transaction *Transaction) Apply(status *WalletStatus, address [32]byte, rewardTo [32]byte) error {
+func (transaction *Transaction) Apply(status *WalletStatus, address Address, rewardTo Address) error {
     areWeInvolved := false
 
     for _, input := range transaction.Inputs {
@@ -143,7 +144,7 @@ func (transaction *Transaction) Apply(status *WalletStatus, address [32]byte, re
     return nil
 }
 
-func contains(list [][32]byte, item [32]byte) bool {
+func contains(list []Address, item Address) bool {
     for _, it := range list {
         if it == item {
             return true
@@ -153,8 +154,8 @@ func contains(list [][32]byte, item [32]byte) bool {
     return false
 }
 
-func AddressesUsed(transactions []Transaction) [][32]byte {
-    var addresses [][32]byte
+func AddressesUsed(transactions []Transaction) []Address {
+    var addresses []Address
     for _, transaction := range transactions {
         for _, input := range transaction.Inputs {
             address := input.Address()
@@ -175,9 +176,9 @@ func AddressesUsed(transactions []Transaction) [][32]byte {
     return addresses
 }
 
-func merkleRootForNodes(nodes [][32]byte) [32]byte {
+func merkleRootForNodes(nodes []Address) Address {
     if len(nodes) == 0 {
-        return [32]byte{}
+        return Address{}
     }
     if len(nodes) == 1 {
         return nodes[0]
@@ -191,13 +192,13 @@ func merkleRootForNodes(nodes [][32]byte) [32]byte {
     hasher.Write(nodeA[:])
     hasher.Write(nodeB[:])
 
-    var result [32]byte
+    var result Address
     copy(result[:], hasher.Sum(nil))
     return result
 }
 
-func MerkleRoot(transactions []Transaction) [32]byte {
-    nodes := make([][32]byte, len(transactions))
+func MerkleRoot(transactions []Transaction) Address {
+    nodes := make([]Address, len(transactions))
     for i, transaction := range transactions {
         nodes[i] = transaction.Hash()
     }

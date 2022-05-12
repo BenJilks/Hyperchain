@@ -8,10 +8,11 @@ package transaction
 
 import (
     "hash"
+    . "hyperchain/blockchain/wallet"
 )
 
 type Transfer struct {
-    Address [32]byte
+    Address Address
     Amount float32
 }
 
@@ -24,11 +25,11 @@ func (transfer *Transfer) cost() float32 {
     return transfer.Amount
 }
 
-func (transfer *Transfer) addresses() [][32]byte {
-    return [][32]byte { transfer.Address }
+func (transfer *Transfer) addresses() []Address {
+    return []Address { transfer.Address }
 }
 
-func (transfer *Transfer) apply(status *WalletStatus, address [32]byte) (bool, error) {
+func (transfer *Transfer) apply(status *WalletStatus, address Address) (bool, error) {
     involved := false
 
     if transfer.Address == address {

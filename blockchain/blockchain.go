@@ -8,6 +8,7 @@ package blockchain
 
 import (
 	"time"
+    . "hyperchain/blockchain/wallet"
     . "hyperchain/blockchain/transaction"
 )
 
@@ -116,9 +117,9 @@ func (chain *BlockChain) sample() (*Block, *Block) {
     return &start, &end
 }
 
-func (chain *BlockChain) NewBlock(rewardTo [32]byte) Block {
+func (chain *BlockChain) NewBlock(rewardTo Address) Block {
     topId := uint64(0)
-    topHash := [32]byte{}
+    topHash := Address{}
     if top := chain.Top(); top != nil {
         topId = top.Id + 1
         topHash = top.Hash()
@@ -137,7 +138,7 @@ func (chain *BlockChain) NewBlock(rewardTo [32]byte) Block {
     return block
 }
 
-func (chain *BlockChain) WalletStatus(address [32]byte) (WalletStatus, error) {
+func (chain *BlockChain) WalletStatus(address Address) (WalletStatus, error) {
     var status WalletStatus
     for _, block := range chain.blocks {
         if block.RewardTo == address {

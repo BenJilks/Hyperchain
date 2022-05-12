@@ -6,6 +6,10 @@
 
 package transaction
 
+import (
+    . "hyperchain/blockchain/wallet"
+)
+
 type TransactionBuilder struct {
     transaction Transaction
     wallets []Wallet
@@ -41,8 +45,9 @@ func (builder TransactionBuilder) Build() (Transaction, error) {
     for i := range builder.transaction.Inputs {
         input := &builder.transaction.Inputs[i]
         wallet := builder.wallets[i]
+        data := builder.transaction.Hash()
 
-        signature, err := wallet.Sign(builder.transaction)
+        signature, err := wallet.Sign(data[:])
         if err != nil {
             return Transaction{}, err
         }

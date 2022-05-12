@@ -8,13 +8,14 @@ package transaction
 
 import (
     "hash"
+    . "hyperchain/blockchain/wallet"
 )
 
 type NewPage struct {
-    Address [32]byte
+    Address Address
     Name string
     Length int
-    Chunks [][32]byte
+    Chunks []Address
 }
 
 func (page *NewPage) hash(hasher hash.Hash) {
@@ -31,11 +32,11 @@ func (page *NewPage) cost() float32 {
     return float32(length) / (1000.0*1000.0)
 }
 
-func (page *NewPage) addresses() [][32]byte {
-    return [][32]byte { page.Address }
+func (page *NewPage) addresses() []Address {
+    return []Address { page.Address }
 }
 
-func (page *NewPage) apply(status *WalletStatus, address [32]byte) (bool, error) {
+func (page *NewPage) apply(status *WalletStatus, address Address) (bool, error) {
     if page.Address == address {
         return true, nil
     } else {

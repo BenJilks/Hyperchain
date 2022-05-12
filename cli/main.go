@@ -10,8 +10,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"hyperchain/node"
-	. "hyperchain/blockchain/transaction"
+	. "hyperchain/node"
+	. "hyperchain/blockchain/wallet"
 )
 
 func onError(err string) {
@@ -38,18 +38,18 @@ func newWallet(outputPath string) {
     fmt.Print("Done!\n")
 }
 
-func connect(connectAddress string) {
-    if connectAddress == "" {
+func connect(address string) {
+    if address == "" {
         onError("No address given")
     }
 
-    _, err := node.SendIpc(node.Command {
-        Kind: node.CommandConnect,
-        Address: connectAddress,
-    })
+    command := Command {
+        Kind: CommandConnect,
+        NodeAddress: address,
+    }
 
-    if err != nil {
-        onError(err.Error())
+    if _, err := SendIpc(command); err != "" {
+        onError(err)
     }
 }
 
@@ -59,52 +59,93 @@ func balance(walletPath string) {
         onError(err.Error())
     }
 
-    response, err := node.SendIpc(node.Command {
-        Kind: node.CommandBalance,
-        WalletAddress: wallet.Address(),
-    })
+    address := wallet.Address()
+    command := Command {
+        Kind: CommandBalance,
+        Address: address,
+    }
 
-    if err != nil {
-        onError(err.Error())
+    response, errMsg := SendIpc(command)
+    if errMsg != "" {
+        onError(errMsg)
     }
 
     fmt.Printf("Balance: %f\n", response.Balance)
 }
 
-func ping() {
-    _, err := node.SendIpc(node.Command {
-        Kind: node.CommandPing,
-    })
+func send(walletPath string, toAddress string, amount float32) {
+    if walletPath == "" || toAddress == "" {
+        onError("No wallet or to address given")
+    }
 
+    if amount <= 0 {
+        onError("Invalid amount")
+    }
+    
+    wallet, err := LoadWallet(walletPath)
     if err != nil {
         onError(err.Error())
+    }
+
+    to, err := DecodeAddress(toAddress)
+    if err != nil {
+        onError(err.Error())
+    }
+
+    command := Command {
+        Kind: CommandSend,
+        Wallet: wallet,
+        Address: to,
+        Amount: amount,
+    }
+
+    if _, errMsg := SendIpc(command); errMsg != "" {
+        onError(errMsg)
+    }
+}
+
+func ping() {
+    command := Command {
+        Kind: CommandPing,
+    }
+
+    if _, err := SendIpc(command); err != "" {
+        onError(err)
     }
 }
 
 func main() {
-    newWalletCommand := flag.NewFlagSet("connect", flag.ExitOnError)
-    outputPath := newWalletCommand.String("output", "", "Output file path")
-
-    connectCommand := flag.NewFlagSet("connect", flag.ExitOnError)
-    connectAddress := connectCommand.String("address", "", "Address to connect to")
-
-    balanceCommand := flag.NewFlagSet("connect", flag.ExitOnError)
-    walletPath := balanceCommand.String("wallet", "", "Wallet file path")
-
     if len(os.Args) < 2 {
         onError("Expected subcommand")
     }
 
     switch os.Args[1] {
     case "new-wallet":
-        newWalletCommand.Parse(os.Args[2:])
+        command := flag.NewFlagSet("new-wallet", flag.ExitOnError)
+        outputPath := command.String("output", "", "Output file path")
+        command.Parse(os.Args[2:])
+
         newWallet(*outputPath)
     case "connect":
-        connectCommand.Parse(os.Args[2:])
+        command := flag.NewFlagSet("connect", flag.ExitOnError)
+        connectAddress := command.String("address", "", "Address to connect to")
+        command.Parse(os.Args[2:])
+
         connect(*connectAddress)
     case "balance":
-        balanceCommand.Parse(os.Args[2:])
+        command := flag.NewFlagSet("balance", flag.ExitOnError)
+        walletPath := command.String("wallet", "", "Wallet file path")
+        command.Parse(os.Args[2:])
+
         balance(*walletPath)
+    case "send":
+        command := flag.NewFlagSet("send", flag.ExitOnError)
+        walletPath := command.String("wallet", "", "Wallet file path")
+        toAddress := command.String("to", "", "Address to send coins to")
+        amount := command.Float64("amount", 0, "How many coins to send")
+        command.Parse(os.Args[2:])
+
+        send(*walletPath, *toAddress, float32(*amount))
     case "ping":
         ping()
     default:

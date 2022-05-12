@@ -7,19 +7,31 @@
 package main
 
 import (
+	"flag"
 	"fmt"
+	. "hyperchain/blockchain/wallet"
 	"hyperchain/node"
-	. "hyperchain/blockchain/transaction"
 )
 
 func main() {
-    fmt.Println("Staring Node")
+    walletPath := flag.String("wallet", "", "Wallet file path")
+    flag.Parse()
 
-    wallet, err := NewWallet()
+    var wallet Wallet
+    var err error
+
+    if *walletPath != "" {
+        fmt.Printf("Using wallet '%s'\n", *walletPath)
+        wallet, err = LoadWallet(*walletPath)
+    } else {
+        wallet, err = NewWallet()
+    }
+
     if err != nil {
         panic(err)
     }
 
+    fmt.Println("Staring Node")
     node.StartNode(wallet.Address(), 8080)
 }
 

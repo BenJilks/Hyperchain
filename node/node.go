@@ -7,15 +7,17 @@
 package node
 
 import (
-	"encoding/base32"
 	"fmt"
-	. "hyperchain/blockchain"
 	"os"
+	. "hyperchain/blockchain"
+	. "hyperchain/blockchain/wallet"
+	. "hyperchain/blockchain/transaction"
 )
 
 type Node struct {
     chain BlockChain
-    rewardTo [32]byte
+    rewardTo Address
+    transactionQueue []Transaction
 
     network NetworkNode
     ipc chan commandRequest
@@ -35,33 +37,62 @@ func (node *Node) handlePacket(packet Packet) {
     }
 }
 
+func (node *Node) findTransactionInQueue(transaction *Transaction) int {
+    for index, it := range node.transactionQueue {
+        if it.Hash() == transaction.Hash() {
+            return index
+        }
+    }
+
+    return -1
+}
+
 func (node *Node) handleCommand(request commandRequest) {
     command := request.command
-    response := request.response
+    var response Response
+    var err error
+
     switch command.Kind {
     case CommandPing:
-        fmt.Println("Ping")
-        node.network.Send <- Packet { Kind: PacketPing }
-        response <- Response {}
+        response, err = command.ping(node)
     case CommandConnect:
-        fmt.Printf("Connecting to '%s'\n", command.Address)
-        node.network.ConnectPeer(command.Address)
-        response <- Response {}
+        response, err = command.connect(node)
     case CommandBalance:
-        address := base32.StdEncoding.EncodeToString(command.WalletAddress[:])
-        fmt.Printf("Balance for '%s'\n", address)
-
-        status, err := node.chain.WalletStatus(command.WalletAddress)
-        if err != nil {
-            panic(err)
-        }
-
-        response <- Response {
-            Balance: status.Balance,
-        }
+        response, err = command.balance(node)
+    case CommandSend:
+        response, err = command.send(node)
     default:
-        panic(command)
+        panic(command.Kind)
     }
+
+    if err != nil {
+        request.response <- Response { Error: err.Error() }
+    } else {
+        request.response <- response
+    }
+}
+
+func (node *Node) completedTransactions(transactions []Transaction) {
+    for _, completed := range transactions {
+        index := node.findTransactionInQueue(&completed)
+        if index == -1 {
+            continue
+        }
+
+        node.transactionQueue = append(
+            node.transactionQueue[:index],
+            node.transactionQueue[index+1:]...)
+    }
+}
+
+func (node *Node) createBlock() Block {
+    block := node.chain.NewBlock(node.rewardTo)
+
+    // TODO: Limit how many transaction can be added
+    block.Transactions = make([]Transaction, len(node.transactionQueue))
+    copy(block.Transactions, node.transactionQueue)
+
+    return block
 }
 
 func (node *Node) handleBlock(block Block) bool {
@@ -70,7 +101,8 @@ func (node *Node) handleBlock(block Block) bool {
         return false
     }
 
-    node.miner <- node.chain.NewBlock(node.rewardTo)
+    node.completedTransactions(block.Transactions)
+    node.miner <- node.createBlock()
     node.network.Send <- Packet {
         Kind: PacketBlock,
         Block: block,
@@ -84,8 +116,8 @@ func (node *Node) eventHandler() {
         select {
         case packet := <- node.network.Receive:
             node.handlePacket(packet)
-        case command := <- node.ipc:
-            node.handleCommand(command)
+        case request := <- node.ipc:
+            node.handleCommand(request)
         case block := <- node.miner:
             if !node.handleBlock(block) {
                 node.miner <- node.chain.NewBlock(node.rewardTo)
@@ -94,7 +126,7 @@ func (node *Node) eventHandler() {
     }
 }
 
-func StartNode(rewardTo [32]byte, port uint16) {
+func StartNode(rewardTo Address, port uint16) {
     node := Node {
         chain: NewBlockChain(),
         rewardTo: rewardTo,

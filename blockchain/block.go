@@ -9,21 +9,22 @@ package blockchain
 import (
 	"crypto/sha256"
     . "hyperchain/blockchain/transaction"
+    . "hyperchain/blockchain/wallet"
 )
 
 const BlockReward = float32(100)
 
 type Block struct {
     Id uint64
-    PrevBlock [32]byte
+    PrevBlock Address
     Timestamp uint64
     Target Target
-    RewardTo [32]byte
+    RewardTo Address
     Transactions []Transaction
     Pow uint64
 }
 
-func (block *Block) Hash() [32]byte {
+func (block *Block) Hash() Address {
     hasher := sha256.New()
     merkleRoot := MerkleRoot(block.Transactions)
     hasher.Write(Uint64AsBytes(block.Id))
@@ -34,7 +35,7 @@ func (block *Block) Hash() [32]byte {
     hasher.Write(merkleRoot[:])
     hasher.Write(Uint64AsBytes(block.Pow))
     
-    var hash [32]byte
+    var hash Address
     copy(hash[:], hasher.Sum(nil))
     return hash
 }

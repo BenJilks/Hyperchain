@@ -9,12 +9,13 @@ package blockchain
 import (
     "testing"
     . "hyperchain/blockchain/transaction"
+    . "hyperchain/blockchain/wallet"
 )
 
 func (chain *BlockChain) testBlock(t *testing.T,
                                    expect error,
                                    configBlock func(block *Block)) Block {
-    block := chain.NewBlock([32]byte{})
+    block := chain.NewBlock(Address{})
     configBlock(&block)
     block.Mine()
     if err := chain.Add(block); err != expect {
@@ -63,7 +64,7 @@ func TestBlockChainAddPrevBlock(t *testing.T) {
         block.PrevBlock = block_a.Hash()
     })
     chain.testBlock(t, AddErrorInvalidPrevBlockHash, func(block *Block) {
-        block.PrevBlock = [32]byte{}
+        block.PrevBlock = Address{}
     })
 }
 
@@ -71,7 +72,7 @@ func TestBlockChainAddPOW(t *testing.T) {
     chain := NewBlockChain()
     chain.testBlock(t, nil, func(block *Block) {})
 
-    block := chain.NewBlock([32]byte{})
+    block := chain.NewBlock(Address{})
     if err := chain.Add(block); err != AddErrorInvalidPOW {
         t.Error(err)
     }
@@ -102,7 +103,7 @@ func TestBlockChainAddTransaction(t *testing.T) {
             Address: wallet_b.Address(),
             Name: "index.html",
             Length: 1000,
-            Chunks: make([][32]byte, 0),
+            Chunks: make([]Address, 0),
         }).
         Build()
     if err != nil {

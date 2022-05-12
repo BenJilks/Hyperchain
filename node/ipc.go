@@ -14,20 +14,8 @@ import (
 	"net"
 )
 
-type CommandKind int
-const (
-    CommandPing = CommandKind(iota)
-    CommandConnect
-    CommandBalance
-)
-
-type Command struct {
-    Kind CommandKind
-    Address string
-    WalletAddress [32]byte
-}
-
 type Response struct {
+    Error string
     Balance float32
 }
 
@@ -100,38 +88,42 @@ func ListenIpc() chan commandRequest {
     return channel
 }
 
-func SendIpc(command Command) (Response, error) {
+func SendIpc(command Command) (Response, string) {
     sender, err := net.DialUnix("unix", nil, &net.UnixAddr {
         Name: "/tmp/hyperchain",
         Net: "unix",
     })
 
     if err != nil {
-        return Response{}, err
+        return Response{}, err.Error()
     }
     defer sender.Close()
 
     command_json, err := json.Marshal(command)
     if err != nil {
-        return Response{}, err
+        return Response{}, err.Error()
     }
 
     command_json = append(command_json, byte('\n'))
     if _, err := sender.Write(command_json); err != nil {
-        return Response{}, err
+        return Response{}, err.Error()
     }
     
     reader := bufio.NewReader(sender)
     responseBytes, err := reader.ReadBytes('\n')
     if err != nil {
-        return Response{}, err
+        return Response{}, err.Error()
     }
 
     var response Response
     if err = json.Unmarshal(responseBytes, &response); err != nil {
-        return Response{}, err
+        return Response{}, err.Error()
     }
 
-    return response, nil
+    if response.Error != "" {
+        return Response{}, response.Error
+    } else {
+        return response, ""
+    }
 }
 

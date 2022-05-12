@@ -8,6 +8,7 @@ package blockchain
 
 import (
 	"math"
+    . "hyperchain/blockchain/wallet"
 )
 
 const BlockTime = 10 * 1000 // 10 second blocks
@@ -64,8 +65,8 @@ func compactFromDifficulty(diff float64) Target {
     return Target { byte(co >> 16), byte(co >> 8), byte(co), id }
 }
 
-func hashFromTarget(compact Target) [32]byte {
-    target := [32]byte{}
+func hashFromTarget(compact Target) Address {
+    target := Address{}
     start := 32 - index(compact)
 
     if start > 32 - 3 {
@@ -102,7 +103,7 @@ func CalculateTarget(sample_start_or_none *Block,
     return compactFromDifficulty(new_diff)
 }
 
-func IsValidHashForTarget(hash [32]byte, target Target) bool {
+func IsValidHashForTarget(hash Address, target Target) bool {
     fullTarget := hashFromTarget(target)
     for i := 0; i < 32; i++ {
         if hash[i] < fullTarget[i] {
