@@ -7,8 +7,9 @@
 package node
 
 import (
-	. "hyperchain/blockchain"
+	"encoding/base32"
 	"fmt"
+	. "hyperchain/blockchain"
 	"os"
 )
 
@@ -17,7 +18,7 @@ type Node struct {
     rewardTo [32]byte
 
     network NetworkNode
-    ipc chan Command
+    ipc chan commandRequest
     miner chan Block
 }
 
@@ -34,14 +35,30 @@ func (node *Node) handlePacket(packet Packet) {
     }
 }
 
-func (node *Node) handleCommand(command Command) {
+func (node *Node) handleCommand(request commandRequest) {
+    command := request.command
+    response := request.response
     switch command.Kind {
     case CommandPing:
         fmt.Println("Ping")
         node.network.Send <- Packet { Kind: PacketPing }
+        response <- Response {}
     case CommandConnect:
         fmt.Printf("Connecting to '%s'\n", command.Address)
         node.network.ConnectPeer(command.Address)
+        response <- Response {}
+    case CommandBalance:
+        address := base32.StdEncoding.EncodeToString(command.WalletAddress[:])
+        fmt.Printf("Balance for '%s'\n", address)
+
+        status, err := node.chain.WalletStatus(command.WalletAddress)
+        if err != nil {
+            panic(err)
+        }
+
+        response <- Response {
+            Balance: status.Balance,
+        }
     default:
         panic(command)
     }

@@ -18,14 +18,25 @@ type CommandKind int
 const (
     CommandPing = CommandKind(iota)
     CommandConnect
+    CommandBalance
 )
 
 type Command struct {
     Kind CommandKind
     Address string
+    WalletAddress [32]byte
 }
 
-func handleConnection(connection net.Conn, channel chan Command) {
+type Response struct {
+    Balance float32
+}
+
+type commandRequest struct {
+    command Command
+    response chan Response
+}
+
+func handleConnection(connection net.Conn, channel chan commandRequest) {
     fmt.Println("Got IPC connection")
     reader := bufio.NewReader(connection)
 
@@ -43,11 +54,25 @@ func handleConnection(connection net.Conn, channel chan Command) {
             panic(err)
         }
 
-        channel <- command
+        response := make(chan Response)
+        channel <- commandRequest {
+            command,
+            response,
+        }
+
+        responseBytes, err := json.Marshal(<- response)
+        if err != nil {
+            panic(err)
+        }
+
+        responseBytes = append(responseBytes, '\n')
+        if _, err = connection.Write(responseBytes); err != nil {
+            panic(err)
+        }
     }
 }
 
-func startIpcServer(channel chan Command) {
+func startIpcServer(channel chan commandRequest) {
     listener, err := net.ListenUnix("unix", &net.UnixAddr {
         Name: "/tmp/hyperchain",
         Net: "unix",
@@ -66,32 +91,43 @@ func startIpcServer(channel chan Command) {
     }
 }
 
-func ListenIpc() chan Command {
-    channel := make(chan Command)
+func ListenIpc() chan commandRequest {
+    channel := make(chan commandRequest)
 
     go startIpcServer(channel)
     return channel
 }
 
-func SendIpc(command Command) error {
+func SendIpc(command Command) (Response, error) {
     sender, err := net.DialUnix("unix", nil, &net.UnixAddr {
         Name: "/tmp/hyperchain",
         Net: "unix",
     })
     if err != nil {
-        return err
+        return Response{}, err
     }
 
     command_json, err := json.Marshal(command)
     if err != nil {
-        return err
+        return Response{}, err
     }
 
     command_json = append(command_json, byte('\n'))
     if _, err := sender.Write(command_json); err != nil {
-        return err
+        return Response{}, err
+    }
+    
+    reader := bufio.NewReader(sender)
+    responseBytes, err := reader.ReadBytes('\n')
+    if err != nil {
+        return Response{}, err
     }
 
-    return nil
+    var response Response
+    if err = json.Unmarshal(responseBytes, &response); err != nil {
+        return Response{}, err
+    }
+
+    return response, nil
 }
 

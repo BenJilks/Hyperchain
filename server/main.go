@@ -8,14 +8,14 @@ package main
 
 import (
 	"fmt"
-	"hyperchain/blockchain"
 	"hyperchain/node"
+	. "hyperchain/blockchain/transaction"
 )
 
 func main() {
     fmt.Println("Staring Node")
 
-    wallet, err := blockchain.NewWallet()
+    wallet, err := NewWallet()
     if err != nil {
         panic(err)
     }
